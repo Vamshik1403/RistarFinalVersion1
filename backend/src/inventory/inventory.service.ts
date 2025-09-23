@@ -311,19 +311,123 @@ export class InventoryService {
 }
 
 
+  async canDeleteContainer(id: string) {
+    const numId = +id;
+
+    // Get all movement history records for this container
+    const movementHistory = await this.prisma.movementHistory.findMany({
+      where: { inventoryId: numId },
+      orderBy: { date: 'asc' },
+    });
+
+    // If no movement history, it's a new container that can be deleted
+    if (movementHistory.length === 0) {
+      return { canDelete: true, reason: null };
+    }
+
+    // Check if container is currently allocated (has a shipment or empty repo job)
+    const currentRecord = movementHistory[movementHistory.length - 1];
+    
+    if (currentRecord.shipmentId || currentRecord.emptyRepoJobId) {
+      return { 
+        canDelete: false, 
+        reason: 'Container is currently allocated to a shipment and cannot be deleted.' 
+      };
+    }
+
+    // Check if container has been through any status lifecycle after ALLOTTED
+    const statuses = movementHistory.map(record => record.status);
+    const hasAnyLifecycleAfterAllotted = this.hasAnyLifecycleAfterAllotted(statuses);
+
+    if (hasAnyLifecycleAfterAllotted) {
+      return { 
+        canDelete: false, 
+        reason: 'Container has completed 1 status lifecycle and cannot be deleted.' 
+      };
+    }
+
+    // If container is available and hasn't completed any lifecycle, it can be deleted
+    return { canDelete: true, reason: null };
+  }
+
+  private hasAnyLifecycleAfterAllotted(statuses: string[]): boolean {
+    // Define the statuses that come after ALLOTTED in the lifecycle
+    const lifecycleStatuses = [
+      'EMPTY PICKED UP',
+      'LADEN GATE-IN',
+      'SOB',
+      'LADEN DISCHARGE(ATA)',
+      'EMPTY RETURNED'
+    ];
+
+    // Check if container has been ALLOTTED and then has any lifecycle status
+    const uniqueStatuses = [...new Set(statuses)];
+    const hasAllotted = uniqueStatuses.includes('ALLOTTED');
+    const hasAnyLifecycleStatus = lifecycleStatuses.some(status => 
+      uniqueStatuses.includes(status)
+    );
+
+    // Container cannot be deleted if it has been ALLOTTED and has any lifecycle status
+    return hasAllotted && hasAnyLifecycleStatus;
+  }
+
+  private hasCompleteCycle(statuses: string[]): boolean {
+    // Define the key statuses that indicate a complete shipment cycle
+    // A container has completed a cycle if it has gone through:
+    // ALLOTTED -> EMPTY PICKED UP -> LADEN GATE-IN -> SOB -> LADEN DISCHARGE(ATA) -> EMPTY RETURNED
+    const keyCycleStatuses = [
+      'ALLOTTED',
+      'EMPTY PICKED UP',
+      'LADEN GATE-IN',
+      'SOB',
+      'LADEN DISCHARGE(ATA)',
+      'EMPTY RETURNED'
+    ];
+
+    // Check if all key cycle statuses have been encountered at least once
+    const uniqueStatuses = [...new Set(statuses)];
+    const hasAllKeyStatuses = keyCycleStatuses.every(status => 
+      uniqueStatuses.includes(status)
+    );
+
+    return hasAllKeyStatuses;
+  }
+
   async remove(id: string) {
     const numId = +id;
 
+    // Check if container can be deleted
+    const deletionCheck = await this.canDeleteContainer(id);
+    if (!deletionCheck.canDelete) {
+      throw new ConflictException(deletionCheck.reason);
+    }
+
     await this.prisma.$transaction([
+      // Delete movement history records that reference this inventory
+      this.prisma.movementHistory.deleteMany({
+        where: { inventoryId: numId },
+      }),
+      // Delete shipment containers that reference this inventory
+      this.prisma.shipmentContainer.deleteMany({
+        where: { inventoryId: numId },
+      }),
+      // Delete repo shipment containers that reference this inventory
+      this.prisma.repoShipmentContainer.deleteMany({
+        where: { inventoryId: numId },
+      }),
+      // Delete periodic tank certificates
       this.prisma.periodicTankCertificates.deleteMany({
         where: { inventoryId: numId },
       }),
+      // Delete on hire reports
       this.prisma.onHireReport.deleteMany({
         where: { inventoryId: numId },
       }),
+      // Delete leasing info
       this.prisma.leasingInfo.deleteMany({
         where: { inventoryId: numId },
       }),
+      // Finally delete the inventory record itself
       this.prisma.inventory.delete({
         where: { id: numId },
       }),

@@ -1,11 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { CreateShipmentDto } from './dto/create-shipment.dto';
 import { UpdateShipmentDto } from './dto/update-shipment.dto';
+import { BillManagementService } from '../bill-management/bill-management.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class ShipmentService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly billManagementService: BillManagementService
+  ) {}
 
 async create(data: CreateShipmentDto) {
   if (!data.polPortId || !data.podPortId) {
@@ -191,6 +195,19 @@ async create(data: CreateShipmentDto) {
       }
     }
 
+    // ✅ Create bill management record automatically
+    await tx.billManagement.create({
+      data: {
+        invoiceNo: '', // Null initially, user will fill it manually
+        invoiceAmount: 0, // Start with 0, user will fill in the actual amount
+        paidAmount: 0,
+        dueAmount: 0,
+        shipmentId: createdShipment.id,
+        billingStatus: 'Pending',
+        paymentStatus: 'Unpaid',
+      },
+    });
+
     return createdShipment;
   });
 }
@@ -239,6 +256,11 @@ async create(data: CreateShipmentDto) {
         emptyReturnDepotAddressBook: true,
         containers: true,
       },
+      orderBy: [
+        { date: 'desc' },
+        { jobNumber: 'desc' },
+        { id: 'desc' }
+      ],
     });
   }
 
@@ -298,12 +320,14 @@ async create(data: CreateShipmentDto) {
           orderBy: { createdAt: 'desc' },
         });
 
+        // Skip containers with incomplete leasing info instead of throwing error
         if (
           !leasingInfo ||
           leasingInfo.portId == null ||
           leasingInfo.onHireDepotaddressbookId == null
         ) {
-          throw new Error(`Leasing info incomplete for inventoryId ${inventoryId}`);
+          console.warn(`Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`);
+          continue;
         }
 
         await tx.movementHistory.create({
@@ -363,12 +387,14 @@ async create(data: CreateShipmentDto) {
             orderBy: { createdAt: 'desc' },
           });
 
+          // Skip containers with incomplete leasing info instead of throwing error
           if (
             !leasingInfo ||
             leasingInfo.portId == null ||
             leasingInfo.onHireDepotaddressbookId == null
           ) {
-            throw new Error(`Leasing info incomplete for inventoryId ${container.inventoryId}`);
+            console.warn(`Skipping movement history for inventoryId ${container.inventoryId} - incomplete leasing info`);
+            continue;
           }
 
           await tx.movementHistory.create({
@@ -434,6 +460,10 @@ async create(data: CreateShipmentDto) {
       select: {
         id: true,
         jobNumber: true,
+        date: true,
+        customerAddressBook: { select: { companyName: true } },
+        polPort: { select: { portName: true } },
+        podPort: { select: { portName: true } },
       },
     });
 
@@ -442,6 +472,23 @@ async create(data: CreateShipmentDto) {
     });
 
     return this.prisma.$transaction(async (tx) => {
+      // ✅ Update bill management record to mark shipment as deleted and store details
+      const portDetails = shipment.polPort?.portName && shipment.podPort?.portName 
+        ? `${shipment.polPort.portName} → ${shipment.podPort.portName}`
+        : null;
+
+      await tx.billManagement.updateMany({
+        where: { shipmentId: id },
+        data: {
+          remarks: 'Shipment Deleted',
+          shipmentId: null as any, // Remove foreign key reference to allow shipment deletion
+          shipmentNumber: shipment.jobNumber,
+          shipmentDate: shipment.date,
+          customerName: shipment.customerAddressBook?.companyName,
+          portDetails: portDetails,
+        } as any,
+      });
+
       for (const container of containers) {
         const inventoryId = container.inventoryId;
         if (!inventoryId) continue;
@@ -451,8 +498,10 @@ async create(data: CreateShipmentDto) {
           orderBy: { createdAt: 'desc' },
         });
 
+        // Skip containers with incomplete leasing info instead of throwing error
         if (!leasingInfo || !leasingInfo.portId || !leasingInfo.onHireDepotaddressbookId) {
-          throw new Error(`Leasing info missing for inventoryId ${inventoryId}`);
+          console.warn(`Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`);
+          continue;
         }
 
         await tx.movementHistory.create({

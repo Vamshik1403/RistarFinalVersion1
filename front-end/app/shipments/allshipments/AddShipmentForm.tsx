@@ -67,7 +67,49 @@ const ContainerSearchModal = ({
   setSelectedContainers, // <-- Add this prop for container selection
   form, // <-- Add form prop
   selectedContainers, // <-- Add selectedContainers prop
-}: any) => (
+}: any) => {
+  const [containerSearchText, setContainerSearchText] = useState("");
+  const [filteredContainers, setFilteredContainers] = useState(containers);
+
+  // Reset search when modal opens/closes or containers change
+  useEffect(() => {
+    if (open) {
+      setContainerSearchText("");
+      setFilteredContainers(containers);
+    }
+  }, [open, containers]);
+
+  // Filter containers based on search text
+  useEffect(() => {
+    if (!containerSearchText.trim()) {
+      setFilteredContainers(containers);
+      return;
+    }
+
+    // Split search text by commas, newlines, or spaces and clean up
+    const searchTerms = containerSearchText
+      .split(/[,\n\s]+/)
+      .map(term => term.trim())
+      .filter(term => term.length > 0);
+
+    if (searchTerms.length === 0) {
+      setFilteredContainers(containers);
+      return;
+    }
+
+    // Filter containers that match any of the search terms
+    const filtered = containers.filter((container: any) => {
+      const containerNumber = (container.inventory?.containerNumber || "").toLowerCase().trim();
+      return searchTerms.some(term => {
+        const searchTerm = term.toLowerCase().trim();
+        // Try both exact match and partial match
+        return containerNumber === searchTerm || containerNumber.includes(searchTerm);
+      });
+    });
+    setFilteredContainers(filtered);
+  }, [containerSearchText, containers]);
+
+  return (
   <Dialog open={open} onOpenChange={onClose}>
     <DialogContent 
       className="!w-[90vw] !max-w-[600px] min-w-0 bg-white dark:bg-neutral-900 rounded-lg shadow-lg max-h-[90vh] overflow-y-auto p-0 border border-neutral-200 dark:border-neutral-800"
@@ -165,6 +207,21 @@ const ContainerSearchModal = ({
           </div>
         </div>
 
+        {/* Container Search */}
+        <div className="mb-4">
+          <Label htmlFor="containerSearch" className="block text-sm text-gray-900 dark:text-neutral-200 mb-1">
+            Search Containers
+          </Label>
+          <textarea
+            id="containerSearch"
+            value={containerSearchText}
+            onChange={(e) => setContainerSearchText(e.target.value)}
+            placeholder="Search by container numbers..."
+            rows={3}
+            className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white border border-neutral-200 dark:border-neutral-700 rounded resize-none"
+          />
+        </div>
+
         {/* Container List and Actions */}
         <div>
           <div className="flex justify-between items-center mb-2">
@@ -173,19 +230,19 @@ const ContainerSearchModal = ({
                 htmlFor="containers"
                 className="block text-sm text-gray-900 dark:text-neutral-200"
               >
-                Containers
+                Containers {containerSearchText.trim() && `(${filteredContainers.length} found)`}
               </Label>
               <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full">
                 {modalSelectedContainers.length} selected
               </span>
             </div>
-            {containers.length > 0 && (
+            {filteredContainers.length > 0 && (
               <div className="flex gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  onClick={() => setModalSelectedContainers([...containers])}
+                  onClick={() => setModalSelectedContainers([...filteredContainers])}
                   className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white border-green-600"
                 >
                   Select All
@@ -203,12 +260,29 @@ const ContainerSearchModal = ({
             )}
           </div>
           <div className="max-h-60 overflow-y-auto border rounded p-2 bg-white dark:bg-neutral-900">
-            {containers.length === 0 && (
+            {filteredContainers.length === 0 && containers.length === 0 && !selectedPort && (
               <div className="text-center text-neutral-400 py-4">
-                No containers available for the selected port.
+                Please select a port to load containers.
               </div>
             )}
-            {containers.map((container: any) => (
+            {filteredContainers.length === 0 && containers.length === 0 && selectedPort && (
+              <div className="text-center text-neutral-400 py-4">
+                No containers available for the selected port and location.
+              </div>
+            )}
+            {filteredContainers.length === 0 && containers.length > 0 && containerSearchText.trim() && (
+              <div className="text-center text-neutral-400 py-4">
+                <p>No containers found matching your search criteria.</p>
+                <p className="text-xs mt-2">Available containers: {containers.length}</p>
+                <p className="text-xs">Try checking the container numbers for typos.</p>
+              </div>
+            )}
+            {filteredContainers.length === 0 && containers.length > 0 && !containerSearchText.trim() && (
+              <div className="text-center text-neutral-400 py-4">
+                {containers.length} containers available. Use the search box above to filter.
+              </div>
+            )}
+            {filteredContainers.map((container: any) => (
               <div
                 key={container.id}
                 className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
@@ -352,7 +426,8 @@ const ContainerSearchModal = ({
       </DialogFooter>
     </DialogContent>
   </Dialog>
-);
+  );
+};
 
 const AddShipmentModal = ({
   onClose,
@@ -862,13 +937,26 @@ const AddShipmentModal = ({
     }
 
     if (value.length >= 2) {
+      // Split search text by commas, newlines, or spaces and clean up
+      const searchTerms = value
+        .split(/[,\n\s]+/)
+        .map(term => term.trim())
+        .filter(term => term.length >= 2); // Only consider terms with at least 2 characters
+
+      if (searchTerms.length === 0) {
+        setSuggestions([]);
+        return;
+      }
+
       const matched = allMovements
         .filter(
           (m) =>
             m.inventory?.containerNumber &&
-            m.inventory.containerNumber
-              .toLowerCase()
-              .includes(value.toLowerCase())
+            searchTerms.some(term =>
+              m.inventory.containerNumber
+                .toLowerCase()
+                .includes(term.toLowerCase())
+            )
         )
         .sort(
           (a, b) =>
@@ -2692,6 +2780,78 @@ const AddShipmentModal = ({
                     <p className="text-red-500 text-xs mt-1">{validationErrors.quantity}</p>
                   )}
                 </div>
+                {/* Selected Containers Header - Only show when containers are selected */}
+                {selectedContainers.length > 0 && (
+                  <div className="mb-4 bg-white dark:bg-neutral-900 rounded border border-neutral-200 dark:border-neutral-700 p-3">
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-3">
+                        <h5 className="text-gray-900 dark:text-white text-sm font-semibold">
+                          Selected Containers
+                        </h5>
+                        <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full">
+                          {selectedContainers.length} selected
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            // Select all containers from suggestions
+                            const currentQuantity = parseInt(form.quantity);
+                            if (!form.quantity || isNaN(currentQuantity) || currentQuantity <= 0) {
+                              alert("Please enter a valid positive number in the quantity field first.");
+                              return;
+                            }
+                            
+                            const containersToAdd = suggestions.slice(0, currentQuantity - selectedContainers.length);
+                            const newContainers = containersToAdd.map((item: any) => ({
+                              containerNumber: item.inventory?.containerNumber,
+                              capacity: item.inventory?.containerCapacity,
+                              tare: item.inventory?.tareWeight,
+                              inventoryId: item.inventory?.id,
+                              portId: item.port?.id || null,
+                              port: item.port || null,
+                              depotName: item.addressBook?.companyName || "",
+                            }));
+                            
+                            const updatedContainers = [...selectedContainers, ...newContainers];
+                            setSelectedContainers(updatedContainers);
+                            
+                            setForm({
+                              ...form,
+                              containers: updatedContainers.map((c) => ({
+                                containerNumber: c.containerNumber,
+                                capacity: c.capacity,
+                                tare: c.tare,
+                                inventoryId: c.inventoryId,
+                                portId: c.portId,
+                                depotName: c.depotName,
+                              })),
+                              containerNumber: "",
+                            });
+                            setSuggestions([]);
+                          }}
+                          className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white border-green-600"
+                          disabled={suggestions.length === 0}
+                        >
+                          Select All from Search
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedContainers([])}
+                          className="px-2 py-1 text-xs bg-red-600 hover:bg-red-700 text-white border-red-600"
+                        >
+                          Deselect All
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="relative mb-4 bg-white dark:bg-neutral-900 rounded">
                   <Label
                     htmlFor="containerNumber"
@@ -2700,9 +2860,8 @@ const AddShipmentModal = ({
                     Container No.
                   </Label>
                   <div className="flex">
-                    <Input
+                    <textarea
                       id="containerNumber"
-                      type="text"
                       value={form.containerNumber || ""}
                       onChange={(e) => handleContainerSearch(e.target.value)}
                       placeholder={
@@ -2710,10 +2869,11 @@ const AddShipmentModal = ({
                           ? "First select Port of Loading"
                           : !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0
                           ? "Please enter valid quantity first"
-                          : "Type at least 2 characters"
+                          : "Search by container numbers..."
                       }
                       disabled={!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0}
-                      className="rounded-l w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white border border-neutral-200 dark:border-neutral-700 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
+                      rows={2}
+                      className="rounded-l w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white border border-neutral-200 dark:border-neutral-700 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed resize-none"
                     />
                     <Button
                       type="button"
@@ -2727,37 +2887,35 @@ const AddShipmentModal = ({
                       <Plus className={`w-10 h-10 ${!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0 ? 'text-gray-400 dark:text-neutral-500' : 'text-blue-600 dark:text-blue-400'} cursor-pointer`}/>
                     </Button>
                   </div>
-                  {suggestions.length > 0 && (
-                    <ul className="absolute z-10 mt-1 w-full bg-white text-black dark:bg-neutral-800 dark:text-white border border-neutral-700 dark:border-neutral-700 shadow max-h-60 overflow-y-auto">
-                      {suggestions.map((sug) => (
-                        <li
-                          key={sug.id}
-                          onClick={() => handleSuggestionSelect(sug)}
-                          className="px-4 py-2 hover:bg-neutral-400 dark:hover:bg-neutral-700 cursor-pointer text-sm"
-                        >
-                          <div className="font-semibold">
-                            {sug.inventory.containerNumber}
-                          </div>
-                          <div className="text-xs text-black-400 flex justify-between">
-                          <span>
-                              Capacity: {sug.inventory.containerCapacity}{" "}
-                              {sug.inventory.capacityUnit}
-                            </span>
-                          </div>
-                          <div className="text-xs text-black-400 mt-1">
-                            Location: {sug.addressBook?.companyName} -{" "}
-                            {sug.port?.portName}
-                          </div>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                  
+                                     {suggestions.length > 0 && (
+                     <ul className="absolute z-[5] mt-1 w-full bg-white text-black dark:bg-neutral-800 dark:text-white border border-neutral-700 dark:border-neutral-700 shadow max-h-60 overflow-y-auto">
+                       {suggestions.map((sug) => (
+                         <li
+                           key={sug.id}
+                           onClick={() => handleSuggestionSelect(sug)}
+                           className="px-4 py-2 hover:bg-neutral-400 dark:hover:bg-neutral-700 cursor-pointer text-sm"
+                         >
+                           <div className="font-semibold">
+                             {sug.inventory.containerNumber}
+                           </div>
+                           <div className="text-xs text-black-400 flex justify-between">
+                           <span>
+                               Capacity: {sug.inventory.containerCapacity}{" "}
+                               {sug.inventory.capacityUnit}
+                             </span>
+                           </div>
+                           <div className="text-xs text-black-400 mt-1">
+                             Location: {sug.addressBook?.companyName} -{" "}
+                             {sug.port?.portName}
+                           </div>
+                         </li>
+                       ))}
+                     </ul>
+                   )}
                 </div>
                 {selectedContainers.length > 0 && (
                   <div className="mt-6 bg-white dark:bg-neutral-900 rounded">
-                    <h5 className="text-gray-900 dark:text-white text-sm font-semibold mb-2">
-                      Selected Containers
-                    </h5>
                     <div className="max-h-64 overflow-y-auto border border-neutral-200 dark:border-neutral-700 rounded">
                       <Table>
                       <TableHeader>

@@ -32,6 +32,7 @@ import { ConfigModule } from '@nestjs/config';
 import { UserModule } from './user/user.module';
 import { AuditController } from './audit/audit.controller';
 import { AuditModule } from './audit/audit.module';
+import { BillManagementModule } from './bill-management/bill-management.module';
 
 @Module({
   imports: [ 
@@ -62,6 +63,7 @@ import { AuditModule } from './audit/audit.module';
     BillOfLadingModule,
     UserModule,
     AuditModule,
+    BillManagementModule,
 
   ],
 

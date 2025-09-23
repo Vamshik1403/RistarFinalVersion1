@@ -60,6 +60,10 @@ const AllShipmentsPage = () => {
   const [containerSearch, setContainerSearch] = useState('');
   const [blGroups, setBlGroups] = useState<string[][]>([]);
 
+  // --- helpers (place near getAllContainersFromForm / above Multi BL UI) ---
+  const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+
+
 
   // Add state for selected containers
   const [selectedContainers, setSelectedContainers] = useState<any[]>([]);
@@ -147,6 +151,9 @@ const AllShipmentsPage = () => {
     // Add date field for BL generation
     date: '' // Will be set only if user fills it or uses existing date
   });
+
+
+
 
   // Add state for allMovements
   const [allMovements, setAllMovements] = useState<any[]>([]);
@@ -243,10 +250,11 @@ const AllShipmentsPage = () => {
 
 
 
-
   // has the “groups” UI been initialized?
   const [multiBlStageReady, setMultiBlStageReady] = React.useState(false);
   const downloadBlockedByAssign = multiBlStageReady && blGroups.length > 1;
+
+
 
   function AssignedBlDownloads({
     shipmentId,
@@ -328,6 +336,9 @@ const AllShipmentsPage = () => {
     );
   };
 
+
+
+
   // read all container numbers visible in this form (deduped)
   const getAllContainersFromForm = (): string[] => {
     const fromArray = (blFormData?.containers || [])
@@ -343,14 +354,24 @@ const AllShipmentsPage = () => {
     return Array.from(new Set([...fromArray, ...fromString]));
   };
 
+  // Total containers available for this shipment (deduped)
+  const totalContainers = React.useMemo(
+    () => getAllContainersFromForm().length,
+    // if getAllContainersFromForm has no deps, you can also depend on blFormData
+    // but the function itself already reads blFormData safely
+    [blFormData]
+  );
+  // init N groups; preserve any existing picks if count changes
   // init N groups; preserve any existing picks if count changes
   const initBlGroups = (count: number) => {
+    const safeCount = clamp(count, 1, Math.max(1, totalContainers));  // <- enforce cap here too
     setBlGroups(prev => {
-      const next = Array.from({ length: count }, (_, i) => (prev[i] ? [...prev[i]] : []));
+      const next = Array.from({ length: safeCount }, (_, i) => (prev[i] ? [...prev[i]] : []));
       return next.map(g => Array.from(new Set(g)));
     });
     setMultiBlStageReady(true);
   };
+
 
   // toggle container in a group and ensure container exists in only ONE group
   const toggleContainerInGroup = (groupIdx: number, containerNumber: string) => {
@@ -867,6 +888,17 @@ const AllShipmentsPage = () => {
       });
 
       setShowCroModal(true);
+      const saved = croGenerationStatus[shipment.id]?.firstCroGenerationDate;
+      const initialDate =
+        saved
+          ? new Date(saved).toISOString().split('T')[0]
+          : new Date().toISOString().split('T')[0];
+
+      setCroFormData(prev => ({
+        ...prev,
+        date: prev.date || initialDate
+      }));
+
     } catch (error) {
       console.error('Error loading CRO data:', error);
     }
@@ -893,35 +925,40 @@ const AllShipmentsPage = () => {
   // Handle downloading PDF with current form data and consistent date logic
   const handleDownloadCroPdf = async () => {
     try {
-      // Get the consistent date from generation status or use provided date
-      const generationStatus = croGenerationStatus[croFormData.shipmentId];
-      const formDate = generationStatus?.firstCroGenerationDate
-        ? new Date(generationStatus.firstCroGenerationDate).toISOString().split('T')[0]
-        : croFormData.date || new Date().toISOString().split('T')[0]; // Use provided date or fallback to current
+      // 1) Pick the date: user edit > previously saved > today
+      const today = new Date().toISOString().split('T')[0];
+      const saved = croGenerationStatus[croFormData.shipmentId]?.firstCroGenerationDate;
+      const formDate = (croFormData.date || (saved ? new Date(saved).toISOString().split('T')[0] : '') || today);
 
-      // Mark CRO as generated and capture first generation date if not already done
-      const response = await apiFetch(`http://localhost:8000/shipment/mark-cro-generated/${croFormData.shipmentId}`, {
-        method: 'POST',
-      });
-      const updatedShipment = response;
+      // 2) Persist to DB (ensure backend stores this in your CRO "date" column)
+      const updatedShipment = await apiFetch(
+        `http://localhost:8000/shipment/mark-cro-generated/${croFormData.shipmentId}`,
+        {
+          method: 'POST',
+          body: { date: formDate }, // <-- IMPORTANT: send the chosen date
+        }
+      );
 
-      // Update CRO generation status
+      // 3) Update local UI state so it shows immediately (and on next open)
       setCroGenerationStatus(prev => ({
         ...prev,
         [croFormData.shipmentId]: {
-          hasCroGenerated: updatedShipment.hasCroGenerated || true,
-          firstCroGenerationDate: updatedShipment.firstCroGenerationDate || formDate
-        }
+          hasCroGenerated: updatedShipment?.hasCroGenerated ?? true,
+          firstCroGenerationDate: updatedShipment?.firstCroGenerationDate || formDate,
+        },
       }));
+      setCroFormData(prev => ({ ...prev, date: formDate }));
 
-      // Generate PDF with consistent date
+      // 4) Generate PDF with the exact same date
       await generateCroPdf(croFormData.shipmentId, croFormData.containers, formDate);
+
       setShowCroModal(false);
     } catch (error) {
       console.error('Error generating CRO PDF:', error);
       alert('Error generating CRO PDF. Please try again.');
     }
   };
+
 
   // Handle opening BL modal with empty form based on BillofLading schema
   const handleOpenBlModal = async (shipment: any, blType: BLType) => {
@@ -2059,7 +2096,7 @@ const AllShipmentsPage = () => {
                                       size={16}
                                       className="text-green-600 hover:text-green-700 cursor-pointer"
                                       onClick={(e) => {
-                                        e.stopPropagation();  
+                                        e.stopPropagation();
                                         handleDirectBlDownload(shipment.id, 'seaway');
                                       }}
                                     />
@@ -2120,11 +2157,15 @@ const AllShipmentsPage = () => {
                 <Input
                   id="date"
                   type="date"
-                  value={croFormData.date}
-                  disabled
-                  className="bg-gray-100 cursor-not-allowed"
+                  value={croFormData.date || ""}
+                  onChange={(e) => setCroFormData({ ...croFormData, date: e.target.value })}
+                  className="bg-white dark:bg-black"
                 />
+
               </div>
+
+
+
               <div className="space-y-2">
                 <Label htmlFor="houseBL">House BL</Label>
                 <Input
@@ -2365,16 +2406,21 @@ const AllShipmentsPage = () => {
 
             {/* Date Field - Added at the top */}
             <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="blDate">BL Issued Date</Label>
-                <Input
-                  id="blDate"
-                  type="date"
-                  value={blFormData.date}
-                  onChange={(e) => setBlFormData({ ...blFormData, date: e.target.value })}
-                  className="bg-white dark:bg-black"
-                />
-              </div>
+              {currentBlType !== 'draft' && (
+                <div className="space-y-2">
+                  <Label htmlFor="blDate">BL Issued Date</Label>
+                  <Input
+                    id="blDate"
+                    type="date"
+                    value={blFormData.date}
+                    onChange={(e) =>
+                      setBlFormData({ ...blFormData, date: e.target.value })
+                    }
+                    className="bg-white dark:bg-black"
+                  />
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="blTypeDisplay">BL Type</Label>
                 <Input
@@ -2385,179 +2431,6 @@ const AllShipmentsPage = () => {
                 />
               </div>
 
-              {/* === MULTI BL (full width below Issued Date) === */}
-              <div className="col-span-full mt-6 space-y-4">
-                {/* Top row: Count + Set on the left, Save on the right */}
-                <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <Label className="mb-1 block">
-                      No. of BL (Don’t alter if you want single BL containing all containers)
-                    </Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="number"
-                        min={1}
-                        value={blCount}
-                        onChange={(e) =>
-                          setBlCount(Math.max(1, Number(e.target.value || 1)))
-                        }
-                        className="w-28 bg-white dark:bg-black"
-                      />
-
-                      {/* Set: open groups UI (Download will auto-hide because of derived flag) */}
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        onClick={() => {
-                          initBlGroups(blCount);        // shows the assignment cards
-                          // no state needed for blocking; derived flag will become true when groups > 1
-                        }}
-                        className="cursor-pointer"
-                      >
-                        Set
-                      </Button>
-
-                      {/* Reset: clear groups UI (Download re-appears automatically) */}
-                      {multiBlStageReady && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => {
-                            setBlGroups([]);            // no groups
-                            setMultiBlStageReady(false);// assignment cards hidden
-                            setBlCount(1);              // back to single BL mode
-                            // downloadBlockedByAssign becomes false automatically
-                          }}
-                          className="cursor-pointer"
-                        >
-                          Reset
-                        </Button>
-                      )}
-                    </div>
-
-
-                    <p className="text-xs text-gray-500 mt-2">
-                      Click “Set” to open BL groups. Assign each container to exactly one BL.
-                    </p>
-                  </div>
-
-                  {multiBlStageReady && (
-                    <Button
-                      type="button"
-                      onClick={async () => {
-                        if (!blFormData?.shipmentId) return;
-
-                        // ✅ Require at least one container in each BL
-                        if (blGroups.some((grp) => grp.length === 0)) {
-                          alert("Each BL must have at least one container assigned.");
-                          return;
-                        }
-                        await saveBlAssignments(
-                          blFormData.shipmentId,
-                          currentBlType as BLType,
-                          blGroups
-                        );
-
-
-
-
-                        await saveBlAssignments(
-                          blFormData.shipmentId,
-                          currentBlType as BLType,
-                          blGroups
-                        );
-
-                        await hydrateAssignmentsForModal(blFormData.shipmentId, currentBlType as BLType);
-
-
-
-
-                        alert(`Saved container assignments for ${blGroups.length} BL(s). Now click "Update Bill of Lading".`);
-                      }}
-                      className="cursor-pointer"
-                    >
-                      Save Assignments
-                    </Button>
-                  )}
-
-                </div>
-
-                {/* Cards: one per BL, neatly filling the width under the date */}
-                {multiBlStageReady && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {blGroups.map((grp, idx) => {
-                      const allContainers = getAllContainersFromForm();
-
-                      // Build map: containerNumber -> groupIndex
-                      const assignedMap = blGroups.reduce<Record<string, number>>(
-                        (acc, g, gIdx) => {
-                          g.forEach((cn) => {
-                            acc[cn] = gIdx;
-                          });
-                          return acc;
-                        },
-                        {}
-                      );
-
-                      const ord = (n: number) =>
-                        n === 1 ? "1st" : n === 2 ? "2nd" : n === 3 ? "3rd" : `${n}th`;
-
-                      return (
-                        <div
-                          key={idx}
-                          className="border rounded-md p-3 bg-gray-50 dark:bg-zinc-900"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="font-medium">Containers in {ord(idx + 1)} BL</div>
-                            <div className="text-xs text-gray-500">
-                              Selected: {grp.length}/{allContainers.length}
-                            </div>
-                          </div>
-
-                          <ul className="space-y-2">
-                            {allContainers.map((cn) => {
-                              const assignedTo = assignedMap[cn];
-                              const isChecked = grp.includes(cn);
-                              const isDisabled =
-                                assignedTo !== undefined && assignedTo !== idx;
-
-                              return (
-                                <li key={cn}>
-                                  <label
-                                    className={`inline-flex items-center gap-2 border px-2 py-1 rounded ${isDisabled
-                                        ? "opacity-60 cursor-not-allowed"
-                                        : "cursor-pointer"
-                                      }`}
-                                    title={
-                                      isDisabled
-                                        ? `Already assigned to ${ord((assignedTo ?? 0) + 1)} BL`
-                                        : ""
-                                    }
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={isChecked}
-                                      disabled={isDisabled}
-                                      onChange={() => toggleContainerInGroup(idx, cn)}
-                                    />
-                                    <span className="text-sm">{cn}</span>
-                                    {isDisabled && (
-                                      <span className="text-[10px] ml-1 px-1.5 py-0.5 rounded bg-neutral-200 dark:bg-neutral-800">
-                                        {ord((assignedTo ?? 0) + 1)}
-                                      </span>
-                                    )}
-                                  </label>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-              {/* === END MULTI BL === */}
 
 
             </div>

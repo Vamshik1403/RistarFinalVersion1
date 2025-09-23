@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,8 +90,15 @@ export default function LoginPage() {
         <Card className="shadow-2xl border-0 bg-white/80 dark:bg-neutral-900/95 dark:border dark:border-neutral-700 dark:shadow-2xl dark:shadow-purple-500/20 dark:ring-1 dark:ring-neutral-500/30 rounded-2xl backdrop-blur-sm">
           <CardHeader className="space-y-1 pb-8">
             <div className="flex items-center justify-center mb-4">
-              <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 dark:from-gray-600 dark:to-gray-700 rounded-2xl flex items-center justify-center shadow-lg">
-                <LogIn className="w-8 h-8 text-white" />
+              <div className="w-80 h-48 flex items-center justify-center">
+                <Image
+                  src="/Ristar-logo.png"
+                  alt="Ristar Logistics Logo"
+                  width={800}
+                  height={240}
+                  className="object-contain"
+                  priority
+                />
               </div>
             </div>
             <CardTitle className="text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-white dark:to-gray-200 bg-clip-text text-transparent">

@@ -456,6 +456,7 @@ model Shipment {
   transhipmentPort              Ports?              @relation("ShipmentTranshipment", fields: [transhipmentPortId], references: [id])
   containers                    ShipmentContainer[]
   blAssignment                  BlAssignment[]
+  billManagement                BillManagement[]
 }
 
 model ShipmentContainer {
@@ -664,4 +665,27 @@ model AuditLog {
   @@index([entity, entityId])
   @@index([actorId])
   @@index([action])
+}
+
+model BillManagement {
+  id            Int      @id @default(autoincrement())
+  invoiceNo     String?  // Made nullable, removed unique constraint
+  invoiceAmount Float
+  paidAmount    Float    @default(0)
+  dueAmount     Float
+  shipmentId    Int?
+  shipment      Shipment? @relation(fields: [shipmentId], references: [id])
+  billingStatus String   @default("Pending") // Pending, Invoiced, Paid
+  paymentStatus String   @default("Unpaid")  // Unpaid, Partial, Paid
+  // Store shipment details for deleted shipments
+  shipmentNumber String?
+  shipmentDate  DateTime?
+  customerName   String?
+  portDetails    String?
+  remarks        String?  // Added remarks field for deleted shipments
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([shipmentId])
+  @@index([invoiceNo])
 }

@@ -21,6 +21,7 @@ const modulesList = [
   "EmptyRepoJobs",
   "Quotation",
   "MovementHistory",
+  "BillManagement",
   "DataImport"
 ];
 

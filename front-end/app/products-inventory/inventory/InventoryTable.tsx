@@ -129,6 +129,15 @@ const handleDeleteInventoryWithPermission = (id: number) => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
+      // First check if container can be deleted
+      const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+      
+      if (!deletionCheck.data.canDelete) {
+        alert(deletionCheck.data.reason);
+        return;
+      }
+
+      // If deletion is allowed, proceed with deletion
       await axios.delete(`http://localhost:8000/inventory/${id}`);
       setInventoryData(inventoryData.filter((item) => item.id !== id));
       alert('Inventory deleted successfully');

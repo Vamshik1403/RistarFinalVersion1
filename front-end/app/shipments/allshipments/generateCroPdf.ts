@@ -115,9 +115,7 @@ export async function generateCroPdf(
     const consignee = addressBooks.find(
       (ab: any) => ab.id === shipment.consigneeAddressBookId
     );
-    const shipper = addressBooks.find(
-      (ab: any) => ab.id === shipment.shipperAddressBookId
-    );
+
     const carrier = addressBooks.find(
       (ab: any) => ab.id === shipment.carrierAddressBookId
     );
@@ -411,6 +409,8 @@ const eta =
 
     // Generate a separate page for each depot/port combination
     let isFirstGroup = true;
+    const totalPages = Object.keys(containerGroups).length;
+    let currentPage = 1;
 
     Object.entries(containerGroups).forEach(([groupKey, groupContainers]) => {
       const [depotName, portName] = groupKey.split("|");
@@ -513,11 +513,11 @@ groupEtd =
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
       doc.setTextColor(0, 0, 0);
-      doc.text("RISTAR LOGISTICS PTE. LTD.", 160, 11);
+      doc.text("RISTAR LOGISTICS PVT. LTD.", 160, 11);
 
       doc.setFont("arial", "normal");
       doc.setFontSize(10);
-      doc.text("GSTIN 27AAOCR2909Q1ZK", 160, 16);
+      // doc.text("GSTIN 27AAOCR2909Q1ZK", 160, 16);
       doc.text("Office No. C-0010, Akshar Business Park, Sector 25", 160, 21);
       doc.text("Vashi, Navi Mumbai, Maharashtra, India 400703.", 160, 26);
       doc.text("TEL: +65 6221 4844", 160, 31);
@@ -575,6 +575,10 @@ groupEtd =
           countryValue = depot.country.countryName;
         }
       }
+      // Format country value - first letter capital, rest lowercase
+      if (countryValue !== "N/A") {
+        countryValue = countryValue.charAt(0).toUpperCase() + countryValue.slice(1).toLowerCase();
+      }
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
       doc.text("COUNTRY:", 14, 91 + baseYOffset);
@@ -623,7 +627,7 @@ groupEtd =
       // Add horizontal line below terminal section
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
-      doc.line(14, 102 + baseYOffset, 236, 102 + baseYOffset);
+      doc.line(14, 102 + baseYOffset, 240, 102 + baseYOffset);
 
       // --- ORDER INFORMATION ---
       // Right side fields - align values consistently with left side pattern
@@ -634,72 +638,70 @@ groupEtd =
       doc.setFontSize(10);
       doc.text(croDate, 165, 60);
 
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("HOUSE BL:", 120, 66);
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
+      // doc.setFont("arial", "bold");
+      // doc.setFontSize(10);
+      // doc.text("HOUSE BL:", 120, 66);
+      // doc.setFont("arial", "normal");
+      // doc.setFontSize(10);
       doc.text(shipment.houseBL || shipment.masterBL || "N/A", 165, 66);
 
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
-      doc.text("REFERENCE NO.:", 120, 72);
+      doc.text("REFERENCE NO.:", 120, 66);
       doc.setFont("arial", "normal");
       doc.setFontSize(10);
-      doc.text(shipment.refNumber || "", 165, 72);
+      // doc.text(shipment.refNumber || "", 165, 66);
+      doc.text(shipment.houseBL || shipment.masterBL || "N/A", 165, 66);
 
       // --- SHIPMENT DETAILS ---
       const shipmentDetailsStartY = 110 + baseYOffset;
       addTextWithSpacing(
         doc,
-        "SHIPPER:",
-        shipper?.companyName || "N/A",
+        "RELEASE DATE:",
+        releaseDate,
         14,
         shipmentDetailsStartY,
         45
       );
       addTextWithSpacing(
         doc,
-        "RELEASE DATE:",
-        releaseDate,
+        "POL:",
+        groupPol.charAt(0).toUpperCase() + groupPol.slice(1).toLowerCase(),
         14,
         shipmentDetailsStartY + 6,
         45
       );
       addTextWithSpacing(
         doc,
-        "POL:",
-        groupPol,
+        "FINAL DESTINATION:",
+        finalDestination.charAt(0).toUpperCase() + finalDestination.slice(1).toLowerCase(),
         14,
         shipmentDetailsStartY + 12,
         45
       );
+      // Format tank preparation - first letter capital, rest lowercase
+      const tankPrepValue = shipment.tankPreparation || "N/A";
+      const formattedTankPrep = tankPrepValue !== "N/A" 
+        ? tankPrepValue.charAt(0).toUpperCase() + tankPrepValue.slice(1).toLowerCase()
+        : tankPrepValue;
       addTextWithSpacing(
         doc,
-        "FINAL DESTINATION:",
-        finalDestination,
+        "TANK PREP:",
+        formattedTankPrep,
         14,
         shipmentDetailsStartY + 18,
         45
       );
-      addTextWithSpacing(
-        doc,
-        "TANK PREP:",
-        shipment.tankPreparation || "N/A",
-        14,
-        shipmentDetailsStartY + 24,
-        45
-      );
 
-      // Add hazardous status below TANK PREP value
+      // Add hazardous status below TANK PREP value - format with proper case
       const hazardousStatus =
-        productType === "Hazardous" ? "Hazardous" : "Non-Hazardous";
+        productType === "Hazardous" ? "Hazardous" : "Non-hazardous";
       addTextWithSpacing(
         doc,
         "PRODUCT TYPE:",
         hazardousStatus,
         14,
-        shipmentDetailsStartY + 30,
+        shipmentDetailsStartY + 24,
         45
       );
 
@@ -713,20 +715,20 @@ groupEtd =
         50
       );
       // Add product name below POD value
-      addTextWithSpacing(
-        doc,
-        "PRODUCT NAME:",
-        productName,
-        120,
-        shipmentDetailsStartY + 6,
-        50
-      );
+      // addTextWithSpacing(
+      //   doc,
+      //   "PRODUCT NAME:",
+      //   productName,
+      //   120,
+      //   shipmentDetailsStartY + 6,
+      //   50
+      // );
       addTextWithSpacing(
         doc,
         "POD:",
-        groupPod,
+        groupPod.charAt(0).toUpperCase() + groupPod.slice(1).toLowerCase(),
         120,
-        shipmentDetailsStartY + 12,
+        shipmentDetailsStartY + 6,
         50
       );
 
@@ -798,7 +800,7 @@ groupEtd =
       const vesselTableStartY = 190 + baseYOffset;
       doc.setDrawColor(0, 0, 0);
       doc.setLineWidth(0.5);
-      doc.line(14, vesselTableStartY, 236, vesselTableStartY);
+      doc.line(14, vesselTableStartY, 240, vesselTableStartY);
 
       // --- VESSEL/VOYAGE DETAILS TABLE ---
       doc.setFont("arial", "bold");
@@ -809,7 +811,7 @@ groupEtd =
 
       // Add horizontal line under headers
       doc.setLineWidth(0.5);
-      doc.line(14, vesselTableStartY + 8, 236, vesselTableStartY + 8);
+      doc.line(14, vesselTableStartY + 8, 240, vesselTableStartY + 8);
 
       // Vessel data
       doc.setFont("arial", "normal");
@@ -821,7 +823,7 @@ groupEtd =
       doc.text(etdDisplay, 160, vesselTableStartY + 14);
 
       // Add horizontal line after vessel table
-      doc.line(14, vesselTableStartY + 18, 236, vesselTableStartY + 18);
+      doc.line(14, vesselTableStartY + 18, 240, vesselTableStartY + 18);
 
       // --- CONTAINER RELEASE INSTRUCTION ---
       const instructionY = vesselTableStartY + 24;
@@ -837,183 +839,136 @@ groupEtd =
 
       // Add horizontal line after instruction
       doc.setLineWidth(0.5);
-      doc.line(14, instructionY + 4, 236, instructionY + 4);
+      doc.line(14, instructionY + 4, 240, instructionY + 4);
 
       // --- CONTAINER DETAILS TABLE ---
       const containerTableStartY = instructionY + 10;
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
       doc.text("SR NO.", 20, containerTableStartY);
-      doc.text("TANK NO", 60, containerTableStartY);
+      doc.text("TANK NO", 49, containerTableStartY); // Move TANK NO header slightly to the left
 
       // Add horizontal line under headers
-      doc.line(14, containerTableStartY + 3, 236, containerTableStartY + 3);
+      doc.line(14, containerTableStartY + 3, 240, containerTableStartY + 3);
 
-      // Container data - show containers from this specific group
+      // Container data - show containers from this specific group in proper table format with rows
       const containersToShow =
         groupContainers.length > 0
           ? groupContainers
-          : [{ containerNumber: "N/A", capacity: "N/A", tare: "N/A" }];
+          : [{ containerNumber: "N/A" }];
 
-      let currentPage = 1;
-      const firstPageMaxY = 280;
+      // Display containers in proper table format with rows and borders
       const containerStartY = containerTableStartY + 10;
-      const containerSpacing = 20; // Use consistent spacing of 20 pixels per container
-      const containersPerFirstPage = Math.floor(
-        (firstPageMaxY - containerStartY) / containerSpacing
-      ); // Containers that fit on first page
-      const containersPerSubsequentPage = Math.floor(
-        (280 - 60) / containerSpacing
-      ); // Containers that fit on subsequent pages (accounting for header)
-      let containersOnCurrentPage = 0;
-
-      // All containers on single page or multiple pages if needed
-      containersToShow.forEach((container: any, index: number) => {
-        // Check if we need a new page
-        const maxForCurrentPage =
-          currentPage === 1
-            ? containersPerFirstPage
-            : containersPerSubsequentPage;
-
-        if (containersOnCurrentPage >= maxForCurrentPage) {
-          // Add footer to current page before creating new page
-          doc.setFont("arial", "bold");
-          doc.setFontSize(9);
-          doc.text(
-            "ALL BUSINESS WITH RISTAR LOGISTICS PRIVATE LIMITED IS CONDUCTED ACCORDING TO SLA STANDARD TRADING CONDITIONS.",
-            120,
-            287,
-            { align: "center" }
-          );
-          doc.text(
-            "A COPY OF OUR TERMS AND CONDITIONS ARE AVAILABLE UPON RECEIPT OF A WRITTEN REQUEST.",
-            120,
-            291,
-            { align: "center" }
-          );
-
-          // Add page number to current page
-          doc.setFont("arial", "normal");
-          doc.setFontSize(10);
-          const remainingContainers =
-            containersToShow.length - containersPerFirstPage;
-          const additionalPages = Math.ceil(
-            remainingContainers / containersPerSubsequentPage
-          );
-          const totalPages = 1 + additionalPages;
-          doc.text(`Page ${currentPage} of ${totalPages}`, 220, 295);
-
-          currentPage++;
-          containersOnCurrentPage = 0;
-          doc.addPage();
-
-          // Add complete header to new page
-          // Right side - Company details (shifted more to the right)
-          if (ristarLogoBase64) {
-            doc.addImage(ristarLogoBase64, "PNG", 14, 5, 100, 30);
-          }
-          doc.setFont("arial", "bold");
-          doc.setFontSize(10);
-          doc.setTextColor(0, 0, 0);
-          doc.text("RISTAR LOGISTICS PTE. LTD.", 160, 11);
-
-          doc.setFont("arial", "normal");
-          doc.setFontSize(10);
-          doc.text("GSTIN 27AAOCR2909Q1ZK", 160, 16);
-          doc.text(
-            "Office No. C-0010, Akshar Business Park, Sector 25",
-            160,
-            21
-          );
-          doc.text("Vashi, Navi Mumbai, Maharashtra, India 400703.", 160, 26);
-          doc.text("TEL: +65 6221 4844", 160, 31);
-          doc.text("WWW.RISTARLOGISTICS.COM", 160, 36);
-
-          // Add horizontal line under headers
-          doc.setLineWidth(0.5);
-          doc.line(14, 53, 236, 53);
+      
+      doc.setFont("arial", "normal");
+      doc.setFontSize(9); // Slightly smaller font for better fit
+      
+      // Create serial number range (e.g., "1-50" for 50 containers)
+      const totalContainers = containersToShow.length;
+      const serialRange = totalContainers === 1 ? "1" : `1-${totalContainers}`;
+      
+      // Display serial range
+      doc.text(serialRange, 20, containerStartY);
+      
+      // Get all container numbers
+      const containerNumbers = containersToShow.map((container: any) => 
+        container.containerNumber || "N/A"
+      );
+      
+      // Table configuration
+      const containersPerRow = 8; // Number of containers per row for optimal space usage
+      const cellWidth = 22; // Width of each cell
+      const cellHeight = 6; // Height of each row
+      const tableStartX = 50; // Shift table to left - reduce space between SR.NO and TANK NO
+      const tableWidth = containersPerRow * cellWidth; // Total table width
+      
+      // Calculate number of rows needed
+      const numberOfRows = Math.ceil(containerNumbers.length / containersPerRow);
+      
+      // Draw table with borders and container numbers
+      let currentY = containerStartY;
+      
+      // Draw top horizontal line first
+      doc.setLineWidth(0.3);
+      const topRowContainers = containerNumbers.slice(0, Math.min(containersPerRow, containerNumbers.length));
+      const topRowWidth = topRowContainers.length * cellWidth;
+      doc.line(tableStartX, currentY - 2, tableStartX + topRowWidth, currentY - 2);
+      
+      for (let row = 0; row < numberOfRows; row++) {
+        // Get containers for this row first
+        const rowStart = row * containersPerRow;
+        const rowEnd = Math.min(rowStart + containersPerRow, containerNumbers.length);
+        const rowContainers = containerNumbers.slice(rowStart, rowEnd);
+        
+        // Draw containers and vertical lines for this row - only for actual containers
+        const cellsToDrawInThisRow = rowContainers.length; // Only draw cells for actual containers
+        
+        for (let col = 0; col < cellsToDrawInThisRow; col++) {
+          const cellX = tableStartX + (col * cellWidth);
+          
+          // Draw vertical line
+          doc.line(cellX, currentY - 2, cellX, currentY + cellHeight - 2);
+          
+          // Add container number
+          const containerText = rowContainers[col];
+          // Center the text in the cell
+          doc.text(containerText, cellX + 1, currentY + 2);
         }
+        
+        // Draw the last vertical line only after the last actual container
+        const lastCellX = tableStartX + (cellsToDrawInThisRow * cellWidth);
+        doc.line(lastCellX, currentY - 2, lastCellX, currentY + cellHeight - 2);
+        
+        // Draw horizontal line under this row (except for the last row, which will be drawn separately)
+        if (row < numberOfRows - 1) {
+          doc.setLineWidth(0.3);
+          const actualRowWidth = rowContainers.length * cellWidth;
+          doc.line(tableStartX, currentY + cellHeight - 2, tableStartX + actualRowWidth, currentY + cellHeight - 2);
+        }
+        
+        currentY += cellHeight;
+      }
+      
+      // Draw final horizontal line to close the table - match the actual table width
+      const lastRowContainers = containerNumbers.slice(
+        (numberOfRows - 1) * containersPerRow, 
+        containerNumbers.length
+      );
+      const actualTableWidth = lastRowContainers.length * cellWidth;
+      doc.setLineWidth(0.3);
+      doc.line(tableStartX, currentY - 2, tableStartX + actualTableWidth, currentY - 2);
+      
+      // Calculate the bottom position for the main horizontal line - match the width of the top line
+      const lastContainerY = currentY + 2;
+      doc.setLineWidth(0.5);
+      doc.line(14, lastContainerY, 240, lastContainerY); // Same width as top horizontal line
 
-        // Calculate yPos for current page - fixed spacing for subsequent pages using consistent spacing
-        const adjustedYPos =
-          currentPage === 1
-            ? containerStartY + containersOnCurrentPage * containerSpacing
-            : 58 + containersOnCurrentPage * containerSpacing;
-
-        // SR NO.
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text((index + 1).toString(), 20, adjustedYPos + 2);
-
-        // TANK NO details with minimal gaps - side by side
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("TANK NO:", 60, adjustedYPos);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(container.containerNumber || "N/A", 79, adjustedYPos);
-
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("CAPACITY:", 60, adjustedYPos + 5);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(container.capacity || "N/A", 81, adjustedYPos + 5);
-
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("TARE WEIGHT:", 60, adjustedYPos + 10);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(container.tare || "N/A", 88, adjustedYPos + 10);
-
-        containersOnCurrentPage++;
-      });
-
-      // Add footer to the last page (whether it's the first page or a subsequent page)
+      // Add footer to the page - position it properly below horizontal line with adequate spacing
+      const footerStartY = 290; // Fixed position to match reference image - footer should be at bottom
+      
       doc.setFont("arial", "bold");
       doc.setFontSize(9);
       doc.text(
-        "ALL BUSINESS WITH RISTAR LOGISTICS PRIVATE LIMITED IS CONDUCTED ACCORDING TO SLA STANDARD TRADING CONDITIONS.",
+        "ALL BUSINESS WITH RISTAR LOGISTICS PRIVATE LIMITED IS CONDUCTED ACCORDING TO STANDARD TRADING CONDITIONS.",
         120,
-        287,
+        footerStartY,
         { align: "center" }
       );
       doc.text(
         "A COPY OF OUR TERMS AND CONDITIONS ARE AVAILABLE UPON RECEIPT OF A WRITTEN REQUEST.",
         120,
-        291,
+        footerStartY + 4,
         { align: "center" }
       );
 
-      // Add page number to the last page
+      // Add page number with correct numbering
       doc.setFont("arial", "normal");
       doc.setFontSize(10);
-      const remainingContainers = Math.max(
-        0,
-        containersToShow.length - containersPerFirstPage
-      );
-      const additionalPages =
-        remainingContainers > 0
-          ? Math.ceil(remainingContainers / containersPerSubsequentPage)
-          : 0;
-      const totalPages = 1 + additionalPages;
-      doc.text(`Page ${currentPage} of ${totalPages}`, 220, 295);
+      doc.text(`Page ${currentPage} of ${totalPages}`, 220, footerStartY + 5);
 
-      // Add horizontal line after container table (only on first page) - moved down with consistent spacing
-      const containersOnFirstPageCount = Math.min(
-        containersToShow.length,
-        containersPerFirstPage
-      );
-      const lastContainerY =
-        containerStartY +
-        (containersOnFirstPageCount - 1) * containerSpacing +
-        15; // Use consistent spacing variable
-      doc.setLineWidth(0.5);
-      doc.line(14, lastContainerY, 236, lastContainerY);
-
-      // Set flag for next iteration
+      // Set flag for next iteration and increment page counter
       isFirstGroup = false;
+      currentPage++;
     });
 
     doc.save(
@@ -1025,3 +980,4 @@ groupEtd =
     console.error("Error generating CRO PDF", err);
   }
 }
+

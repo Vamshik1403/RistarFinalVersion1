@@ -172,6 +172,19 @@ const navItems = [
     module: "MovementHistory",
   },
   {
+    label: "Bill Management",
+    icon: <DollarSign size={16} className="mr-2" />,
+    module: "BillManagement",
+    children: [
+      {
+        label: "Sales Invoices",
+        href: "/bill-management/sales-invoices",
+        icon: <FileText size={14} className="mr-2" />,
+        module: "SalesInvoices",
+      },
+    ],
+  },
+  {
     label: "Users",
     href: "/users",
     icon: <User size={16} className="mr-2" />,
@@ -380,6 +393,50 @@ const handleLogout = async () => {
                       <span className="flex-1 flex items-center cursor-pointer">{item.label}</span>
                     </Link>
                   </li>
+                );
+              }
+
+              // Show Bill Management always to all
+              if (item.label === "Bill Management") {
+                return (
+                  <Accordion
+                    key={item.label}
+                    type="single"
+                    collapsible
+                    defaultValue={hasActiveChild(item, pathname) ? item.label : undefined}
+                  >
+                    <AccordionItem value={item.label} className="border-0">
+                      <AccordionTrigger
+                        className={cn(
+                          "flex items-center gap-2 px-2 py-2.5 text-sm font-medium rounded-md hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-orange-500 text-gray-900 dark:text-gray-300 cursor-pointer transition-colors duration-200 w-full",
+                          hasActiveChild(item, pathname) &&
+                            "bg-gray-200 dark:bg-neutral-800 text-orange-500 dark:text-orange-400"
+                        )}
+                      >
+                        <span className="flex items-center cursor-pointer">{item.icon}</span>
+                        <span className="flex-1 flex items-center cursor-pointer">{item.label}</span>
+                      </AccordionTrigger>
+                      <AccordionContent className="pb-2 pt-1">
+                        <ul className="space-y-1 pl-3">
+                          {item.children?.map((child) => (
+                            <li key={child.href}>
+                              <Link
+                                href={child.href}
+                                className={cn(
+                                  "flex items-center gap-2 pl-5 pr-4 py-2 rounded-md hover:bg-gray-100 dark:hover:bg-neutral-800 hover:text-orange-500 text-gray-700 dark:text-gray-400 cursor-pointer transition-colors duration-200 text-xs",
+                                  pathname === child.href &&
+                                    "bg-orange-100 dark:bg-orange-400/20 text-orange-500 dark:text-orange-400 hover:bg-orange-100 dark:hover:bg-orange-400/20 hover:text-orange-500 dark:hover:text-orange-400"
+                                )}
+                              >
+                                <span className="flex items-center cursor-pointer">{child.icon}</span>
+                                <span className="flex-1 flex items-center cursor-pointer">{child.label}</span>
+                              </Link>
+                            </li>
+                          ))}
+                        </ul>
+                      </AccordionContent>
+                    </AccordionItem>
+                  </Accordion>
                 );
               }
 

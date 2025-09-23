@@ -78,7 +78,7 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
               className="flex items-center gap-1 text-green-400 border-green-800 hover:border-green-700"
             >
               <Download size={16} />
-              Download Shipment
+              Download CRO
             </Button>
             <Button
               variant="ghost"
