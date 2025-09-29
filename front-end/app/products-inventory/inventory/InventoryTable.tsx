@@ -58,6 +58,7 @@ const ProductsInventoryPage = () => {
     initialSurveyDate: ""
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
+  const [containerEditStatus, setContainerEditStatus] = useState<{[key: number]: {canEdit: boolean, reason: string | null, action: string | null}}>({});
 
 useEffect(() => {
   const userId = localStorage.getItem("userId");
@@ -83,20 +84,54 @@ const handleAddInventoryWithPermission = () => {
   }
 };
 
-const handleEditInventoryWithPermission = (id: number) => {
-  if (inventoryPermissions?.canEdit) {
-    handleEditClick(id);
-  } else {
-    alert("You don't have access to edit inventory.");
+const checkContainerEditStatus = async (id: number) => {
+  try {
+    const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
+    const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+    
+    setContainerEditStatus(prev => ({
+      ...prev,
+      [id]: {
+        canEdit: editResponse.data.canEdit,
+        reason: editResponse.data.reason,
+        action: editResponse.data.action,
+        canDelete: deleteResponse.data.canDelete,
+        deleteReason: deleteResponse.data.reason
+      }
+    }));
+  } catch (error) {
+    console.error('Error checking container edit status:', error);
   }
 };
 
-const handleDeleteInventoryWithPermission = (id: number) => {
-  if (inventoryPermissions?.canDelete) {
-    handleDelete(id);
-  } else {
-    alert("You don't have access to delete inventory.");
+const handleEditInventoryWithPermission = (id: number) => {
+  if (!inventoryPermissions?.canEdit) {
+    alert("You don't have access to edit inventory.");
+    return;
   }
+
+  const editStatus = containerEditStatus[id];
+  if (!editStatus?.canEdit) {
+    alert(editStatus?.reason || "Cannot edit this container.");
+    return;
+  }
+
+  handleEditClick(id);
+};
+
+const handleDeleteInventoryWithPermission = (id: number) => {
+  if (!inventoryPermissions?.canDelete) {
+    alert("You don't have access to delete inventory.");
+    return;
+  }
+
+  const editStatus = containerEditStatus[id];
+  if (!editStatus?.canDelete) {
+    alert(editStatus?.deleteReason || "Cannot delete this container.");
+    return;
+  }
+
+  handleDelete(id);
 };
 
 
@@ -115,6 +150,45 @@ const handleDeleteInventoryWithPermission = (id: number) => {
     try {
       const response = await axios.get('http://localhost:8000/inventory');
       setInventoryData(response.data);
+      
+      // Check edit status for all containers
+      const editStatusPromises = response.data.map(async (item: any) => {
+        try {
+          const editResponse = await axios.get(`http://localhost:8000/inventory/${item.id}/can-edit`);
+          const deleteResponse = await axios.get(`http://localhost:8000/inventory/${item.id}/can-delete`);
+          
+          return {
+            id: item.id,
+            editStatus: {
+              canEdit: editResponse.data.canEdit,
+              reason: editResponse.data.reason,
+              action: editResponse.data.action,
+              canDelete: deleteResponse.data.canDelete,
+              deleteReason: deleteResponse.data.reason
+            }
+          };
+        } catch (error) {
+          console.error(`Error checking status for container ${item.id}:`, error);
+          return {
+            id: item.id,
+            editStatus: {
+              canEdit: true,
+              reason: null,
+              action: null,
+              canDelete: true,
+              deleteReason: null
+            }
+          };
+        }
+      });
+      
+      const editResults = await Promise.all(editStatusPromises);
+      const editStatusMap = editResults.reduce((acc, item) => {
+        acc[item.id] = item.editStatus;
+        return acc;
+      }, {} as {[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}});
+      
+      setContainerEditStatus(editStatusMap);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching inventory data:', error);
@@ -361,7 +435,11 @@ const handleDeleteInventoryWithPermission = (id: number) => {
                      <Button
   variant="ghost"
   size="icon"
-  className={`h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 dark:hover:bg-blue-900/40 ${!inventoryPermissions?.canEdit ? "opacity-50 cursor-not-allowed" : ""}`}
+  className={`h-8 w-8 ${
+    !inventoryPermissions?.canEdit || !containerEditStatus[item.id]?.canEdit
+      ? "text-gray-400 opacity-50 cursor-pointer"
+      : "text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 dark:hover:bg-blue-900/40"
+  }`}
   onClick={() => handleEditInventoryWithPermission(item.id)}
 >
   <Pencil size={16} />
@@ -370,7 +448,11 @@ const handleDeleteInventoryWithPermission = (id: number) => {
 <Button
   variant="ghost"
   size="icon"
-  className={`h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 dark:hover:bg-red-900/40 ${!inventoryPermissions?.canDelete ? "opacity-50 cursor-not-allowed" : ""}`}
+  className={`h-8 w-8 ${
+    !inventoryPermissions?.canDelete || !containerEditStatus[item.id]?.canDelete
+      ? "text-gray-400 opacity-50 cursor-pointer"
+      : "text-red-400 hover:text-red-300 hover:bg-red-900/40 dark:hover:bg-red-900/40"
+  }`}
   onClick={() => handleDeleteInventoryWithPermission(item.id)}
 >
   <Trash2 size={16} />

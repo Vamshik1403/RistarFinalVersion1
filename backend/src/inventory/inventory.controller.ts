@@ -32,6 +32,11 @@ create(@Body() data: CreateInventoryDto) {
     return this.inventoryService.canDeleteContainer(id);
   }
 
+  @Get(':id/can-edit')
+  canEdit(@Param('id') id: string) {
+    return this.inventoryService.canEditContainer(id);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.inventoryService.remove(id);

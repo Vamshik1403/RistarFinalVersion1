@@ -103,17 +103,18 @@ const navItems = [
       },
     ],
   },
-  {
-    label: "Container Lease Tariff",
-    href: "/container-lease-tariff",
-    icon: <FileText size={16} className="mr-2" />,
-    module: "ContainerLeaseTarrif",
-  },
+  
   {
     label: "Cost Tariff",
     icon: <DollarSign size={16} className="mr-2" />,
     module: "CostTariff",
     children: [
+      {
+        label: "Container Lease Tariff",
+        href: "/cost-tariff/container-lease-tariff",
+        icon: <FileText size={16} className="mr-2" />,
+        module: "ContainerLeaseTarrif",
+      },
       {
         label: "Handling Agent Tariff Cost",
         href: "/cost-tariff/handlingagenttariffcost",

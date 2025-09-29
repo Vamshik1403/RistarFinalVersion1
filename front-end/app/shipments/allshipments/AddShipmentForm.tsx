@@ -48,6 +48,94 @@ type SelectOptions = {
   shippingTerm: Option[];
 };
 
+// Component to display latest container location data
+const ContainerLocationDisplay = ({ 
+  inventoryId, 
+  fallbackDepotName, 
+  fallbackPortName 
+}: { 
+  inventoryId: number | null; 
+  fallbackDepotName?: string; 
+  fallbackPortName?: string; 
+}) => {
+  const [locationData, setLocationData] = useState<{
+    depotName: string;
+    portName: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatestLocation = async () => {
+      if (!inventoryId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch latest container data
+        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inventory = inventoryResponse.data;
+
+        // Get the latest leasing info
+        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        
+        if (latestLeasingInfo) {
+          // Fetch port name
+          let portName = fallbackPortName || "N/A";
+          if (latestLeasingInfo.portId) {
+            try {
+              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+              portName = portResponse.data.portName;
+            } catch (portError) {
+              console.warn("Failed to fetch port name:", portError);
+            }
+          }
+
+          // Fetch depot name
+          let depotName = fallbackDepotName || "N/A";
+          if (latestLeasingInfo.onHireDepotaddressbookId) {
+            try {
+              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+              depotName = depotResponse.data.companyName;
+            } catch (depotError) {
+              console.warn("Failed to fetch depot name:", depotError);
+            }
+          }
+
+          setLocationData({ depotName, portName });
+        } else {
+          // Fallback to stored values if no leasing info
+          setLocationData({
+            depotName: fallbackDepotName || "N/A",
+            portName: fallbackPortName || "N/A"
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch latest container location:", error);
+        // Fallback to stored values
+        setLocationData({
+          depotName: fallbackDepotName || "N/A",
+          portName: fallbackPortName || "N/A"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestLocation();
+  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+
+  if (loading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+
+  return (
+    <span>
+      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
+    </span>
+  );
+};
+
 const ContainerSearchModal = ({
   open,
   onClose,
@@ -939,7 +1027,7 @@ const AddShipmentModal = ({
     if (value.length >= 2) {
       // Split search text by commas, newlines, or spaces and clean up
       const searchTerms = value
-        .split(/[,\n\s]+/)
+        .split(/[\,\n\s]+/)
         .map(term => term.trim())
         .filter(term => term.length >= 2); // Only consider terms with at least 2 characters
 
@@ -948,21 +1036,13 @@ const AddShipmentModal = ({
         return;
       }
 
-      const matched = allMovements
-        .filter(
-          (m) =>
-            m.inventory?.containerNumber &&
-            searchTerms.some(term =>
-              m.inventory.containerNumber
-                .toLowerCase()
-                .includes(term.toLowerCase())
-            )
-        )
-        .sort(
-          (a, b) =>
-            new Date(a.inventory?.createdAt || a.createdAt).getTime() -
-            new Date(b.inventory?.createdAt || b.createdAt).getTime()
-        ); // FIFO: oldest first
+      // Use already built containers list which contains latest port/depot mapping
+      const matched = containers
+        .filter((item: any) => {
+          const cn = (item.inventory?.containerNumber || '').toLowerCase();
+          return searchTerms.some(term => cn.includes(term.toLowerCase()));
+        })
+        .slice(0, 50);
 
       setSuggestions(matched);
     } else {
@@ -2962,9 +3042,11 @@ const AddShipmentModal = ({
                               {item.tare || item.inventory?.tare || "N/A"}
                             </TableCell>
                             <TableCell className="text-gray-900 dark:text-white">
-                              {(item.depotName || "N/A") +
-                                " - " +
-                                (item.port?.portName || "N/A")}
+                              <ContainerLocationDisplay 
+                                inventoryId={item.inventoryId} 
+                                fallbackDepotName={item.depotName}
+                                fallbackPortName={item.port?.portName}
+                              />
                             </TableCell>
                             <TableCell className="text-gray-900 dark:text-white">
                               {getContainerSize(item.inventoryId)}

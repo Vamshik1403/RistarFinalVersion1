@@ -12,6 +12,135 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "../../lib/api";
 
+// Component to display latest container port data
+const ContainerPortDisplay = ({ 
+  inventoryId, 
+  fallbackPortName 
+}: { 
+  inventoryId: number | null; 
+  fallbackPortName?: string; 
+}) => {
+  const [portName, setPortName] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatestPort = async () => {
+      if (!inventoryId) {
+        setPortName(fallbackPortName || "-");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inventory = inventoryResponse.data;
+        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        
+        if (latestLeasingInfo && latestLeasingInfo.portId) {
+          try {
+            const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+            setPortName(portResponse.data.portName);
+          } catch (portError) {
+            console.warn("Failed to fetch port name:", portError);
+            setPortName(fallbackPortName || "-");
+          }
+        } else {
+          setPortName(fallbackPortName || "-");
+        }
+      } catch (error) {
+        console.error("Failed to fetch latest container port:", error);
+        setPortName(fallbackPortName || "-");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLatestPort();
+  }, [inventoryId, fallbackPortName]);
+
+  if (loading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+  return <span>{portName}</span>;
+};
+
+// Component to display latest container location data
+const ContainerLocationDisplay = ({ 
+  inventoryId, 
+  fallbackDepotName, 
+  fallbackPortName 
+}: { 
+  inventoryId: number | null; 
+  fallbackDepotName?: string; 
+  fallbackPortName?: string; 
+}) => {
+  const [locationData, setLocationData] = useState<{
+    depotName: string;
+    portName: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatestLocation = async () => {
+      if (!inventoryId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inventory = inventoryResponse.data;
+        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        
+        if (latestLeasingInfo) {
+          let portName = fallbackPortName || "N/A";
+          if (latestLeasingInfo.portId) {
+            try {
+              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+              portName = portResponse.data.portName;
+            } catch (portError) {
+              console.warn("Failed to fetch port name:", portError);
+            }
+          }
+
+          let depotName = fallbackDepotName || "N/A";
+          if (latestLeasingInfo.onHireDepotaddressbookId) {
+            try {
+              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+              depotName = depotResponse.data.companyName;
+            } catch (depotError) {
+              console.warn("Failed to fetch depot name:", depotError);
+            }
+          }
+          setLocationData({ depotName, portName });
+        } else {
+          setLocationData({
+            depotName: fallbackDepotName || "N/A",
+            portName: fallbackPortName || "N/A"
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch latest container location:", error);
+        setLocationData({
+          depotName: fallbackDepotName || "N/A",
+          portName: fallbackPortName || "N/A"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchLatestLocation();
+  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+
+  if (loading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+  return (
+    <span>
+      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
+    </span>
+  );
+};
+
 interface MovementRow {
   id: number;
   date: string;
@@ -19,7 +148,7 @@ interface MovementRow {
   remarks: string;
   jobNumber?: string;
   vesselName?: string;
-  inventory?: { containerNumber?: string };
+  inventory?: { id?: number; containerNumber?: string };
   shipment?: { jobNumber?: string; vesselName?: string };
   emptyRepoJob?: { jobNumber?: string; vesselName?: string };
   port?: { id?: number; portName?: string };
@@ -721,7 +850,12 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                         {row.status}
                       </span>
                     </TableCell>
-                    <TableCell>{row.port?.portName || "-"}</TableCell>
+                    <TableCell>
+                      <ContainerPortDisplay 
+                        inventoryId={row.inventory?.id || null}
+                        fallbackPortName={row.port?.portName}
+                      />
+                    </TableCell>
                     <TableCell>
                       {row.status?.toUpperCase() === "SOB" ? (
                         row.addressBook?.companyName && row.vesselName ? (
@@ -733,14 +867,12 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                         ) : (
                           "-"
                         )
-                      ) : row.addressBook?.companyName && row.port?.portName ? (
-                        `${row.addressBook.companyName} - ${row.port.portName}`
-                      ) : row.addressBook?.companyName ? (
-                        row.addressBook.companyName
-                      ) : row.port?.portName ? (
-                        row.port.portName
                       ) : (
-                        "N/A"
+                        <ContainerLocationDisplay 
+                          inventoryId={row.inventory?.id || null}
+                          fallbackDepotName={row.addressBook?.companyName}
+                          fallbackPortName={row.port?.portName}
+                        />
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{row.remarks}</TableCell>

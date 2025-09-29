@@ -1121,13 +1121,24 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
       alert("Container saved successfully!");
       onClose();
     } catch (error: any) {
-      if (error.response?.status === 409 || (error.response?.data?.message && error.response.data.message.includes('already exists'))) {
-        alert('Container with this number already exists!');
-        onClose(); // Close the form/modal after alert
-      } else {
-        console.error("Error saving container:", error.response?.data || error.message);
-        alert("Failed to save container. Please check console for details.");
+      const status = error?.response?.status;
+      const rawMsg = error?.response?.data?.message;
+      const apiMessage = Array.isArray(rawMsg) ? rawMsg.join(', ') : rawMsg;
+
+      // Show the precise backend reason for 409 conflicts (shipment exists / movement progressed)
+      if (status === 409 && apiMessage) {
+        alert(apiMessage);
+        return;
       }
+
+      // Fallback duplicate number message
+      if (status === 409 || (typeof apiMessage === 'string' && apiMessage.toLowerCase().includes('already exists'))) {
+        alert('Container with this number already exists!');
+        return;
+      }
+
+      console.error("Error saving container:", error?.response?.data || error?.message);
+      alert("Failed to save container. Please check console for details.");
     }
   };
 

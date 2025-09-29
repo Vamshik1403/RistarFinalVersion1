@@ -32,7 +32,93 @@ import { Label } from "@/components/ui/label";
 import { Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "../../../lib/api";
 
+// Component to display latest container location data
+const ContainerLocationDisplay = ({ 
+  inventoryId, 
+  fallbackDepotName, 
+  fallbackPortName 
+}: { 
+  inventoryId: number | null; 
+  fallbackDepotName?: string; 
+  fallbackPortName?: string; 
+}) => {
+  const [locationData, setLocationData] = useState<{
+    depotName: string;
+    portName: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const fetchLatestLocation = async () => {
+      if (!inventoryId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch latest container data
+        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inventory = inventoryResponse.data;
+
+        // Get the latest leasing info
+        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        
+        if (latestLeasingInfo) {
+          // Fetch port name
+          let portName = fallbackPortName || "N/A";
+          if (latestLeasingInfo.portId) {
+            try {
+              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+              portName = portResponse.data.portName;
+            } catch (portError) {
+              console.warn("Failed to fetch port name:", portError);
+            }
+          }
+
+          // Fetch depot name
+          let depotName = fallbackDepotName || "N/A";
+          if (latestLeasingInfo.onHireDepotaddressbookId) {
+            try {
+              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+              depotName = depotResponse.data.companyName;
+            } catch (depotError) {
+              console.warn("Failed to fetch depot name:", depotError);
+            }
+          }
+
+          setLocationData({ depotName, portName });
+        } else {
+          // Fallback to stored values if no leasing info
+          setLocationData({
+            depotName: fallbackDepotName || "N/A",
+            portName: fallbackPortName || "N/A"
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch latest container location:", error);
+        // Fallback to stored values
+        setLocationData({
+          depotName: fallbackDepotName || "N/A",
+          portName: fallbackPortName || "N/A"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestLocation();
+  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+
+  if (loading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+
+  return (
+    <span>
+      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
+    </span>
+  );
+};
 
 type ContainerItem = {
   containerNumber: string;
@@ -91,6 +177,18 @@ const AddShipmentModal = ({
   const [onHireDepots, setOnHireDepots] = useState<any[]>([]);
   const [containers, setContainers] = useState<any[]>([]);
   const [portSuggestionsForModal, setPortSuggestionsForModal] = useState<any[]>([]);
+  const [containerSearchText, setContainerSearchText] = useState<string>("");
+  const filteredContainers = React.useMemo(() => {
+    const terms = containerSearchText
+      .split(/[\s,\n]+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    if (terms.length === 0) return containers;
+    return containers.filter((c: any) => {
+      const num = (c.inventory?.containerNumber || "").toLowerCase();
+      return terms.some((t) => num.includes(t));
+    });
+  }, [containerSearchText, containers]);
 
   // Add validation error state
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
@@ -145,19 +243,29 @@ const AddShipmentModal = ({
     }
 
     if (value.length >= 2) {
-      const matched = allMovements
-        .filter(
-          (m) =>
-            m.inventory?.containerNumber &&
-            m.inventory.containerNumber
-              .toLowerCase()
-              .includes(value.toLowerCase())
-        )
-        .sort(
-          (a, b) =>
-            new Date(a.inventory?.createdAt || a.createdAt).getTime() -
-            new Date(b.inventory?.createdAt || b.createdAt).getTime()
-        ); // FIFO: oldest first
+      // Split by commas, newlines, or spaces and filter out empty strings
+      const searchTerms = value
+        .split(/[\s,\n]+/)
+        .map(term => term.trim().toLowerCase())
+        .filter(term => term.length > 0);
+
+      const matched = allMovements.filter((m) => {
+        if (!m.inventory?.containerNumber) return false;
+        
+        const containerNumber = m.inventory.containerNumber.toLowerCase();
+        
+        // If multiple search terms, match any of them
+        if (searchTerms.length > 1) {
+          return searchTerms.some(term => containerNumber.includes(term));
+        }
+        
+        // Single search term
+        return containerNumber.includes(searchTerms[0]);
+      }).sort(
+        (a, b) =>
+          new Date(a.inventory?.createdAt || a.createdAt).getTime() -
+          new Date(b.inventory?.createdAt || b.createdAt).getTime()
+      ); // FIFO: oldest first
 
       setSuggestions(matched);
     } else {
@@ -1273,9 +1381,9 @@ const AddShipmentModal = ({
                   >
                     Container No.
                   </Label>
-                  <div className="flex">
-                    <Input
-                      type="text"
+                  <div className="flex gap-2">
+                    <textarea
+                      id="containerNumber"
                       value={form.containerNumber || ""}
                       onChange={(e) => handleContainerSearch(e.target.value)}
                       placeholder={
@@ -1283,23 +1391,30 @@ const AddShipmentModal = ({
                           ? "First select Port of Loading"
                           : !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0
                           ? "Please enter valid quantity first"
-                          : "Type at least 2 characters"
+                          : "Search by container numbers..."
                       }
                       disabled={!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0}
-                      className="rounded-l w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white border border-neutral-200 dark:border-neutral-700 disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
+                      rows={3}
+                      className="flex-1 p-2.5 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white border border-neutral-200 dark:border-neutral-700 rounded resize-none disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed"
                     />
                     <Button
                       type="button"
-                      className="rounded-r flex items-center justify-center
+                      className="flex items-center justify-center px-3 py-2 h-auto
                         bg-white hover:bg-blue-100 border border-neutral-200
                         dark:bg-neutral-800 dark:hover:bg-blue-900 dark:border-neutral-700
                         transition-colors disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed cursor-pointer"
                       onClick={() => setShowContainerModal(true)}
                       disabled={!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0}
                     >
-                      <Plus className={`w-10 h-10 ${!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0 ? 'text-gray-400 dark:text-neutral-500' : 'text-blue-600 dark:text-blue-400'} cursor-pointer`} />
+                      <Plus className={`w-4 h-4 mr-2 ${!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0 ? 'text-gray-400 dark:text-neutral-500' : 'text-blue-600 dark:text-blue-400'} cursor-pointer`} />
                     </Button>
                   </div>
+                  <p className="text-xs text-neutral-400 mt-1">
+                    {suggestions.length > 0 
+                      ? `Found ${suggestions.length} container${suggestions.length === 1 ? '' : 's'}` 
+                      : "Search by container number (min. 2 characters)"
+                    }
+                  </p>
                   {suggestions.length > 0 && (
                     <ul className="absolute z-10 mt-1 w-full bg-white text-black dark:bg-neutral-800 dark:text-white border border-neutral-800 dark:border-neutral-800 shadow max-h-60 overflow-y-auto">
                       {suggestions.map((sug) => (
@@ -1318,16 +1433,16 @@ const AddShipmentModal = ({
                             </span>
                           </div>
                           <div className="text-xs text-black-400 mt-1">
-                            Location: {sug.addressBook?.companyName} -{" "}
-                            {sug.port?.portName}
+                            Location: <ContainerLocationDisplay 
+                              inventoryId={sug.inventory?.id} 
+                              fallbackDepotName={sug.addressBook?.companyName}
+                              fallbackPortName={sug.port?.portName}
+                            />
                           </div>
                         </li>
                       ))}
                     </ul>
                   )}
-                  <p className="text-xs text-neutral-400 mt-1">
-                    Search by container number (min. 2 characters)
-                  </p>
                 </div>
                 {selectedContainers.length > 0 && (
                   <div className="mt-6">
@@ -1378,9 +1493,11 @@ const AddShipmentModal = ({
                                 {item.tare || item.inventory?.tare || "N/A"}
                               </TableCell>
                               <TableCell className="text-gray-900 dark:text-white">
-                                {(item.depotName || "N/A") +
-                                  " - " +
-                                  (item.port?.portName || "N/A")}
+                                <ContainerLocationDisplay 
+                                  inventoryId={item.inventoryId} 
+                                  fallbackDepotName={item.depotName}
+                                  fallbackPortName={item.port?.portName}
+                                />
                               </TableCell>
                               <TableCell className="text-center">
                                 <Button
@@ -1860,6 +1977,24 @@ const AddShipmentModal = ({
               </div>
             </div>
 
+            {/* Search Containers */}
+            <div className="mb-2">
+              <Label
+                htmlFor="containerSearch"
+                className="block text-sm text-gray-900 dark:text-neutral-200 mb-1"
+              >
+                Search Containers
+              </Label>
+              <textarea
+                id="containerSearch"
+                value={containerSearchText}
+                onChange={(e) => setContainerSearchText(e.target.value)}
+                placeholder="Search by container numbers..."
+                rows={3}
+                className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white border border-neutral-200 dark:border-neutral-700 rounded resize-none"
+              />
+            </div>
+
             {/* Container List and Actions */}
             <div>
               <div className="flex justify-between items-center mb-2">
@@ -1868,19 +2003,19 @@ const AddShipmentModal = ({
                     htmlFor="containers"
                     className="block text-sm text-gray-900 dark:text-neutral-200"
                   >
-                    Containers
+                    Containers {containerSearchText.trim() && `(${filteredContainers.length} found)`}
                   </Label>
                   <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs font-medium rounded-full">
                     {modalSelectedContainers.length} selected
                   </span>
                 </div>
-                {containers.length > 0 && (
+                {filteredContainers.length > 0 && (
                   <div className="flex gap-2">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
-                      onClick={() => setModalSelectedContainers([...containers])}
+                      onClick={() => setModalSelectedContainers([...filteredContainers])}
                       className="px-2 py-1 text-xs bg-green-600 hover:bg-green-700 text-white border-green-600"
                     >
                       Select All
@@ -1898,12 +2033,12 @@ const AddShipmentModal = ({
                 )}
               </div>
               <div className="max-h-60 overflow-y-auto border rounded p-2 bg-white dark:bg-neutral-900">
-                {containers.length === 0 && (
+                {filteredContainers.length === 0 && containers.length === 0 && (
                   <div className="text-center text-neutral-400 py-4">
                     No containers available for the selected port.
                   </div>
                 )}
-                {containers.map((container) => (
+                {filteredContainers.map((container) => (
                   <div
                     key={container.id}
                     className="flex items-center justify-between py-2 px-3 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer"
@@ -1955,8 +2090,11 @@ const AddShipmentModal = ({
                       </div>
                     </div>
                     <div className="text-gray-700 dark:text-neutral-300 text-xs">
-                      {container.port?.portName || "N/A"} -{" "}
-                      {container.depotName || container.addressBook?.companyName || "N/A"}
+                      <ContainerLocationDisplay 
+                        inventoryId={container.inventory?.id || container.inventoryId} 
+                        fallbackDepotName={container.depotName || container.addressBook?.companyName}
+                        fallbackPortName={container.port?.portName}
+                      />
                       <div className="mt-1">
                         Capacity: {container.inventory?.containerCapacity || "N/A"} | 
                         Unit: {container.inventory?.capacityUnit || "N/A"}

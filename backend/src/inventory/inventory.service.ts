@@ -170,13 +170,72 @@ export class InventoryService {
       });
   }
 
- async update(id: number, data: UpdateInventoryDto) {
+  async update(id: number, data: UpdateInventoryDto) {
   const {
     periodicTankCertificates,
     leasingInfo,
     onHireReport,
     ...inventoryData
   } = data;
+
+    // 🔒 Block edits when container has progressed in movement lifecycle (after ALLOTTED)
+    // BUT allow edits if container is available again (completed cycle) or no active shipment exists
+    const movementRecords = await this.prisma.movementHistory.findMany({
+      where: { inventoryId: id },
+      orderBy: { date: 'asc' },
+      select: { status: true },
+    });
+    const statuses = movementRecords.map((m) => m.status);
+    
+    // Check if container has any active shipment or empty repo job
+    const activeShipment = await this.prisma.shipmentContainer.findFirst({
+      where: { inventoryId: id },
+      select: { id: true },
+    });
+    
+    const activeEmptyRepoJob = await this.prisma.repoShipmentContainer.findFirst({
+      where: { inventoryId: id },
+      select: { id: true },
+    });
+    
+    // Check if container has completed full cycle and is available again
+    const hasCompletedShipmentCycle = this.hasCompleteCycle(statuses);
+    const hasCompletedEmptyRepoCycle = this.hasEmptyRepoCycleCompleted(statuses);
+    
+    // ✅ First check: Block edits if container has progressed in movement status
+    // Check only the current/latest status, not the entire movement history
+    const currentStatus = statuses.length > 0 ? statuses[statuses.length - 1] : null;
+    
+    if (currentStatus && currentStatus !== 'AVAILABLE' && currentStatus !== 'ALLOTTED') {
+      // Block if current status is beyond ALLOTTED (EMPTY PICKED UP, LADEN GATE-IN, SOB, LADEN DISCHARGE(ATA), EMPTY RETURNED)
+      throw new ConflictException(
+        'Cannot change inventory details as the container has progressed in movement status.'
+      );
+    }
+
+    // ✅ Second check: Block changing on-hire port/depot if shipments or empty repo jobs exist
+    // We only block if the payload attempts to set portId or onHireDepotaddressbookId
+    const intendsToChangeOnHireViaLeases = Array.isArray(leasingInfo) && leasingInfo.some((l: any) =>
+      typeof l?.portId !== 'undefined' || typeof l?.onHireDepotaddressbookId !== 'undefined'
+    );
+    const intendsToChangeOnHireViaInventory =
+      typeof (inventoryData as any)?.portId !== 'undefined' ||
+      typeof (inventoryData as any)?.onHireDepotaddressbookId !== 'undefined';
+    const intendsToChangeOnHire = intendsToChangeOnHireViaLeases || intendsToChangeOnHireViaInventory;
+
+    if (intendsToChangeOnHire) {
+      if (activeShipment) {
+        throw new ConflictException(
+          'Remove the container or Delete the shipment first, then you can change the inventory data.'
+        );
+      }
+
+      if (activeEmptyRepoJob) {
+        throw new ConflictException(
+          'Remove the container or Delete the empty repo job first, then you can change the inventory data.'
+        );
+      }
+    }
 
   // ✅ Update inventory base data
   await this.prisma.inventory.update({
@@ -350,6 +409,59 @@ export class InventoryService {
     return { canDelete: true, reason: null };
   }
 
+  async canEditContainer(id: string) {
+    const numId = +id;
+
+    // Get all movement history records for this container
+    const movementHistory = await this.prisma.movementHistory.findMany({
+      where: { inventoryId: numId },
+      orderBy: { date: 'asc' },
+    });
+    const statuses = movementHistory.map(m => m.status);
+    
+    // Check only the current/latest status
+    const currentStatus = statuses.length > 0 ? statuses[statuses.length - 1] : null;
+    
+    // If current status is beyond ALLOTTED, block editing
+    if (currentStatus && currentStatus !== 'AVAILABLE' && currentStatus !== 'ALLOTTED') {
+      return { 
+        canEdit: false, 
+        reason: 'Cannot change inventory details as the container has progressed in movement status.',
+        action: 'movement_status'
+      };
+    }
+
+    // Check if container is currently allocated (has a shipment or empty repo job)
+    const activeShipment = await this.prisma.shipmentContainer.findFirst({
+      where: { inventoryId: numId },
+      select: { id: true },
+    });
+    
+    const activeEmptyRepoJob = await this.prisma.repoShipmentContainer.findFirst({
+      where: { inventoryId: numId },
+      select: { id: true },
+    });
+
+    if (activeShipment) {
+      return { 
+        canEdit: false, 
+        reason: 'Remove the container or Delete the shipment first, then you can change the inventory data.',
+        action: 'delete_shipment'
+      };
+    }
+
+    if (activeEmptyRepoJob) {
+      return { 
+        canEdit: false, 
+        reason: 'Remove the container or Delete the empty repo job first, then you can change the inventory data.',
+        action: 'delete_empty_repo'
+      };
+    }
+
+    // If no blocks, container can be edited
+    return { canEdit: true, reason: null, action: null };
+  }
+
   private hasAnyLifecycleAfterAllotted(statuses: string[]): boolean {
     // Define the statuses that come after ALLOTTED in the lifecycle
     const lifecycleStatuses = [
@@ -372,25 +484,24 @@ export class InventoryService {
   }
 
   private hasCompleteCycle(statuses: string[]): boolean {
-    // Define the key statuses that indicate a complete shipment cycle
-    // A container has completed a cycle if it has gone through:
-    // ALLOTTED -> EMPTY PICKED UP -> LADEN GATE-IN -> SOB -> LADEN DISCHARGE(ATA) -> EMPTY RETURNED
-    const keyCycleStatuses = [
-      'ALLOTTED',
-      'EMPTY PICKED UP',
-      'LADEN GATE-IN',
-      'SOB',
-      'LADEN DISCHARGE(ATA)',
-      'EMPTY RETURNED'
-    ];
+    if (!Array.isArray(statuses) || statuses.length === 0) return false;
+    const last = statuses[statuses.length - 1];
+    // Consider cycle completed when container is effectively available again
+    // i.e., last status is EMPTY RETURNED or AVAILABLE
+    return last === 'EMPTY RETURNED' || last === 'AVAILABLE';
+  }
 
-    // Check if all key cycle statuses have been encountered at least once
-    const uniqueStatuses = [...new Set(statuses)];
-    const hasAllKeyStatuses = keyCycleStatuses.every(status => 
-      uniqueStatuses.includes(status)
-    );
+  // For empty repo jobs, consider completion when the container has been
+  // ALLOTTED -> EMPTY PICKED UP -> EMPTY RETURNED (available again)
+  private hasEmptyRepoCycleCompleted(statuses: string[]): boolean {
+    if (!Array.isArray(statuses) || statuses.length === 0) return false;
 
-    return hasAllKeyStatuses;
+    const required = ['ALLOTTED', 'EMPTY PICKED UP', 'EMPTY RETURNED'];
+    const unique = [...new Set(statuses)];
+    const lastStatus = statuses[statuses.length - 1];
+
+    const hasAll = required.every(s => unique.includes(s));
+    return hasAll && lastStatus === 'EMPTY RETURNED';
   }
 
   async remove(id: string) {

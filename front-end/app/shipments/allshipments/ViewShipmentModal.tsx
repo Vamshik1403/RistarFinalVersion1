@@ -1,6 +1,95 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Download, X, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import axios from "axios";
+
+// Component to display latest container location data
+const ContainerLocationDisplay = ({ 
+  inventoryId, 
+  fallbackDepotName, 
+  fallbackPortName 
+}: { 
+  inventoryId: number | null; 
+  fallbackDepotName?: string; 
+  fallbackPortName?: string; 
+}) => {
+  const [locationData, setLocationData] = useState<{
+    depotName: string;
+    portName: string;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchLatestLocation = async () => {
+      if (!inventoryId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch latest container data
+        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inventory = inventoryResponse.data;
+
+        // Get the latest leasing info
+        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        
+        if (latestLeasingInfo) {
+          // Fetch port name
+          let portName = fallbackPortName || "N/A";
+          if (latestLeasingInfo.portId) {
+            try {
+              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+              portName = portResponse.data.portName;
+            } catch (portError) {
+              console.warn("Failed to fetch port name:", portError);
+            }
+          }
+
+          // Fetch depot name
+          let depotName = fallbackDepotName || "N/A";
+          if (latestLeasingInfo.onHireDepotaddressbookId) {
+            try {
+              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+              depotName = depotResponse.data.companyName;
+            } catch (depotError) {
+              console.warn("Failed to fetch depot name:", depotError);
+            }
+          }
+
+          setLocationData({ depotName, portName });
+        } else {
+          // Fallback to stored values if no leasing info
+          setLocationData({
+            depotName: fallbackDepotName || "N/A",
+            portName: fallbackPortName || "N/A"
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch latest container location:", error);
+        // Fallback to stored values
+        setLocationData({
+          depotName: fallbackDepotName || "N/A",
+          portName: fallbackPortName || "N/A"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLatestLocation();
+  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+
+  if (loading) {
+    return <span className="text-gray-400">Loading...</span>;
+  }
+
+  return (
+    <span>
+      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
+    </span>
+  );
+};
 
 interface ViewShipmentModalProps {
   shipment: any;
@@ -223,7 +312,11 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
                           {container.tare || "-"}
                         </td>
                         <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                          {container.depotName || "-"}
+                          <ContainerLocationDisplay 
+                            inventoryId={container.inventoryId} 
+                            fallbackDepotName={container.depotName}
+                            fallbackPortName={container.port?.portName}
+                          />
                         </td>
                       </tr>
                     ))}
