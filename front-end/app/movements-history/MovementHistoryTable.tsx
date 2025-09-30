@@ -12,134 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "../../lib/api";
 
-// Component to display latest container port data
-const ContainerPortDisplay = ({ 
-  inventoryId, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackPortName?: string; 
-}) => {
-  const [portName, setPortName] = useState<string>("");
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLatestPort = async () => {
-      if (!inventoryId) {
-        setPortName(fallbackPortName || "-");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
-        if (latestLeasingInfo && latestLeasingInfo.portId) {
-          try {
-            const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-            setPortName(portResponse.data.portName);
-          } catch (portError) {
-            console.warn("Failed to fetch port name:", portError);
-            setPortName(fallbackPortName || "-");
-          }
-        } else {
-          setPortName(fallbackPortName || "-");
-        }
-      } catch (error) {
-        console.error("Failed to fetch latest container port:", error);
-        setPortName(fallbackPortName || "-");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLatestPort();
-  }, [inventoryId, fallbackPortName]);
-
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
-  return <span>{portName}</span>;
-};
-
-// Component to display latest container location data
-const ContainerLocationDisplay = ({ 
-  inventoryId, 
-  fallbackDepotName, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackDepotName?: string; 
-  fallbackPortName?: string; 
-}) => {
-  const [locationData, setLocationData] = useState<{
-    depotName: string;
-    portName: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLatestLocation = async () => {
-      if (!inventoryId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
-        if (latestLeasingInfo) {
-          let portName = fallbackPortName || "N/A";
-          if (latestLeasingInfo.portId) {
-            try {
-              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-              portName = portResponse.data.portName;
-            } catch (portError) {
-              console.warn("Failed to fetch port name:", portError);
-            }
-          }
-
-          let depotName = fallbackDepotName || "N/A";
-          if (latestLeasingInfo.onHireDepotaddressbookId) {
-            try {
-              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
-              depotName = depotResponse.data.companyName;
-            } catch (depotError) {
-              console.warn("Failed to fetch depot name:", depotError);
-            }
-          }
-          setLocationData({ depotName, portName });
-        } else {
-          setLocationData({
-            depotName: fallbackDepotName || "N/A",
-            portName: fallbackPortName || "N/A"
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch latest container location:", error);
-        setLocationData({
-          depotName: fallbackDepotName || "N/A",
-          portName: fallbackPortName || "N/A"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLatestLocation();
-  }, [inventoryId, fallbackDepotName, fallbackPortName]);
-
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
-  return (
-    <span>
-      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
-    </span>
-  );
-};
+// These components are no longer needed as we now use bulk caching approach
 
 interface MovementRow {
   id: number;
@@ -172,6 +45,7 @@ type AddressBook = {
 
 const MovementHistoryTable = () => {
   const [data, setData] = useState<MovementRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [containerSearch, setContainerSearch] = useState("");
   const [jobSearch, setJobSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -199,7 +73,10 @@ const MovementHistoryTable = () => {
   const [selectedDepotId, setSelectedDepotId] = useState<number | null>(null);
   const [selectedCarrierId, setSelectedCarrierId] = useState<number | null>(null);
   const [carriers, setCarriers] = useState<any[]>([]);
-const [movementPermissions, setMovementPermissions] = useState<any>(null);
+  const [movementPermissions, setMovementPermissions] = useState<any>(null);
+  
+  // Cache for container location data to avoid multiple API calls
+  const [containerLocationCache, setContainerLocationCache] = useState<{[key: number]: {depotName: string, portName: string}}>({});
 
 
   const statusTransitions: Record<string, string[]> = {
@@ -313,17 +190,128 @@ const [movementPermissions, setMovementPermissions] = useState<any>(null);
     setShowHistoryModal(true);
   };
 
+  // Function to fetch container location data in bulk - optimized version
+  const fetchContainerLocationData = async (inventoryIds: number[]) => {
+    const locationCache: {[key: number]: {depotName: string, portName: string}} = {};
+    
+    try {
+      // Fetch all inventory data in parallel (limit concurrent requests to avoid overwhelming server)
+      const batchSize = 10; // Process 10 containers at a time
+      const batches = [];
+      
+      for (let i = 0; i < inventoryIds.length; i += batchSize) {
+        const batch = inventoryIds.slice(i, i + batchSize);
+        batches.push(batch);
+      }
+      
+      // Process each batch
+      for (const batch of batches) {
+        const inventoryPromises = batch.map(async (inventoryId) => {
+          if (inventoryId) {
+            try {
+              const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+              const inventory = inventoryResponse.data;
+              const latestLeasingInfo = inventory.leasingInfo?.[0];
+              
+              let portName = "N/A";
+              let depotName = "N/A";
+              
+              if (latestLeasingInfo) {
+                // Create promises for port and depot fetching
+                const promises = [];
+                
+                if (latestLeasingInfo.portId) {
+                  promises.push(
+                    axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`)
+                      .then(response => ({ type: 'port', data: response.data.portName }))
+                      .catch(error => {
+                        console.warn("Failed to fetch port name:", error);
+                        return { type: 'port', data: 'N/A' };
+                      })
+                  );
+                }
+                
+                if (latestLeasingInfo.onHireDepotaddressbookId) {
+                  promises.push(
+                    axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`)
+                      .then(response => ({ type: 'depot', data: response.data.companyName }))
+                      .catch(error => {
+                        console.warn("Failed to fetch depot name:", error);
+                        return { type: 'depot', data: 'N/A' };
+                      })
+                  );
+                }
+                
+                // Wait for both port and depot data
+                const results = await Promise.all(promises);
+                results.forEach(result => {
+                  if (result.type === 'port') portName = result.data;
+                  if (result.type === 'depot') depotName = result.data;
+                });
+              }
+              
+              locationCache[inventoryId] = { depotName, portName };
+            } catch (error) {
+              console.error(`Failed to fetch location for inventory ${inventoryId}:`, error);
+              locationCache[inventoryId] = { depotName: "N/A", portName: "N/A" };
+            }
+          }
+        });
+        
+        // Wait for current batch to complete before processing next batch
+        await Promise.all(inventoryPromises);
+        
+        // Update cache progressively
+        setContainerLocationCache(prev => ({ ...prev, ...locationCache }));
+      }
+      
+    } catch (error) {
+      console.error("Error fetching container location data:", error);
+    }
+  };
+
   useEffect(() => {
-    axios.get("http://localhost:8000/movement-history/latest").then((res) => {
-      // Sort by date in descending order (latest first)
-      const sortedData = res.data.sort((a: any, b: any) => {
-        const dateA = new Date(a.date || a.createdAt || 0);
-        const dateB = new Date(b.date || b.createdAt || 0);
-        return dateB.getTime() - dateA.getTime();
-      });
-      setData(sortedData);
-    });
-    axios.get("http://localhost:8000/ports").then((res) => setPorts(res.data));
+    const fetchData = async () => {
+      try {
+        // Fetch both in parallel for better performance
+        const [movementRes, portsRes] = await Promise.all([
+          axios.get("http://localhost:8000/movement-history/latest"),
+          axios.get("http://localhost:8000/ports")
+        ]);
+
+        // Sort by date in descending order (latest first)
+        const sortedData = movementRes.data.sort((a: any, b: any) => {
+          const dateA = new Date(a.date || a.createdAt || 0);
+          const dateB = new Date(b.date || b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        setPorts(portsRes.data);
+        
+        // Extract unique inventory IDs and fetch location data BEFORE setting data
+        const uniqueInventoryIds = [...new Set(sortedData
+          .map((row: any) => row.inventory?.id)
+          .filter((id: any) => id && typeof id === 'number')
+        )] as number[];
+        
+        if (uniqueInventoryIds.length > 0) {
+          // Wait for location data to be fetched before showing the table
+          await fetchContainerLocationData(uniqueInventoryIds);
+        }
+        
+        // Set data after location cache is populated
+        setData(sortedData);
+        setLoading(false);
+        
+      } catch (error) {
+        console.error("Error fetching movement history data:", error);
+        // Even if location fetch fails, show the table with fallback data
+        setData([]);
+        setLoading(false);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const filteredData = data.filter((row) => {
@@ -806,7 +794,22 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredData.map((row) => (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-gray-600 dark:text-gray-400">
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-500 border-t-transparent"></div>
+                        <span className="font-medium">Loading movement history and container locations...</span>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : filteredData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={10} className="text-center py-8 text-gray-600 dark:text-gray-400">
+                      No movement history data found
+                    </TableCell>
+                  </TableRow>
+                ) : filteredData.map((row) => (
                   <TableRow
                     key={row.id}
                     className={`hover:bg-muted/50 transition-colors ${selectedIds.includes(row.id) ? 'bg-orange-50 dark:bg-orange-900/20' : ''
@@ -851,10 +854,7 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <ContainerPortDisplay 
-                        inventoryId={row.inventory?.id || null}
-                        fallbackPortName={row.port?.portName}
-                      />
+                      {containerLocationCache[row.inventory?.id || 0]?.portName || "-"}
                     </TableCell>
                     <TableCell>
                       {row.status?.toUpperCase() === "SOB" ? (
@@ -868,11 +868,9 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                           "-"
                         )
                       ) : (
-                        <ContainerLocationDisplay 
-                          inventoryId={row.inventory?.id || null}
-                          fallbackDepotName={row.addressBook?.companyName}
-                          fallbackPortName={row.port?.portName}
-                        />
+                        containerLocationCache[row.inventory?.id || 0] ? 
+                          `${containerLocationCache[row.inventory?.id || 0].depotName} - ${containerLocationCache[row.inventory?.id || 0].portName}` :
+                          "-"
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{row.remarks}</TableCell>

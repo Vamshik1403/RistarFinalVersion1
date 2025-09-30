@@ -396,7 +396,7 @@ const QuotationPage = () => {
       <div className="rounded-lg shadow border border-neutral-800 bg-neutral-900 overflow-x-auto">
         <Table>
           <TableHeader className="bg-white dark:bg-neutral-900">
-            <TableRow>
+            <TableRow className="bg-white dark:bg-neutral-900">
               {[
                 'Quote Ref.',
                 'createdAt',
@@ -413,7 +413,7 @@ const QuotationPage = () => {
               ].map((heading, i) => (
                 <TableHead
                   key={i}
-                  className="text-center px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200"
+                  className="text-center px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 bg-white dark:bg-neutral-900"
                 >
                   {heading}
                 </TableHead>
@@ -446,7 +446,7 @@ const QuotationPage = () => {
                 <TableCell className="text-center">
                   <StatusBadge status={q.status} />
                 </TableCell>
-                <TableCell className="text-center">
+                <TableCell className="text-center bg-white dark:bg-neutral-900">
                   <div className="flex justify-center gap-2">
                     {/* View button */}
                     <Button
@@ -513,8 +513,8 @@ const QuotationPage = () => {
               </TableRow>
             ))}
             {quotations.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={11} className="text-center py-8 text-neutral-400 bg-white dark:bg-black">
+              <TableRow className="bg-white dark:bg-neutral-900">
+                <TableCell colSpan={12} className="text-center py-8 text-neutral-400 bg-white dark:bg-neutral-900">
                   No quotations found.
                 </TableCell>
               </TableRow>

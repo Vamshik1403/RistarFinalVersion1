@@ -462,6 +462,99 @@ export class InventoryService {
     return { canEdit: true, reason: null, action: null };
   }
 
+  async getBulkEditStatus(containerIds: number[]) {
+    // Get all movement history records for all containers in one query
+    const movementHistory = await this.prisma.movementHistory.findMany({
+      where: { inventoryId: { in: containerIds } },
+      orderBy: { date: 'asc' },
+    });
+
+    // Get all active shipments for all containers in one query
+    const activeShipments = await this.prisma.shipmentContainer.findMany({
+      where: { inventoryId: { in: containerIds } },
+      select: { inventoryId: true },
+    });
+
+    // Get all active empty repo jobs for all containers in one query
+    const activeEmptyRepoJobs = await this.prisma.repoShipmentContainer.findMany({
+      where: { inventoryId: { in: containerIds } },
+      select: { inventoryId: true },
+    });
+
+    // Create maps for quick lookup
+    const shipmentMap = new Set(activeShipments.map(s => s.inventoryId));
+    const emptyRepoMap = new Set(activeEmptyRepoJobs.map(e => e.inventoryId));
+    
+    // Group movement history by inventoryId
+    const movementByContainer = movementHistory.reduce((acc, movement) => {
+      if (!acc[movement.inventoryId]) {
+        acc[movement.inventoryId] = [];
+      }
+      acc[movement.inventoryId].push(movement);
+      return acc;
+    }, {} as Record<number, any[]>);
+
+    // Process each container
+    const results = containerIds.map(id => {
+      const movements = movementByContainer[id] || [];
+      const statuses = movements.map(m => m.status);
+      const currentStatus = statuses.length > 0 ? statuses[statuses.length - 1] : null;
+
+      // Check edit status
+      let canEdit = true;
+      let editReason: string | null = null;
+      let editAction: string | null = null;
+
+      // If current status is beyond ALLOTTED, block editing
+      if (currentStatus && currentStatus !== 'AVAILABLE' && currentStatus !== 'ALLOTTED') {
+        canEdit = false;
+        editReason = 'Cannot change inventory details as the container has progressed in movement status.';
+        editAction = 'movement_status';
+      } else if (shipmentMap.has(id)) {
+        canEdit = false;
+        editReason = 'Remove the container or Delete the shipment first, then you can change the inventory data.';
+        editAction = 'delete_shipment';
+      } else if (emptyRepoMap.has(id)) {
+        canEdit = false;
+        editReason = 'Remove the container or Delete the empty repo job first, then you can change the inventory data.';
+        editAction = 'delete_empty_repo';
+      }
+
+      // Check delete status
+      let canDelete = true;
+      let deleteReason: string | null = null;
+
+      if (movements.length === 0) {
+        // New container, can be deleted
+        canDelete = true;
+      } else {
+        const currentRecord = movements[movements.length - 1];
+        
+        if (currentRecord.shipmentId || currentRecord.emptyRepoJobId) {
+          canDelete = false;
+          deleteReason = 'Container is currently allocated to a shipment and cannot be deleted.';
+        } else {
+          const hasAnyLifecycleAfterAllotted = this.hasAnyLifecycleAfterAllotted(statuses);
+          if (hasAnyLifecycleAfterAllotted) {
+            canDelete = false;
+            deleteReason = 'Container has completed 1 status lifecycle and cannot be deleted.';
+          }
+        }
+      }
+
+      return {
+        id,
+        canEdit,
+        reason: editReason,
+        action: editAction,
+        canDelete,
+        deleteReason
+      };
+    });
+
+    return results;
+  }
+
   private hasAnyLifecycleAfterAllotted(statuses: string[]): boolean {
     // Define the statuses that come after ALLOTTED in the lifecycle
     const lifecycleStatuses = [
