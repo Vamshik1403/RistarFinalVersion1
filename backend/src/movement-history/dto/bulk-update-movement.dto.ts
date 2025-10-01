@@ -35,6 +35,10 @@ export class BulkUpdateMovementDto {
   @IsString()
   remarks?: string;
 
+  @IsOptional()
+  @IsString()
+  maintenanceStatus:string;
+
    @IsOptional()
   @IsInt()
   portIdFromClient?: number;

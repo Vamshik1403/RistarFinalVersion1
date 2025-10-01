@@ -12,139 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "../../lib/api";
 
-// Component to display latest container port data
-const ContainerPortDisplay = ({ 
-  inventoryId, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackPortName?: string; 
-}) => {
-  const [portName, setPortName] = useState<string>("");
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchLatestPort = async () => {
-      if (!inventoryId) {
-        setPortName(fallbackPortName || "-");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
-        if (latestLeasingInfo && latestLeasingInfo.portId) {
-          try {
-            const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-            setPortName(portResponse.data.portName);
-          } catch (portError) {
-            console.warn("Failed to fetch port name:", portError);
-            setPortName(fallbackPortName || "-");
-          }
-        } else {
-          setPortName(fallbackPortName || "-");
-        }
-      } catch (error) {
-        console.error("Failed to fetch latest container port:", error);
-        setPortName(fallbackPortName || "-");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLatestPort();
-  }, [inventoryId, fallbackPortName]);
-
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
-  return <span>{portName}</span>;
-};
-
-// Component to display latest container location data
-const ContainerLocationDisplay = ({ 
-  inventoryId, 
-  fallbackDepotName, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackDepotName?: string; 
-  fallbackPortName?: string; 
-}) => {
-  const [locationData, setLocationData] = useState<{
-    depotName: string;
-    portName: string;
-  } | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLatestLocation = async () => {
-      if (!inventoryId) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
-        if (latestLeasingInfo) {
-          let portName = fallbackPortName || "N/A";
-          if (latestLeasingInfo.portId) {
-            try {
-              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-              portName = portResponse.data.portName;
-            } catch (portError) {
-              console.warn("Failed to fetch port name:", portError);
-            }
-          }
-
-          let depotName = fallbackDepotName || "N/A";
-          if (latestLeasingInfo.onHireDepotaddressbookId) {
-            try {
-              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
-              depotName = depotResponse.data.companyName;
-            } catch (depotError) {
-              console.warn("Failed to fetch depot name:", depotError);
-            }
-          }
-          setLocationData({ depotName, portName });
-        } else {
-          setLocationData({
-            depotName: fallbackDepotName || "N/A",
-            portName: fallbackPortName || "N/A"
-          });
-        }
-      } catch (error) {
-        console.error("Failed to fetch latest container location:", error);
-        setLocationData({
-          depotName: fallbackDepotName || "N/A",
-          portName: fallbackPortName || "N/A"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchLatestLocation();
-  }, [inventoryId, fallbackDepotName, fallbackPortName]);
-
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
-  return (
-    <span>
-      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
-    </span>
-  );
-};
 
 interface MovementRow {
   id: number;
   date: string;
   status: string;
+  maintenanceStatus:string;
   remarks: string;
   jobNumber?: string;
   vesselName?: string;
@@ -166,8 +40,6 @@ type AddressBook = {
   businessType: string;
   portId: number;
 };
-
-
 
 
 const MovementHistoryTable = () => {
@@ -199,50 +71,88 @@ const MovementHistoryTable = () => {
   const [selectedDepotId, setSelectedDepotId] = useState<number | null>(null);
   const [selectedCarrierId, setSelectedCarrierId] = useState<number | null>(null);
   const [carriers, setCarriers] = useState<any[]>([]);
-const [movementPermissions, setMovementPermissions] = useState<any>(null);
+  const [movementPermissions, setMovementPermissions] = useState<any>(null);
+  const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
+
+  // Cache for container location data to avoid multiple API calls
+  const [containerLocationCache, setContainerLocationCache] = useState<{ [key: number]: { depotName: string, portName: string } }>({});
 
 
   const statusTransitions: Record<string, string[]> = {
-  ALLOTTED: ["EMPTY PICKED UP"],
+    ALLOTTED: ["EMPTY PICKED UP"],
 
-  "EMPTY PICKED UP": [], // handled dynamically
+    "EMPTY PICKED UP": [], // handled dynamically
+    "LADEN GATE-IN": ["SOB"],
+    "EMPTY GATE-IN": ["SOB"],
+    SOB: [],
 
-  // GATE-IN
-  "LADEN GATE-IN": ["SOB"],
-  "EMPTY GATE-IN": ["SOB"],
+    "LADEN DISCHARGE(ATA)": ["EMPTY RETURNED", "DAMAGED"],
+    "EMPTY DISCHARGE": ["EMPTY RETURNED", "DAMAGED"],
 
-  // SOB → handled dynamically
-  SOB: [],
+    // RETURN / STORAGE
+    "EMPTY RETURNED": ["AVAILABLE", "UNAVAILABLE"],
+    AVAILABLE: ["UNAVAILABLE"],
 
-  "LADEN DISCHARGE(ATA)": ["EMPTY RETURNED", "DAMAGED"],
-  "EMPTY DISCHARGE": ["EMPTY RETURNED", "DAMAGED"],
+    // UNAVAILABLE → sub-statuses
+    UNAVAILABLE: ["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"],
 
-  // RETURN / STORAGE
-  "EMPTY RETURNED": ["AVAILABLE", "UNAVAILABLE"],
-  AVAILABLE: ["UNAVAILABLE"],
-  UNAVAILABLE: ["AVAILABLE"],
+    // Maintenance statuses can go to AVAILABLE or switch
+    "UNDER CLEANING": ["AVAILABLE", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"],
+    "UNDER SURVEY": ["AVAILABLE", "UNDER CLEANING", "UNDER REPAIR/UNDER TESTING"],
+    "UNDER REPAIR/UNDER TESTING": ["AVAILABLE", "UNDER CLEANING", "UNDER SURVEY"],
 
-  // Exceptions
-  DAMAGED: ["RETURNED TO DEPOT"],
-  CANCELLED: ["RETURNED TO DEPOT"],
-  "RETURNED TO DEPOT": ["UNAVAILABLE", "AVAILABLE"],
+    // Exceptions
+    DAMAGED: ["RETURNED TO DEPOT"],
+    CANCELLED: ["RETURNED TO DEPOT"],
+    "RETURNED TO DEPOT": ["UNAVAILABLE", "AVAILABLE"],
+  };
+
+
+ const getAvailableStatusOptions = (currentStatus: string, currentNewStatus: string, currentMaintenance?: string) => {
+  // EMPTY RETURNED -> UNAVAILABLE -> Maintenance
+  if (currentStatus === "EMPTY RETURNED" && currentNewStatus === "UNAVAILABLE") {
+    return ["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"];
+  }
+
+  // If UNAVAILABLE with a maintenance status attached
+  if (currentStatus === "UNAVAILABLE" && currentMaintenance) {
+    return [
+      "AVAILABLE", // Complete maintenance
+      ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
+        (s) => s !== currentMaintenance // Don't show current maintenance status
+      ),
+    ];
+  }
+
+  // If directly in a maintenance status (UNDER CLEANING, UNDER SURVEY, etc.)
+  if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus)) {
+    return [
+      "AVAILABLE", // Complete maintenance
+      ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
+        (s) => s !== currentStatus // Don't show current maintenance status
+      ),
+    ];
+  }
+
+  // Default transitions
+  return statusTransitions[currentStatus] || [];
 };
 
 
   useEffect(() => {
-  const userId = localStorage.getItem("userId");
-  if (userId) {
-    fetch(`http://localhost:8000/permissions?userId=${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const perms = data.find(
-          (p: any) => p.module === "MovementHistory" // must match backend module name
-        );
-        setMovementPermissions(perms || {});
-      })
-      .catch((err) => console.error("Error fetching permissions:", err));
-  }
-}, []);
+    const userId = localStorage.getItem("userId");
+    if (userId) {
+      fetch(`http://localhost:8000/permissions?userId=${userId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const perms = data.find(
+            (p: any) => p.module === "MovementHistory" // must match backend module name
+          );
+          setMovementPermissions(perms || {});
+        })
+        .catch((err) => console.error("Error fetching permissions:", err));
+    }
+  }, []);
 
 
 
@@ -313,17 +223,94 @@ const [movementPermissions, setMovementPermissions] = useState<any>(null);
     setShowHistoryModal(true);
   };
 
-  useEffect(() => {
-    axios.get("http://localhost:8000/movement-history/latest").then((res) => {
-      // Sort by date in descending order (latest first)
-      const sortedData = res.data.sort((a: any, b: any) => {
-        const dateA = new Date(a.date || a.createdAt || 0);
-        const dateB = new Date(b.date || b.createdAt || 0);
-        return dateB.getTime() - dateA.getTime();
+  // Function to fetch container location data in bulk
+  const fetchContainerLocationData = async (inventoryIds: number[]) => {
+    const locationCache: { [key: number]: { depotName: string, portName: string } } = {};
+
+    try {
+      // Fetch inventory data for all unique inventory IDs in parallel
+      const inventoryPromises = inventoryIds.map(async (inventoryId) => {
+        if (inventoryId) {
+          try {
+            const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+            const inventory = inventoryResponse.data;
+            const latestLeasingInfo = inventory.leasingInfo?.[0];
+
+            let portName = "N/A";
+            let depotName = "N/A";
+
+            if (latestLeasingInfo) {
+              // Fetch port name if portId exists
+              if (latestLeasingInfo.portId) {
+                try {
+                  const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+                  portName = portResponse.data.portName;
+                } catch (portError) {
+                  console.warn("Failed to fetch port name:", portError);
+                }
+              }
+
+              // Fetch depot name if onHireDepotaddressbookId exists
+              if (latestLeasingInfo.onHireDepotaddressbookId) {
+                try {
+                  const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+                  depotName = depotResponse.data.companyName;
+                } catch (depotError) {
+                  console.warn("Failed to fetch depot name:", depotError);
+                }
+              }
+            }
+
+            locationCache[inventoryId] = { depotName, portName };
+          } catch (error) {
+            console.error(`Failed to fetch location for inventory ${inventoryId}:`, error);
+            locationCache[inventoryId] = { depotName: "N/A", portName: "N/A" };
+          }
+        }
       });
-      setData(sortedData);
-    });
-    axios.get("http://localhost:8000/ports").then((res) => setPorts(res.data));
+
+      await Promise.all(inventoryPromises);
+      setContainerLocationCache(locationCache);
+    } catch (error) {
+      console.error("Error fetching container location data:", error);
+    }
+  };
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch both in parallel for better performance
+        const [movementRes, portsRes] = await Promise.all([
+          axios.get("http://localhost:8000/movement-history/latest"),
+          axios.get("http://localhost:8000/ports")
+        ]);
+
+        // Sort by date in descending order (latest first)
+        const sortedData = movementRes.data.sort((a: any, b: any) => {
+          const dateA = new Date(a.date || a.createdAt || 0);
+          const dateB = new Date(b.date || b.createdAt || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+
+        setData(sortedData);
+        setPorts(portsRes.data);
+
+        // Extract unique inventory IDs and fetch location data in background
+        const uniqueInventoryIds = [...new Set(sortedData
+          .map((row: any) => row.inventory?.id)
+          .filter((id: any) => id && typeof id === 'number')
+        )] as number[];
+
+        if (uniqueInventoryIds.length > 0) {
+          fetchContainerLocationData(uniqueInventoryIds);
+        }
+
+      } catch (error) {
+        console.error("Error fetching movement history data:", error);
+      }
+    };
+
+    fetchData();
   }, []);
 
   const filteredData = data.filter((row) => {
@@ -354,13 +341,15 @@ const [movementPermissions, setMovementPermissions] = useState<any>(null);
   const canSelectAll = uniqueJobNumbers.length === 1 && filteredData.length > 0;
 
   // Calculate status counts for all data (not just filtered)
+  // Calculate status counts for all data (not just filtered)
   const getStatusCounts = () => {
     const statusCounts: Record<string, number> = {};
 
-    // Define all possible statuses to ensure they appear even with 0 count
+    // Define all possible statuses including maintenance ones
     const allStatuses = [
       'ALLOTTED', 'EMPTY PICKED UP', 'LADEN GATE-IN', 'SOB',
-      'LADEN DISCHARGE(ATA)', 'EMPTY RETURNED', 'AVAILABLE', 'UNAVAILABLE'
+      'LADEN DISCHARGE(ATA)', 'EMPTY RETURNED', 'AVAILABLE', 'UNAVAILABLE',
+      'UNDER CLEANING', 'UNDER SURVEY', 'UNDER REPAIR/UNDER TESTING' // Add maintenance statuses
     ];
 
     // Initialize all statuses with 0
@@ -411,7 +400,7 @@ const [movementPermissions, setMovementPermissions] = useState<any>(null);
     );
   };
 
-const handleUpdateStatusClick = () => {
+ const handleUpdateStatusClick = () => {
   const selectedRows = data.filter((row) => selectedIds.includes(row.id));
   const currentStatuses = [...new Set(selectedRows.map((r) => r.status))];
 
@@ -421,6 +410,7 @@ const handleUpdateStatusClick = () => {
   }
 
   const currentStatus = currentStatuses[0]?.toUpperCase();
+  const currentMaintenance = selectedRows[0]?.maintenanceStatus;
   const jobNumber =
     selectedRows[0].shipment?.jobNumber ||
     selectedRows[0].emptyRepoJob?.jobNumber ||
@@ -434,10 +424,9 @@ const handleUpdateStatusClick = () => {
     } else if (selectedRows[0].emptyRepoJob) {
       setAvailableStatusOptions(["EMPTY GATE-IN", "DAMAGED", "CANCELLED"]);
     } else {
-      setAvailableStatusOptions(["DAMAGED", "CANCELLED"]); // fallback
+      setAvailableStatusOptions(["DAMAGED", "CANCELLED"]);
     }
   }
-
   // ✅ Special case: SOB
   else if (currentStatus === "SOB") {
     if (selectedRows[0].shipment) {
@@ -445,13 +434,13 @@ const handleUpdateStatusClick = () => {
     } else if (selectedRows[0].emptyRepoJob) {
       setAvailableStatusOptions(["EMPTY DISCHARGE", "DAMAGED"]);
     } else {
-      setAvailableStatusOptions(["DAMAGED"]); // fallback
+      setAvailableStatusOptions(["DAMAGED"]);
     }
   }
-
-  // ✅ Default case (from statusTransitions map)
+  // ✅ Use dynamic function for all other cases including maintenance
   else {
-    setAvailableStatusOptions(statusTransitions[currentStatus] || []);
+    const availableOptions = getAvailableStatusOptions(currentStatus, newStatus, currentMaintenance);
+    setAvailableStatusOptions(availableOptions);
   }
 
   setNewStatus("");
@@ -459,8 +448,6 @@ const handleUpdateStatusClick = () => {
   setRemarks("");
   setModalOpen(true);
 };
-
-
 
   // Fetch locations by port
   const fetchLocationsByPort = async (portId: number) => {
@@ -493,6 +480,18 @@ const handleUpdateStatusClick = () => {
       return;
     }
 
+      // Validate maintenance status when moving from EMPTY RETURNED to UNAVAILABLE
+  if (newStatus === "UNAVAILABLE") {
+    const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+    const currentStatus = selectedRows[0]?.status;
+    
+    // If moving from EMPTY RETURNED to UNAVAILABLE, maintenance status is required
+    if (currentStatus === "EMPTY RETURNED" && !maintenanceStatus) {
+      alert("Please select a maintenance type when setting status to UNAVAILABLE.");
+      return;
+    }
+  }
+
     if ((newStatus === "DAMAGED" || newStatus === "CANCELLED") && remarks.trim() === "") {
       alert("Remarks are required when status is DAMAGED or CANCELLED.");
       return;
@@ -520,10 +519,10 @@ const handleUpdateStatusClick = () => {
           break;
 
         case "LADEN GATE-IN":
-case "EMPTY GATE-IN":
-  portId = source?.polPortId;
-  addressBookId = null;
-  break;
+        case "EMPTY GATE-IN":
+          portId = source?.polPortId;
+          addressBookId = null;
+          break;
 
 
         case "SOB":
@@ -531,24 +530,36 @@ case "EMPTY GATE-IN":
           addressBookId = selectedCarrierId || source?.carrierAddressBookId || null;
           break;
 
-       case 'LADEN DISCHARGE(ATA)':
-case 'EMPTY DISCHARGE':
-  if (emptyRepoJob) {
-    status = 'EMPTY DISCHARGE';
-    portId = emptyRepoJob.podPortId ?? null;
-    addressBookId = null;
-  } else {
-    status = 'LADEN DISCHARGE(ATA)';
-    portId = shipment?.podPortId ?? null;
-    addressBookId = null;
-  }
-  break;
+        case 'LADEN DISCHARGE(ATA)':
+        case 'EMPTY DISCHARGE':
+          if (emptyRepoJob) {
+            portId = emptyRepoJob.podPortId ?? null;
+            addressBookId = null;
+          } else {
+            portId = shipment?.podPortId ?? null;
+            addressBookId = null;
+          }
+          break;
 
 
         case "EMPTY RETURNED":
           portId = source?.podPortId;
           addressBookId = source?.emptyReturnDepotAddressBookId;
           break;
+
+        case "UNDER CLEANING":
+        case "UNDER SURVEY":
+        case "UNDER REPAIR/UNDER TESTING":
+          {
+            const prev = data.find((d) => selectedIds.includes(d.id));
+            if (prev) {
+              portId = prev.port?.id;
+              addressBookId = prev.addressBook?.id ?? null;
+            }
+          }
+          break;
+
+
 
         case "AVAILABLE":
         case "UNAVAILABLE":
@@ -575,7 +586,7 @@ case 'EMPTY DISCHARGE':
 
       const payload: any = {
         ids: selectedIds,
-        newStatus: newStatusUpper,
+        newStatus: newStatus.toUpperCase(),
         jobNumber: jobNumberForUpdate,
         date: movementDate,
         remarks: remarks.trim(),
@@ -584,14 +595,32 @@ case 'EMPTY DISCHARGE':
         vesselName: newStatus === "SOB" ? vesselName : null,
       };
 
+       // Handle maintenance status logic
+    if (newStatus === "UNAVAILABLE" && maintenanceStatus) {
+      // When setting UNAVAILABLE with maintenance
+      payload.maintenanceStatus = maintenanceStatus;
+    } else if (newStatus === "AVAILABLE") {
+      // When completing maintenance, clear maintenance status
+      payload.maintenanceStatus = null;
+    } else if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(newStatus)) {
+      // When switching between maintenance types
+      payload.maintenanceStatus = newStatus;
+    }
+
+      // add maintenanceStatus if set
+      if (maintenanceStatus) {
+        payload.maintenanceStatus = maintenanceStatus;
+      }
+
+
       if (portId !== undefined) payload.portId = portId;
       if (addressBookId !== undefined) payload.addressBookId = addressBookId;
       console.log("Payload being sent:", payload);
 
-await apiFetch('http://localhost:8000/movement-history/bulk-update', {
-  method: 'POST',
-  body: payload,   // 👈 plain object, no JSON.stringify
-});
+      await apiFetch('http://localhost:8000/movement-history/bulk-update', {
+        method: 'POST',
+        body: payload,   // 👈 plain object, no JSON.stringify
+      });
 
       alert("Status updated.");
       setSelectedIds([]);
@@ -612,11 +641,11 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
     if (!editingRow) return;
 
     try {
-  await apiFetch(`http://localhost:8000/movement-history/${editingRow.id}`, {
-    method: 'PATCH',
-    body: { date: editDate },   // 👈 pass plain object
-  });
-      
+      await apiFetch(`http://localhost:8000/movement-history/${editingRow.id}`, {
+        method: 'PATCH',
+        body: { date: editDate },   // 👈 pass plain object
+      });
+
 
       alert("Date updated successfully.");
       setEditModalOpen(false);
@@ -631,33 +660,33 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
   };
 
   useEffect(() => {
-  if (
-    (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
-    selectedIds.length > 0
-  ) {
-    const selectedRow = data.find((d) => selectedIds.includes(d.id));
-    if (selectedRow) {
-      const portId = selectedRow.port?.id || null;
-      setSelectedPortId(portId);
+    if (
+      (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
+      selectedIds.length > 0
+    ) {
+      const selectedRow = data.find((d) => selectedIds.includes(d.id));
+      if (selectedRow) {
+        const portId = selectedRow.port?.id || null;
+        setSelectedPortId(portId);
 
-      // 🔥 Auto-load depots for this port
-      if (portId) {
-        axios.get("http://localhost:8000/addressbook").then((res) => {
-          const filtered = res.data.filter((entry: any) => {
-            return (
-              entry.businessType?.includes("Depot Terminal") &&
-              entry.businessPorts.some((bp: any) => bp.portId === portId)
-            );
+        // 🔥 Auto-load depots for this port
+        if (portId) {
+          axios.get("http://localhost:8000/addressbook").then((res) => {
+            const filtered = res.data.filter((entry: any) => {
+              return (
+                entry.businessType?.includes("Depot Terminal") &&
+                entry.businessPorts.some((bp: any) => bp.portId === portId)
+              );
+            });
+            setDepots(filtered);
           });
-          setDepots(filtered);
-        });
-      }
+        }
 
-      // preselect depot if already present
-      setSelectedDepotId(selectedRow.addressBook?.id || null);
+        // preselect depot if already present
+        setSelectedDepotId(selectedRow.addressBook?.id || null);
+      }
     }
-  }
-}, [newStatus, selectedIds]);
+  }, [newStatus, selectedIds]);
 
 
   return (
@@ -731,26 +760,25 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
           <Filter className="h-4 w-4" />
           Filter
         </Button>
-       <Button
-  onClick={() => {
-    if (movementPermissions?.canCreate) {
-      handleUpdateStatusClick(); // ✅ keep your existing function
-    } else {
-      alert("You don't have access to update status.");
-    }
-  }}
-  disabled={
-    selectedIds.length === 0 || !movementPermissions?.canCreate
-  }
-  className={`${
-    selectedIds.length > 0 && movementPermissions?.canCreate
-      ? "bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-xl cursor-pointer"
-      : "bg-gray-400 text-gray-200 cursor-not-allowed opacity-50"
-  }`}
->
-  Update Status{" "}
-  {selectedIds.length > 0 && `(${selectedIds.length})`}
-</Button>
+        <Button
+          onClick={() => {
+            if (movementPermissions?.canCreate) {
+              handleUpdateStatusClick(); // ✅ keep your existing function
+            } else {
+              alert("You don't have access to update status.");
+            }
+          }}
+          disabled={
+            selectedIds.length === 0 || !movementPermissions?.canCreate
+          }
+          className={`${selectedIds.length > 0 && movementPermissions?.canCreate
+            ? "bg-orange-600 hover:bg-orange-700 text-white shadow-lg hover:shadow-xl cursor-pointer"
+            : "bg-gray-400 text-gray-200 cursor-not-allowed opacity-50"
+            }`}
+        >
+          Update Status{" "}
+          {selectedIds.length > 0 && `(${selectedIds.length})`}
+        </Button>
 
       </div>
 
@@ -825,36 +853,42 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                     <TableCell>
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border ${row.status === 'ALLOTTED'
-                            ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
-                            : row.status === 'AVAILABLE'
-                              ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700'
-                              : row.status === 'EMPTY PICKED UP'
-                                ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
-                                : row.status === 'LADEN GATE-IN'
-                                  ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700'
-                                  : row.status === 'SOB'
-                                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700'
-                                    : row.status === 'LADEN DISCHARGE(ATA)'
-                                      ? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
-                                      : row.status === 'EMPTY RETURNED'
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
-                                        : row.status === 'UNAVAILABLE'
-                                          ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
-                                          : row.status === 'DAMAGED'
-                                            ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
-                                            : row.status === 'CANCELLED'
-                                              ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
-                                              : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
+                          ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
+                          : row.status === 'AVAILABLE'
+                            ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700'
+                            : row.status === 'EMPTY PICKED UP'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
+                              : row.status === 'LADEN GATE-IN'
+                                ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700'
+                                : row.status === 'SOB'
+                                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700'
+                                  : row.status === 'LADEN DISCHARGE(ATA)'
+                                    ? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
+                                    : row.status === 'EMPTY RETURNED'
+                                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
+                                      : row.status === 'UNAVAILABLE'
+                                        ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
+                                        // ADD MAINTENANCE STATUSES HERE:
+                                        : row.status === 'UNDER CLEANING'
+                                          ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-700'
+                                          : row.status === 'UNDER SURVEY'
+                                            ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700'
+                                            : row.status === 'UNDER REPAIR/UNDER TESTING'
+                                              ? 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700'
+                                              : row.status === 'DAMAGED'
+                                                ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
+                                                : row.status === 'CANCELLED'
+                                                  ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
+                                                  : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
                           }`}
                       >
-                        {row.status}
+                        {row.status === "UNAVAILABLE" && row.maintenanceStatus
+      ? `${row.status} (${row.maintenanceStatus})`
+      : row.status}
                       </span>
                     </TableCell>
                     <TableCell>
-                      <ContainerPortDisplay 
-                        inventoryId={row.inventory?.id || null}
-                        fallbackPortName={row.port?.portName}
-                      />
+                      {containerLocationCache[row.inventory?.id || 0]?.portName || row.port?.portName || "-"}
                     </TableCell>
                     <TableCell>
                       {row.status?.toUpperCase() === "SOB" ? (
@@ -868,11 +902,12 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                           "-"
                         )
                       ) : (
-                        <ContainerLocationDisplay 
-                          inventoryId={row.inventory?.id || null}
-                          fallbackDepotName={row.addressBook?.companyName}
-                          fallbackPortName={row.port?.portName}
-                        />
+                        containerLocationCache[row.inventory?.id || 0] ?
+                          `${containerLocationCache[row.inventory?.id || 0].depotName} - ${containerLocationCache[row.inventory?.id || 0].portName}` :
+                          (row.addressBook?.companyName && row.port?.portName ?
+                            `${row.addressBook.companyName} - ${row.port.portName}` :
+                            row.addressBook?.companyName || row.port?.portName || "-"
+                          )
                       )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{row.remarks}</TableCell>
@@ -888,26 +923,25 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                       </Button>
                     </TableCell>
                     <TableCell className="text-center">
-<Button
-  onClick={() => {
-    if (movementPermissions?.canEdit) {
-      openEditDateModal(row); // ✅ your existing edit modal logic
-    } else {
-      alert("You don't have access to edit.");
-    }
-  }}
-  variant="ghost"
-  size="sm"
-  className={`${
-    movementPermissions?.canEdit
-      ? "text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 cursor-pointer"
-      : "text-gray-400 cursor-not-allowed opacity-50"
-  }`}
-  title="Edit Date"
-  disabled={!movementPermissions?.canEdit}
->
-  <FaEdit />
-</Button>
+                      <Button
+                        onClick={() => {
+                          if (movementPermissions?.canEdit) {
+                            openEditDateModal(row); // ✅ your existing edit modal logic
+                          } else {
+                            alert("You don't have access to edit.");
+                          }
+                        }}
+                        variant="ghost"
+                        size="sm"
+                        className={`${movementPermissions?.canEdit
+                          ? "text-yellow-500 hover:text-yellow-600 hover:bg-yellow-50 dark:hover:bg-yellow-900/20 cursor-pointer"
+                          : "text-gray-400 cursor-not-allowed opacity-50"
+                          }`}
+                        title="Edit Date"
+                        disabled={!movementPermissions?.canEdit}
+                      >
+                        <FaEdit />
+                      </Button>
 
                     </TableCell>
                   </TableRow>
@@ -930,56 +964,86 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* New Status Dropdown */}
-              {(() => {
-                // Determine the current status for the modal (from selected rows)
-                const selectedRows = data.filter((row) => selectedIds.includes(row.id));
-                const currentStatus =
-                  selectedRows.length > 0
-                    ? selectedRows[0].status
-                    : "";
+              {/* New Status Dropdown */}
+           {/* New Status Dropdown */}
+{(() => {
+  const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+  const currentStatus = selectedRows.length > 0 ? selectedRows[0].status : "";
+  const currentMaintenance = selectedRows[0]?.maintenanceStatus;
 
-                return (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">New Status</label>
-                    <select
-                      value={newStatus}
-                      onChange={(e) => setNewStatus(e.target.value)}
-                      className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    >
-                      <option value="">Select New Status</option>
-                      {availableStatusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                );
-              })()}
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        New Status
+      </label>
+
+      {/* Main Status Dropdown */}
+      <select
+        value={newStatus}
+        onChange={(e) => {
+          setNewStatus(e.target.value);
+          if (e.target.value !== "UNAVAILABLE") {
+            setMaintenanceStatus(null); // reset maintenance if not unavailable
+          }
+        }}
+        className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+      >
+        <option value="">Select New Status</option>
+        
+        {/* Show available status options */}
+        {availableStatusOptions.map((status) => (
+          <option key={status} value={status}>
+            {status}
+          </option>
+        ))}
+      </select>
+
+      {/* Second dropdown: Maintenance Status (only if UNAVAILABLE chosen from EMPTY RETURNED) */}
+      {newStatus === "UNAVAILABLE" && currentStatus === "EMPTY RETURNED" && (
+        <div className="space-y-2 mt-3">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Maintenance Status
+          </label>
+          <select
+            value={maintenanceStatus || ""}
+            onChange={(e) => setMaintenanceStatus(e.target.value)}
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+          >
+            <option value="">Select Maintenance Type</option>
+            {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* Helper text */}
+      {currentStatus === "EMPTY RETURNED" && !newStatus && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Choose AVAILABLE if container is ready, or UNAVAILABLE for maintenance
+        </p>
+      )}
+
+      {currentStatus === "EMPTY RETURNED" && newStatus === "UNAVAILABLE" && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Select the specific maintenance type for this container
+        </p>
+      )}
+
+      {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus) && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Choose AVAILABLE to complete maintenance, or switch to another maintenance type
+        </p>
+      )}
+    </div>
+  );
+})()}
 
               {/* Show if EMPTY RETURNED or RETURNED TO DEPOT */}
               {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (
                 <div className="space-y-4">
-                  {/* Port Dropdown */}
-                   {/* <div className="space-y-2">
-                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Select Port</label>
-                     <select
-                       value={selectedPortId || ""}
-                       onChange={(e) => {
-                         const portId = parseInt(e.target.value);
-                         setSelectedPortId(portId);
-                         setSelectedDepotId(null); // Reset depot
-                       }}
-                       className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                     >
-                       <option value="">Select Port</option>
-                       {ports.map((port) => (
-                         <option key={port.id} value={port.id}>
-                           {port.portName}
-                         </option>
-                       ))}
-                     </select>
-                   </div>  */}
 
                   {/* Depot Dropdown */}
                   <div className="space-y-2">
@@ -1098,26 +1162,33 @@ await apiFetch('http://localhost:8000/movement-history/bulk-update', {
                 <div className="px-3 py-2 bg-gray-50 dark:bg-neutral-800 text-gray-900 dark:text-white rounded-md border border-gray-200 dark:border-neutral-600">
                   <span
                     className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border ${editingRow.status === 'ALLOTTED'
-                        ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
-                        : editingRow.status === 'AVAILABLE'
-                          ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700'
-                          : editingRow.status === 'EMPTY PICKED UP'
-                            ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
-                            : editingRow.status === 'LADEN GATE-IN'
-                              ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700'
-                              : editingRow.status === 'SOB'
-                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700'
-                                : editingRow.status === 'LADEN DISCHARGE(ATA)'
-                                  ? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
-                                  : editingRow.status === 'EMPTY RETURNED'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
-                                    : editingRow.status === 'UNAVAILABLE'
-                                      ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
-                                      : editingRow.status === 'DAMAGED'
-                                        ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
-                                        : editingRow.status === 'CANCELLED'
-                                          ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
-                                          : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
+                      ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700'
+                      : editingRow.status === 'AVAILABLE'
+                        ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700'
+                        : editingRow.status === 'EMPTY PICKED UP'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700'
+                          : editingRow.status === 'LADEN GATE-IN'
+                            ? 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700'
+                            : editingRow.status === 'SOB'
+                              ? 'bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700'
+                              : editingRow.status === 'LADEN DISCHARGE(ATA)'
+                                ? 'bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700'
+                                : editingRow.status === 'EMPTY RETURNED'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700'
+                                  : editingRow.status === 'UNAVAILABLE'
+                                    ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
+                                    // ADD MAINTENANCE STATUSES HERE:
+                                    : editingRow.status === 'UNDER CLEANING'
+                                      ? 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-700'
+                                      : editingRow.status === 'UNDER SURVEY'
+                                        ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-700'
+                                        : editingRow.status === 'UNDER REPAIR/UNDER TESTING'
+                                          ? 'bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700'
+                                          : editingRow.status === 'DAMAGED'
+                                            ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700'
+                                            : editingRow.status === 'CANCELLED'
+                                              ? 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
+                                              : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700'
                       }`}
                   >
                     {editingRow.status}

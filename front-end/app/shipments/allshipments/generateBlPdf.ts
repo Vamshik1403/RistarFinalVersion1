@@ -26,6 +26,10 @@ export interface BLFormData {
   descriptionOfGoods: string;
   grossWeight: string;
   netWeight: string;
+   unit?: string;
+  tareWt?: string;
+  cbmWt?: string;
+  shippersealNo?: string;
   shippingMarks: string;
   freightCharges: string;
   freightPayableAt: string;
@@ -35,21 +39,7 @@ export interface BLFormData {
   containers: any[];
 }
 
-function addTextWithSpacing(
-  doc: any,
-  label: string,
-  value: string,
-  x: number,
-  y: number,
-  labelWidth: number = 45
-) {
-  doc.setFont("arial", "bold");
-  doc.setFontSize(10);
-  doc.text(label, x, y);
-  doc.setFont("arial", "normal");
-  doc.setFontSize(10);
-  doc.text(value, x + labelWidth, y);
-}
+
 
 // Normalize text heading into PDF to avoid odd spacing issues
 function normalizePdfText(input: string): string {
@@ -223,7 +213,11 @@ export async function generateBlPdf(
       ? blFormData.grossWt
       : formData.grossWeight || "";
     const netWeight = blFormData ? blFormData.netWt : formData.netWeight || "";
-
+    const tareWeight = blFormData ? blFormData.tareWt : ""; // NEW
+    const cbmWeight = blFormData ? blFormData.cbmWt : ""; // NEW
+    const unit = blFormData?.unit || "KGS"; // NEW - default to KGS
+    const shipperSealNo = blFormData?.shippersealNo || ""; // NEW
+    
     // Use delivery agent info from BL form - prefer combined field
     const deliveryAgent = blFormData
       ? {
@@ -242,33 +236,6 @@ export async function generateBlPdf(
     // Use BL details from form
     const blDetails = blFormData?.billofLadingDetails || "";
 
-    const parseWeight = (weightStr: string) => {
-      const w =
-        typeof weightStr === "string"
-          ? weightStr.replace(/[^0-9.]/g, "")
-          : weightStr;
-      const n = parseFloat(w || "");
-      return isNaN(n) ? null : n;
-    };
-
-    const grossWeightNum = parseWeight(grossWeight);
-    const netWeightNum = parseWeight(netWeight);
-
-    const formatKgs = (n: number | null, decimals: number) => {
-      if (n === null) return "";
-      return (
-        new Intl.NumberFormat("en-IN", {
-          minimumFractionDigits: decimals,
-          maximumFractionDigits: decimals,
-        }).format(n) + " KGS"
-      );
-    };
-
-    const grossKgsShort = formatKgs(grossWeightNum, 2); // e.g., 20,030.00 KGS
-    const grossKgsLong = formatKgs(grossWeightNum, 3); // e.g., 20,030.000 KGS
-    const netKgsShort = formatKgs(netWeightNum, 2);
-    const netKgsLong = formatKgs(netWeightNum, 3);
-
     // Set font globally
     doc.setFont("arial");
     // Reset all text spacing and formatting properties to ensure normal rendering
@@ -286,18 +253,20 @@ export async function generateBlPdf(
       (doc as any).setLineHeightFactor(1.05);
     }
 
-    // Page metrics
-    const pageWidth = (doc as any).internal.pageSize.getWidth
-      ? (doc as any).internal.pageSize.getWidth()
-      : (doc as any).internal.pageSize.width;
-    const pageHeight = (doc as any).internal.pageSize.getHeight
-      ? (doc as any).internal.pageSize.getHeight()
-      : (doc as any).internal.pageSize.height;
+  const pageWidth = doc.internal.pageSize.getWidth();
+const pageHeight = doc.internal.pageSize.getHeight();
 
-    // Calculate margins for centering the content
-    const contentWidth = pageWidth - 40; // Reduce content area
-    const marginX = (pageWidth - contentWidth) / 2; // Center horizontally
-    const marginY = 4; // Top margin reduced to shift content up
+// small margins
+const marginX = 10;
+const marginY = 10;
+
+// usable area
+const contentWidth = pageWidth - marginX * 2;
+const contentHeight = pageHeight - marginY * 2;
+
+// Example border
+doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
+
 
     // Main border (centered) with dynamic height
     doc.setDrawColor(0);
@@ -878,9 +847,8 @@ export async function generateBlPdf(
 
     // Display all containers with their details vertically with pagination support
     let containerY = firstRowTextY + 6;
-    const maxYOnPage = 250; // Maximum Y coordinate before needing a new page
-    const containerSpacing = 12; // Height needed for each container row in table format
-    // NEW LOGIC: If more than 3 containers, move ALL containers to next page
+    const maxYOnPage = 250;
+    const containerSpacing = 12;
     const shouldMoveAllContainersToNextPage = containersToShow.length > 3;
 
     if (shouldMoveAllContainersToNextPage) {
@@ -963,7 +931,24 @@ export async function generateBlPdf(
         // Vertical display on the left side for 3 or fewer containers
         const containerStartX = marginX + 15; // Left side position
         const containerStartY = containerY;
-        const containerWidth = 120; // Width for vertical container display
+
+
+        const getContainerHeight = (container: any) => {
+      let height = 20; // Base height for container number
+      
+      // Add height for each data field that has actual data
+      if (container.sealNumber && container.sealNumber !== "N/A") height += 7;
+      if (container.shippersealNo && container.shippersealNo !== "N/A") height += 7;
+      if (container.grossWt && container.grossWt !== "N/A") height += 7;
+      if (container.netWt && container.netWt !== "N/A") height += 7;
+      if (container.tareWt && container.tareWt !== "N/A") height += 7;
+      if (container.cbmWt && container.cbmWt !== "N/A") height += 7;
+      
+      return Math.max(height, 25); // Minimum height
+    };
+
+        let currentContainerY = containerStartY;
+
 
         doc.setFont("arial", "bold");
         doc.setFontSize(10);
@@ -971,220 +956,249 @@ export async function generateBlPdf(
         // Variables to calculate totals
         let totalGrossWt = 0;
         let totalNetWt = 0;
+          let totalTareWt = 0; // NEW
+        let totalCbmWt = 0; // NEW
 
-        containersToShow.forEach((container: any, index: number) => {
-          if (!container.containerNumber) return;
+      containersToShow.forEach((container: any, index: number) => {
+  if (!container.containerNumber) return;
 
-          const yPos = containerStartY + index * 40; // Reduced from 45 to 40px spacing between containers
+  const containerHeight = getContainerHeight(container);
+  const yPos = currentContainerY;
 
-          // Container number - increased font size for better readability
-          doc.setFont("arial", "normal");
-          doc.setFontSize(11); // Increased from 9 to 11 for better readability
-          doc.text(container.containerNumber || "N/A", containerStartX, yPos);
+  // Container number - always show
+  doc.setFont("arial", "normal");
+  doc.setFontSize(11);
+  doc.text(container.containerNumber, containerStartX, yPos);
 
-          // Seal number - increased font size for better readability
-          doc.setFontSize(10); // Increased from 8 to 10 for better readability
-          doc.text(
-            `SEAL NO: ${container.sealNumber || "N/A"}`,
-            containerStartX,
-            yPos + 7
-          );
+  let lineOffset = 7;
+  
+  // Carrier Seal - only show if data exists and is not "N/A"
+  if (container.sealNumber && container.sealNumber !== "N/A") {
+    const carrierSeals = container.sealNumber 
+      ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
+      : "N/A";
+    if (carrierSeals !== "N/A") {
+      doc.setFontSize(9);
+      doc.text(`CARRIER SEAL: ${carrierSeals}`, containerStartX, yPos + lineOffset);
+      lineOffset += 7;
+    }
+  }
 
-          // Weights for each container
-          const grossWtNum = parseFloat(container.grossWt) || 0;
-          const netWtNum = parseFloat(container.netWt) || 0;
-          totalGrossWt += grossWtNum;
-          totalNetWt += netWtNum;
+  // Shipper Seal - add this section
+  if (container.shippersealNo && container.shippersealNo !== "N/A") {
+    const shipperSeals = container.shippersealNo 
+      ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
+      : "N/A";
+    if (shipperSeals !== "N/A") {
+      doc.setFontSize(9);
+      doc.text(`SHIPPER SEAL: ${shipperSeals}`, containerStartX, yPos + lineOffset);
+      lineOffset += 7;
+    }
+  }
+  
+  // Weights - use formatted values that include units
+  if (container.grossWt && container.grossWt !== "N/A") {
+    // Parse the weight and format it with unit
+    const grossNum = parseFloat(container.grossWt);
+    const formattedGross = !isNaN(grossNum) ? 
+      `${grossNum} ${container.unit || unit}` : 
+      container.grossWt;
+    
+    doc.setFontSize(9);
+    doc.text(`GROSS WT: ${formattedGross}`, containerStartX, yPos + lineOffset);
+    lineOffset += 7;
+  }
 
+  if (container.netWt && container.netWt !== "N/A") {
+    // Parse the weight and format it with unit
+    const netNum = parseFloat(container.netWt);
+    const formattedNet = !isNaN(netNum) ? 
+      `${netNum} ${container.unit || unit}` : 
+      container.netWt;
+    
+    doc.setFontSize(9);
+    doc.text(`NET WT: ${formattedNet}`, containerStartX, yPos + lineOffset);
+    lineOffset += 7;
+  }
 
-          const grossWt = container.grossWt
-            ? `${container.grossWt} KGS`
-            : "N/A";
-          const netWt = container.netWt ? `${container.netWt} KGS` : "N/A";
+  if (container.tareWt && container.tareWt !== "N/A") {
+    // Parse the weight and format it with unit
+    const tareNum = parseFloat(container.tareWt);
+    const formattedTare = !isNaN(tareNum) ? 
+      `${tareNum} ${container.unit || unit}` : 
+      container.tareWt;
+    
+    doc.setFontSize(9);
+    doc.text(`TARE WT: ${formattedTare}`, containerStartX, yPos + lineOffset);
+    lineOffset += 7;
+  }
 
-          // Increased font size for weights for better readability
-          doc.setFontSize(10); // Increased from 8 to 10 for better readability
-          doc.text(`GROSS WT: ${grossWt}`, containerStartX, yPos + 14);
-          doc.text(`NET WT: ${netWt}`, containerStartX, yPos + 21);
+  if (container.cbmWt && container.cbmWt !== "N/A") {
+    doc.setFontSize(9);
+    doc.text(`CBM: ${container.cbmWt} CBM`, containerStartX, yPos + lineOffset);
+    lineOffset += 7;
+  }
 
+  // Add spacing between containers
+  currentContainerY += containerHeight + 8;
+});
 
-          // No separator lines between containers
-        });
+    containerY = currentContainerY;
+    rowEndY = Math.max(rowEndY, containerY);
 
-        // Update containerY to position after vertical containers with proper spacing
+  } else {
+    // Table format for more than 3 containers
+    const tableStartY = containerY;
+    const tableWidth = 280;
+    const tableX = (pageWidth - tableWidth) / 2;
+    
+    // Define column widths based on available data
+    const col1Width = 70; // CONTAINER NO
+    const col2Width = 50; // GROSS WT
+    const col3Width = 50; // NET WT
+    const col4Width = 50; // TARE WT
+    const col5Width = 40; // CBM
+    const col6Width = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width); // SEAL NO
 
-        containerY = containerStartY + containersToShow.length * 40 + 25; // Updated to match reduced container spacing
+    // Table header with borders
+    doc.setFont("arial", "bold");
+    doc.setFontSize(9);
 
-        // Update rowEndY to account for actual space used by containers
-        rowEndY = Math.max(rowEndY, containerY);
+    // Draw header background and borders
+    doc.rect(tableX, tableStartY - 2, tableWidth, 12);
 
-        // No totals display for 3 or fewer containers as per user request
-      } else {
-        // Table format for more than 3 containers (existing logic)
-        const tableStartY = containerY;
-        // Increase table width further for better readability on the attachment page
-        const tableWidth = 247;
-        const tableX = (pageWidth - tableWidth) / 2; // Center the table on the page
-        const col1Width = 70; // CONTAINER NO
-        const col2Width = 62; // PRODUCT GROSS WT
-        const col3Width = 62; // PRODUCT NET WT
-        const col4Width = tableWidth - (col1Width + col2Width + col3Width); // SEAL NO (remainder)
+    // Header text (centered within each column)
+    const cell1CenterX = tableX + col1Width / 2;
+    const cell2CenterX = tableX + col1Width + col2Width / 2;
+    const cell3CenterX = tableX + col1Width + col2Width + col3Width / 2;
+    const cell4CenterX = tableX + col1Width + col2Width + col3Width + col4Width / 2;
+    const cell5CenterX = tableX + col1Width + col2Width + col3Width + col4Width + col5Width / 2;
+    const cell6CenterX = tableX + col1Width + col2Width + col3Width + col4Width + col5Width + col6Width / 2;
 
-        // Table header with borders
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
+    doc.text("CONTAINER NO.", cell1CenterX, tableStartY + 6, { align: "center" });
+    doc.text("GROSS WT", cell2CenterX, tableStartY + 6, { align: "center" });
+    doc.text("NET WT", cell3CenterX, tableStartY + 6, { align: "center" });
+    doc.text("TARE WT", cell4CenterX, tableStartY + 6, { align: "center" });
+    doc.text("CBM", cell5CenterX, tableStartY + 6, { align: "center" });
+    doc.text("SEAL NO.", cell6CenterX, tableStartY + 6, { align: "center" });
 
-        // Draw header background and borders
-        doc.rect(tableX, tableStartY - 2, tableWidth, 12);
+    // Draw vertical lines for header
+    doc.line(tableX + col1Width, tableStartY - 2, tableX + col1Width, tableStartY + 10);
+    doc.line(tableX + col1Width + col2Width, tableStartY - 2, tableX + col1Width + col2Width, tableStartY + 10);
+    doc.line(tableX + col1Width + col2Width + col3Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width, tableStartY + 10);
+    doc.line(tableX + col1Width + col2Width + col3Width + col4Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width + col4Width, tableStartY + 10);
+    doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, tableStartY + 10);
 
-        // Header text (centered within each column)
-        const cell1CenterX = tableX + col1Width / 2;
-        const cell2CenterX = tableX + col1Width + col2Width / 2;
-        const cell3CenterX = tableX + col1Width + col2Width + col3Width / 2;
-        const cell4CenterX =
-          tableX + col1Width + col2Width + col3Width + col4Width / 2;
-        doc.text("CONTAINER NO.", cell1CenterX, tableStartY + 6, {
-          align: "center",
-        });
-        doc.text("GROSS WT", cell2CenterX, tableStartY + 6, {
-          align: "center",
-        });
-        doc.text("NET WT", cell3CenterX, tableStartY + 6, { align: "center" });
-        doc.text("SEAL NO.", cell4CenterX, tableStartY + 6, {
-          align: "center",
-        });
+    containerY = tableStartY + 12;
 
-        // Draw vertical lines for header
-        doc.line(
-          tableX + col1Width,
-          tableStartY - 2,
-          tableX + col1Width,
-          tableStartY + 10
-        );
-        doc.line(
-          tableX + col1Width + col2Width,
-          tableStartY - 2,
-          tableX + col1Width + col2Width,
-          tableStartY + 10
-        );
-        doc.line(
-          tableX + col1Width + col2Width + col3Width,
-          tableStartY - 2,
-          tableX + col1Width + col2Width + col3Width,
-          tableStartY + 10
-        );
-
-        containerY = tableStartY + 12;
-
-        // Variables to calculate totals
-        let totalGrossWt = 0;
-        let totalNetWt = 0;
+    // Variables to calculate totals
+    let totalGrossWt = 0;
+    let totalNetWt = 0;
+    let totalTareWt = 0;
+    let totalCbmWt = 0;
 
         // Container data rows with borders
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
+    doc.setFont("arial", "normal");
+    doc.setFontSize(9);
 
-        containersToShow.forEach((container: any, index: number) => {
-          if (!container.containerNumber) return;
+    containersToShow.forEach((container: any, index: number) => {
+      if (!container.containerNumber) return;
 
-          const rowY = containerY;
+      const rowY = containerY;
 
-          // Draw row borders
-          doc.rect(tableX, rowY, tableWidth, 12);
+      // Draw row borders
+      doc.rect(tableX, rowY, tableWidth, 12);
 
-          // Draw vertical lines for data rows
-          doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + 12);
-          doc.line(
-            tableX + col1Width + col2Width,
-            rowY,
-            tableX + col1Width + col2Width,
-            rowY + 12
-          );
-          doc.line(
-            tableX + col1Width + col2Width + col3Width,
-            rowY,
-            tableX + col1Width + col2Width + col3Width,
-            rowY + 12
-          );
+      // Draw vertical lines for data rows
+      doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + 12);
+      doc.line(tableX + col1Width + col2Width, rowY, tableX + col1Width + col2Width, rowY + 12);
+      doc.line(tableX + col1Width + col2Width + col3Width, rowY, tableX + col1Width + col2Width + col3Width, rowY + 12);
+      doc.line(tableX + col1Width + col2Width + col3Width + col4Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width, rowY + 12);
+      doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY + 12);
+
 
           // Container data (centered in each column)
-          doc.text(container.containerNumber || "N/A", cell1CenterX, rowY + 8, {
-            align: "center",
-          });
+      doc.text(container.containerNumber || "N/A", cell1CenterX, rowY + 8, { align: "center" });
 
-          // Parse and add to totals
-          const grossWtNum = parseFloat(container.grossWt) || 0;
-          const netWtNum = parseFloat(container.netWt) || 0;
-          totalGrossWt += grossWtNum;
-          totalNetWt += netWtNum;
+        // Parse and add to totals
+      const grossWtNum = parseFloat(container.grossWt) || 0;
+      const netWtNum = parseFloat(container.netWt) || 0;
+      const tareWtNum = parseFloat(container.tareWt) || 0;
+      const cbmWtNum = parseFloat(container.cbmWt) || 0;
+      
+      totalGrossWt += grossWtNum;
+      totalNetWt += netWtNum;
+      totalTareWt += tareWtNum;
+      totalCbmWt += cbmWtNum;
 
-          const grossWt = container.grossWt
-            ? `${container.grossWt} KGS`
-            : "N/A";
-          doc.text(grossWt, cell2CenterX, rowY + 8, { align: "center" });
 
-          const netWt = container.netWt ? `${container.netWt} KGS` : "N/A";
-          doc.text(netWt, cell3CenterX, rowY + 8, { align: "center" });
+          // Only show values if they exist and are not "N/A"
+      const grossWt = (container.grossWt && container.grossWt !== "N/A") ? container.grossWt : "-";
+      const netWt = (container.netWt && container.netWt !== "N/A") ? container.netWt : "-";
+      const tareWt = (container.tareWt && container.tareWt !== "N/A") ? container.tareWt : "-";
+      const cbmWt = (container.cbmWt && container.cbmWt !== "N/A") ? container.cbmWt : "-";
 
-          doc.text(container.sealNumber || "N/A", cell4CenterX, rowY + 8, {
-            align: "center",
-          });
+      doc.text(grossWt, cell2CenterX, rowY + 8, { align: "center" });
+      doc.text(netWt, cell3CenterX, rowY + 8, { align: "center" });
+      doc.text(tareWt, cell4CenterX, rowY + 8, { align: "center" });
+      doc.text(cbmWt, cell5CenterX, rowY + 8, { align: "center" });
 
-          containerY += 12;
-        });
+
+        // Combine both seal types for display, only if they exist
+      const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A") 
+        ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
+        : "";
+      const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A") 
+        ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
+        : "";
+      
+      let allSeals = "";
+      if (carrierSeals && shipperSeals) {
+        allSeals = `C:${carrierSeals} S:${shipperSeals}`;
+      } else if (carrierSeals) {
+        allSeals = carrierSeals;
+      } else if (shipperSeals) {
+        allSeals = shipperSeals;
+      } else {
+        allSeals = "-";
+      }
+      
+      doc.text(allSeals, cell6CenterX, rowY + 8, { align: "center" });
+
+      containerY += 12;
+    });
 
         // Add TOTAL row at the bottom
-        const totalRowY = containerY;
+    const totalRowY = containerY;
+    doc.rect(tableX, totalRowY, tableWidth, 12);
 
-        // Draw total row borders
-        doc.rect(tableX, totalRowY, tableWidth, 12);
 
-        // Draw vertical lines for total row
-        doc.line(
-          tableX + col1Width,
-          totalRowY,
-          tableX + col1Width,
-          totalRowY + 12
-        );
-        doc.line(
-          tableX + col1Width + col2Width,
-          totalRowY,
-          tableX + col1Width + col2Width,
-          totalRowY + 12
-        );
-        doc.line(
-          tableX + col1Width + col2Width + col3Width,
-          totalRowY,
-          tableX + col1Width + col2Width + col3Width,
-          totalRowY + 12
-        );
+         // Draw vertical lines for total row
+    doc.line(tableX + col1Width, totalRowY, tableX + col1Width, totalRowY + 12);
+    doc.line(tableX + col1Width + col2Width, totalRowY, tableX + col1Width + col2Width, totalRowY + 12);
+    doc.line(tableX + col1Width + col2Width + col3Width, totalRowY, tableX + col1Width + col2Width + col3Width, totalRowY + 12);
+    doc.line(tableX + col1Width + col2Width + col3Width + col4Width, totalRowY, tableX + col1Width + col2Width + col3Width + col4Width, totalRowY + 12);
+    doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, totalRowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, totalRowY + 12);
 
-        doc.setFont("arial", "bold");
-        doc.text(
-          `TOTAL: ${containersToShow.length} CONTAINERS`,
-          cell1CenterX,
-          totalRowY + 8,
-          { align: "center" }
-        );
-        doc.text(
-          `${totalGrossWt.toFixed(2)} KGS`,
-          cell2CenterX,
-          totalRowY + 8,
-          { align: "center" }
-        );
-        doc.text(`${totalNetWt.toFixed(2)} KGS`, cell3CenterX, totalRowY + 8, {
-          align: "center",
-        });
-        // Leave seal no total field empty as requested
-        doc.text(
-          "",
-          tableX + col1Width + col2Width + col3Width + 2,
-          totalRowY + 8
-        );
+    doc.setFont("arial", "bold");
+    doc.text(`TOTAL: ${containersToShow.length} CONTAINERS`, cell1CenterX, totalRowY + 8, { align: "center" });
+       // Only show totals for fields that have data
+    const showGrossTotal = totalGrossWt > 0;
+    const showNetTotal = totalNetWt > 0;
+    const showTareTotal = totalTareWt > 0;
+    const showCbmTotal = totalCbmWt > 0;
 
-        containerY += 12; // Update containerY after total row
+     doc.text(showGrossTotal ? totalGrossWt.toFixed(2) : "-", cell2CenterX, totalRowY + 8, { align: "center" });
+    doc.text(showNetTotal ? totalNetWt.toFixed(2) : "-", cell3CenterX, totalRowY + 8, { align: "center" });
+    doc.text(showTareTotal ? totalTareWt.toFixed(2) : "-", cell4CenterX, totalRowY + 8, { align: "center" });
+    doc.text(showCbmTotal ? totalCbmWt.toFixed(3) : "-", cell5CenterX, totalRowY + 8, { align: "center" });
+    doc.text("", cell6CenterX, totalRowY + 8, { align: "center" });
+
+    containerY += 12;
       }
     }
+
+    
 
     // Container weights are shown individually with each container, no need for overall weights
 
@@ -1194,8 +1208,7 @@ export async function generateBlPdf(
       doc.setPage(1);
     }
 
-    // doc.text('SEAL NO: 014436', 70, firstRowTextY + 7);
-    // doc.text('GROSS WT. 20,030.00 KGS', 70, firstRowTextY + 11);
+
 
     // --- Dynamic container count logic with better positioning and formatting ---
     const selectedFromForm = (
@@ -1254,6 +1267,13 @@ export async function generateBlPdf(
       });
     }
 
+     if (unit) {
+      doc.setFont("arial", "bold");
+      doc.setFontSize(9);
+    }
+
+    
+
     // Get freight payable option and related port info
     const freightPayableAt = blFormData?.freightPayableAt || "";
     const freightText =
@@ -1268,27 +1288,37 @@ export async function generateBlPdf(
     const detentionRate = shipment?.podDetentionRate || "";
 
     // Additional block under description - improved spacing and alignment
-    let addY = firstRowTextY + 50;
-    doc.setFont("arial", "normal");
-    doc.setFontSize(9);
-    doc.text(freightText, marginX + 110, addY);
-    addY += 8;
+    // Additional block under description - improved spacing and alignment
+let addY = firstRowTextY + 50;
 
-    // Dynamic free days text
-    const freeDaysText = freeDays
-      ? `FREE ${freeDays} DAYS AT DESTINATION PORT THERE AFTER AT`
-      : "";
-    if (freeDaysText) {
-      doc.text(freeDaysText, marginX + 110, addY);
-      addY += 5;
-    }
+// Add "Shipped on Board" section just above freight text
+doc.setFont("arial", "bold");
+doc.setFontSize(9);
+doc.text("Shipped on Board", marginX + 110, addY);
+doc.text(blDate, marginX + 110 + 40, addY); // Date aligned to the right of "Shipped on Board"
+addY += 8;
 
-    // Dynamic detention rate text
-    const detentionText = detentionRate ? `USD ${detentionRate} /DAY/TANK` : "";
-    if (detentionText) {
-      doc.text(detentionText, marginX + 110, addY);
-      addY += 8;
-    }
+// Freight text
+doc.setFont("arial", "normal");
+doc.setFontSize(9);
+doc.text(freightText, marginX + 110, addY);
+addY += 8;
+
+// Dynamic free days text
+const freeDaysText = freeDays
+  ? `FREE ${freeDays} DAYS AT DESTINATION PORT THERE AFTER AT`
+  : "";
+if (freeDaysText) {
+  doc.text(freeDaysText, marginX + 110, addY);
+  addY += 5;
+}
+
+// Dynamic detention rate text
+const detentionText = detentionRate ? `USD ${detentionRate} /DAY/TANK` : "";
+if (detentionText) {
+  doc.text(detentionText, marginX + 110, addY);
+  addY += 8;
+}
 
     // Charge lines with better formatting - Use single charges field or default format
     doc.setFont("arial", "bold");
@@ -1554,6 +1584,9 @@ export async function generateBlPdf(
     // Place and date of issue - right aligned with extra padding from border
     doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
     doc.text("For RISTAR LOGISTICS PVT LTD", rightColX, bottomBoxTop + 28);
+
+
+    
 
     // Dynamic positioning for "As Agent for the Carrier" based on container count
     // Move it down much closer to the bottom line for all container counts

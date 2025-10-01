@@ -545,6 +545,7 @@ model MovementHistory {
   shipmentId     Int?
   emptyRepoJobId Int?
   status         String
+  maintenanceStatus  String?
   date           DateTime
   remarks        String?
   jobNumber      String?
@@ -583,23 +584,27 @@ model Permission {
 
 model BillofLading {
   id                     Int       @id @default(autoincrement())
-  consigneeName          String
+  consigneeName          String?
   consigneeAddress       String?
   consigneeContactNo     String?
   consigneeEmail         String?
   consigneeInfo          String?
-  notifyPartyName        String
+  notifyPartyName        String?
   notifyPartyAddress     String?
   notifyPartyContactNo   String?
   notifyPartyEmail       String?
   notifyPartyInfo        String?
+  unit                   String?
   containerNos           String?
-  sealNo                 String
-  grossWt                String
-  netWt                  String
+  sealNo                 String?
+  shippersealNo          String?     // NEW
+  grossWt                String?
+  netWt                  String?
+  tareWt                 String?     // NEW
+  cbmWt                  String?     // NEW
   billofLadingDetails    String?
   freightPayableAt       String?
-  deliveryAgentName      String
+  deliveryAgentName      String?
   deliveryAgentAddress   String?
   Vat                    String?
   deliveryAgentContactNo String?
@@ -609,13 +614,13 @@ model BillofLading {
   shippersAddress        String?
   shippersContactNo      String?
   shippersEmail          String?
-  shippersName           String
+  shippersName           String?
   shipperInfo            String?
   portOfLoading          String?
   portOfDischarge        String?
   vesselNo               String?
   chargesAndFees         String?
-  date                   String? // BL issued date (editable by user)
+  date                   String? 
   createdAt              DateTime  @default(now())
   shipmentId             Int?
   updatedAt              DateTime  @default(now()) @updatedAt
@@ -623,8 +628,8 @@ model BillofLading {
   hasDraftBlGenerated    Boolean   @default(false)
   hasOriginalBLGenerated Boolean   @default(false)
   shipment               Shipment? @relation(fields: [shipmentId], references: [id])
- 
 }
+
 
 // ---------- Audit logging ----------
 

@@ -105,7 +105,6 @@ export default function AssignBlContainersModal({
   };
 
   useEffect(() => {
-    // rebuild groups.containers from belongsTo
     setGroups((prev) => {
       const next = prev.map(g => ({ ...g, containers: [] as string[] }));
       for (const [cn, gi] of Object.entries(belongsTo)) {

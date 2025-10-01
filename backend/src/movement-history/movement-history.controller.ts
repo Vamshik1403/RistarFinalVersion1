@@ -9,7 +9,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { MovementHistoryService } from './movement-history.service';
-import { BulkUpdateMovementDto } from './dto/bulk-update-movement.dto';
 import { AuthGuard } from '@nestjs/passport';
 
 @Controller('movement-history')
@@ -27,21 +26,18 @@ export class MovementHistoryController {
   async getAllMovementHistory() {
     return this.movementHistoryService.findAll();
   }
-  
-      @Get("latest")
-getLatestPerContainer() {
-  return this.movementHistoryService.findLatestPerContainer();
-}
 
-
+  @Get('latest')
+  getLatestPerContainer() {
+    return this.movementHistoryService.findLatestPerContainer();
+  }
 
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.movementHistoryService.findOne(id);
   }
 
-
-   @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'))
   @Post('bulk-create')
   async bulkCreateStatus(
     @Body()
@@ -51,13 +47,21 @@ getLatestPerContainer() {
       jobNumber: string;
       portId?: number;
       addressBookId?: number;
-      remarks?:string;
+      remarks?: string;
+      maintenanceStatus?: string;
       vesselName?: string;
     },
-    
   ) {
-    console.log('🚀 Received payload:', body); 
-    const { ids, newStatus, portId, addressBookId ,remarks , vesselName} = body;
+    console.log('🚀 Received payload:', body);
+    const {
+      ids,
+      newStatus,
+      portId,
+      addressBookId,
+      remarks,
+      maintenanceStatus,
+      vesselName,
+    } = body;
 
     const results = await Promise.all(
       ids.map((id) =>
@@ -67,6 +71,7 @@ getLatestPerContainer() {
           portId ?? null,
           addressBookId ?? null,
           remarks?.trim() || undefined,
+          maintenanceStatus ?? undefined,
           vesselName?.trim() || undefined,
         ),
       ),
@@ -75,27 +80,35 @@ getLatestPerContainer() {
     return { message: 'New status entries created', results };
   }
 
-    @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'))
   @Post('bulk-update')
   async bulkUpdate(
-    @Body() dto: { ids: number[]; newStatus: string; jobNumber: string; remarks:string , vesselName?: string },
+    @Body()
+    dto: {
+      ids: number[];
+      newStatus: string;
+      jobNumber: string;
+      remarks: string;
+      maintenanceStatus?: string;
+      vesselName?: string;
+    },
   ) {
     return this.movementHistoryService.bulkUpdateStatus(
       dto.ids,
       dto.newStatus,
       dto.jobNumber,
       dto.remarks,
+      dto.maintenanceStatus,
       dto.vesselName,
-
     );
   }
 
-    @UseGuards(AuthGuard('jwt'))
+  @UseGuards(AuthGuard('jwt'))
   @Patch(':id')
-  updateMovement(@Param('id', ParseIntPipe) id: number, @Body() body: any) {
+  updateMovement(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: any,
+  ) {
     return this.movementHistoryService.updateMovement(id, body);
   }
-
-
-
 }

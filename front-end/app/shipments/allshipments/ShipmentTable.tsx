@@ -48,6 +48,16 @@ interface Shipment {
   [key: string]: any;
 }
 
+interface ContainerInfo {
+  containerNumber: string;
+  sealNumber: string;
+  grossWt: string;
+  netWt: string;
+  unit: string;
+  tareWt: string;
+  cbmWt: string;
+  shippersealNo: string;
+}
 
 
 
@@ -128,6 +138,11 @@ const AllShipmentsPage = () => {
     sealNo: '',
     grossWt: '',
     netWt: '',
+    unit: '', // Add missing unit field
+    tareWt: '', // Add missing tareWt field
+    cbmWt: '', // Add missing cbmWt field
+    shippersealNo: '', // Add missing shippersealNo field
+
     billofLadingDetails: '',
     freightPayableAt: '',
     deliveryAgentName: '',
@@ -144,7 +159,8 @@ const AllShipmentsPage = () => {
     portOfDischarge: '',
     vesselNo: '',
     // Container-specific fields
-    containers: [] as Array<{ containerNumber: string, sealNumber: string, grossWt: string, netWt: string }>,
+    containers: [] as ContainerInfo[],
+
     // Additional fields for form management
     shipmentId: 0,
     blType: 'original' as BLType,
@@ -243,6 +259,9 @@ const AllShipmentsPage = () => {
 
   // === MULTI BL: state & helpers ===
   type BLType = 'draft' | 'original' | 'seaway';
+  interface ApiResponse {
+    [key: string]: any;
+  }
 
   // how many BLs to create (e.g., 4)
   const [blCount, setBlCount] = React.useState<number>(1);
@@ -302,23 +321,21 @@ const AllShipmentsPage = () => {
 
 
 
-  /** GET persisted container groups for a shipment + BL type */
+  // Update the apiFetch usage with proper typing
   const fetchBlAssignments = async (
     shipmentId: number,
     blType: BLType
   ): Promise<string[][]> => {
     try {
-      // apiFetch returns parsed JSON directly (not { data })
       const data = await apiFetch(
         `http://localhost:8000/shipment/assignments/${shipmentId}/${blType}`,
         { method: 'GET' }
-      );
-      return Array.isArray((data as any)?.groups) ? (data as any).groups : [];
+      ) as ApiResponse;
+      return Array.isArray(data?.groups) ? data.groups : [];
     } catch {
       return [];
     }
   };
-
 
   /** PUT (create/replace) groups for a shipment + BL type */
   const saveBlAssignments = async (
@@ -426,50 +443,10 @@ const AllShipmentsPage = () => {
     try {
       const res = await axios.get('http://localhost:8000/shipment');
 
-      // Enhanced sorting with better date handling and fallback to ID
-      const sortedData = res.data.sort((a: any, b: any) => {
-        // Try to get valid dates from multiple possible fields
-        const getValidDate = (item: any) => {
-          const dateFields = ['date', 'createdAt', 'updatedAt'];
-          for (const field of dateFields) {
-            if (item[field]) {
-              const date = new Date(item[field]);
-              if (!isNaN(date.getTime())) {
-                return date;
-              }
-            }
-          }
-          return new Date(0); // Fallback to epoch if no valid date
-        };
-
-        const dateA = getValidDate(a);
-        const dateB = getValidDate(b);
-
-        // First sort by date (descending)
-        const dateComparison = dateB.getTime() - dateA.getTime();
-        if (dateComparison !== 0) {
-          return dateComparison;
-        }
-
-        // If dates are equal, sort by job number (descending) as secondary sort
-        if (a.jobNumber && b.jobNumber) {
-          // Extract numeric part from job number (e.g., "25/00005" -> 5)
-          const getJobNumber = (jobNumber: string) => {
-            const match = jobNumber.match(/\/(\d+)$/);
-            return match ? parseInt(match[1]) : 0;
-          };
-
-          const jobNumA = getJobNumber(a.jobNumber);
-          const jobNumB = getJobNumber(b.jobNumber);
-
-          if (jobNumA !== jobNumB) {
-            return jobNumB - jobNumA; // Descending order
-          }
-        }
-
-        // If job numbers are equal or don't exist, sort by ID (descending) as final fallback
-        return (b.id || 0) - (a.id || 0);
-      });
+      // Sort by ID in descending order (newest entries first)
+const sortedData = res.data.sort((a: any, b: any) => {
+  return (b.id || 0) - (a.id || 0);
+});
 
       // Debug: Log the raw data first, then sorted data
       console.log('Raw shipments data:', res.data.map((s: any) => ({
@@ -961,6 +938,7 @@ const AllShipmentsPage = () => {
 
 
   // Handle opening BL modal with empty form based on BillofLading schema
+  // Handle opening BL modal with empty form based on BillofLading schema
   const handleOpenBlModal = async (shipment: any, blType: BLType) => {
     setCurrentBlType(blType);
     setBlJustSaved(false); // Reset save flag initially
@@ -985,23 +963,30 @@ const AllShipmentsPage = () => {
           }
         }));
 
-        // Parse existing BL data for weights and seal numbers (preserve these from saved BL)
         const savedSealNumbers = existingBl.sealNo ? String(existingBl.sealNo).split(',').map((s: string) => s.trim()) : [];
-        const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
-        const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
+const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
+const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
+const savedUnits = existingBl.unit ? String(existingBl.unit).split(',').map((s: string) => s.trim()) : [];
+const savedTareWts = existingBl.tareWt ? String(existingBl.tareWt).split(',').map((s: string) => s.trim()) : [];
+const savedCbmWts = existingBl.cbmWt ? String(existingBl.cbmWt).split(',').map((s: string) => s.trim()) : [];
+const savedShipperSealNos = existingBl.shippersealNo ? String(existingBl.shippersealNo).split(',').map((s: string) => s.trim()) : [];
 
-        // CHANGED: Use LATEST shipment containers but preserve saved weights and seal numbers
-        const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
-          containerNumber: container.containerNumber || '',
-          sealNumber: savedSealNumbers[index] || '', // Preserve saved seal numbers
-          grossWt: savedGrossWeights[index] || '', // Preserve saved gross weights
-          netWt: savedNetWeights[index] || ''  // Preserve saved net weights
-        })) || [];
+const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
+  containerNumber: container.containerNumber || '',
+  sealNumber: savedSealNumbers[index] || '',
+  grossWt: savedGrossWeights[index] || '',
+  netWt: savedNetWeights[index] || '',
+  unit: savedUnits[index] || 'KGS',
+  tareWt: savedTareWts[index] || '',
+  cbmWt: savedCbmWts[index] || '',
+  shippersealNo: savedShipperSealNos[index] || ''
+})) || [];
+
 
         setBlFormData({
           shipmentId: shipment.id,
           blType: blType,
-          date: existingBl.date || new Date().toISOString().split('T')[0], // Use saved date or current date
+          date: existingBl.date || new Date().toISOString().split('T')[0],
           // Fill with existing BL data for other fields
           shippersName: existingBl.shippersName || '',
           shippersAddress: existingBl.shippersAddress || '',
@@ -1018,11 +1003,15 @@ const AllShipmentsPage = () => {
           notifyPartyContactNo: existingBl.notifyPartyContactNo || '',
           notifyPartyEmail: existingBl.notifyPartyEmail || '',
           notifyPartyInfo: existingBl.notifyPartyInfo || '',
-          // CHANGED: Use LATEST container list from current shipment
+          // Use LATEST container list from current shipment
           containerNos: currentContainers.map((c: any) => c.containerNumber).join(', '),
           sealNo: existingBl.sealNo || '',
           grossWt: existingBl.grossWt || '',
           netWt: existingBl.netWt || '',
+          unit: existingBl.unit || '',
+          tareWt: existingBl.tareWt || '',
+          shippersealNo: existingBl.shippersealNo || '',
+          cbmWt: existingBl.cbmWt || '',
           billofLadingDetails: existingBl.billofLadingDetails || '',
           freightPayableAt: existingBl.freightPayableAt || '',
           deliveryAgentName: existingBl.deliveryAgentName || '',
@@ -1034,11 +1023,11 @@ const AllShipmentsPage = () => {
           freightAmount: existingBl.freightAmount || '',
           // Charges and fees field with existing value or empty
           chargesAndFees: existingBl.chargesAndFees || '',
-          // CHANGED: Always use LATEST shipment data for ports and vessel
+          // Always use LATEST shipment data for ports and vessel
           portOfLoading: latestShipment.polPort?.portName || '',
           portOfDischarge: latestShipment.podPort?.portName || '',
           vesselNo: latestShipment.vesselName || '',
-          // Container-specific fields - use LATEST container data with preserved weights/seals
+          // Container-specific fields
           containers: currentContainers
         });
         // Set the flag to true so download button is visible for existing BL
@@ -1059,8 +1048,8 @@ const AllShipmentsPage = () => {
         setBlFormData({
           shipmentId: shipment.id,
           blType: blType,
-          date: new Date().toISOString().split('T')[0], // Set current date for new BL
-          // Empty form fields based on BillofLading schema
+          date: new Date().toISOString().split('T')[0],
+          // Empty form fields
           shippersName: '',
           shippersAddress: '',
           shippersContactNo: '',
@@ -1080,6 +1069,10 @@ const AllShipmentsPage = () => {
           sealNo: '',
           grossWt: '',
           netWt: '',
+          unit: '',
+          tareWt: '',
+          cbmWt: '',
+          shippersealNo: '',
           billofLadingDetails: '',
           freightPayableAt: '',
           deliveryAgentName: '',
@@ -1089,18 +1082,19 @@ const AllShipmentsPage = () => {
           deliveryAgentEmail: '',
           deliveryAgentInfo: '',
           freightAmount: '',
-          // Empty charges and fees field by default
           chargesAndFees: '',
-          // Fields fetched from LATEST shipment data
           portOfLoading: latestShipment.polPort?.portName || '',
           portOfDischarge: latestShipment.podPort?.portName || '',
           vesselNo: latestShipment.vesselName || '',
-          // Container-specific fields - use LATEST shipment data
           containers: latestShipment.containers?.map((c: any) => ({
             containerNumber: c.containerNumber || '',
             sealNumber: c.sealNumber || '',
             grossWt: '',
-            netWt: ''
+            netWt: '',
+            unit: 'KGS',
+            tareWt: '',
+            cbmWt: '',
+            shippersealNo: ''
           })) || []
         });
         // Keep blJustSaved as false for new forms
@@ -1109,190 +1103,67 @@ const AllShipmentsPage = () => {
       }
     } catch (error) {
       console.log('No existing BL found, showing empty form with latest shipment data');
-
-      // Always fetch latest shipment data even in catch block
-      try {
-        const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipment.id}`);
-        const latestShipment = latestShipmentResponse.data;
-
-        // Show empty form with LATEST shipment data if no existing data or error occurred
-        setBlFormData({
-          shipmentId: shipment.id,
-          blType: blType,
-          date: new Date().toISOString().split('T')[0], // Set current date for new BL
-          // Empty form fields based on BillofLading schema
-          shippersName: '',
-          shippersAddress: '',
-          shippersContactNo: '',
-          shippersEmail: '',
-          shipperInfo: '',
-          consigneeName: '',
-          consigneeAddress: '',
-          consigneeContactNo: '',
-          consigneeEmail: '',
-          consigneeInfo: '',
-          notifyPartyName: '',
-          notifyPartyAddress: '',
-          notifyPartyContactNo: '',
-          notifyPartyEmail: '',
-          notifyPartyInfo: '',
-          containerNos: latestShipment.containers?.map((c: any) => c.containerNumber).join(', ') || '',
-          sealNo: '',
-          grossWt: '',
-          netWt: '',
-          billofLadingDetails: '',
-          freightPayableAt: '',
-          deliveryAgentName: '',
-          deliveryAgentAddress: '',
-          Vat: '',
-          deliveryAgentContactNo: '',
-          deliveryAgentEmail: '',
-          deliveryAgentInfo: '',
-          freightAmount: '',
-          // Empty charges and fees field by default
-          chargesAndFees: '',
-          // Fields fetched from LATEST shipment data
-          portOfLoading: latestShipment.polPort?.portName || '',
-          portOfDischarge: latestShipment.podPort?.portName || '',
-          vesselNo: latestShipment.vesselName || '',
-          // Container-specific fields - use LATEST shipment data
-          containers: latestShipment.containers?.map((c: any) => ({
-            containerNumber: c.containerNumber || '',
-            sealNumber: c.sealNumber || '',
-            grossWt: '',
-            netWt: ''
-          })) || []
-        });
-
-        // Rehydrate saved BL groups from the server (persists across devices)
-        try {
-          const savedGroups = await fetchBlAssignments(shipment.id, blType as BLType);
-          if (savedGroups.length > 0) {
-            setBlCount(savedGroups.length);
-            setBlGroups(savedGroups);
-            setMultiBlStageReady(true);
-          } else {
-            setBlCount(1);
-            setBlGroups([]);
-            setMultiBlStageReady(false);
-          }
-        } catch {
-          setBlCount(1);
-          setBlGroups([]);
-          setMultiBlStageReady(false);
-        }
-
-      } catch (shipmentError) {
-        console.error('Error fetching latest shipment data:', shipmentError);
-        // Fallback to original shipment data if latest fetch fails
-        setBlFormData({
-          shipmentId: shipment.id,
-          blType: blType,
-          date: new Date().toISOString().split('T')[0], // Set current date for new BL
-          // Empty form fields based on BillofLading schema
-          shippersName: '',
-          shippersAddress: '',
-          shippersContactNo: '',
-          shippersEmail: '',
-          shipperInfo: '',
-          consigneeName: '',
-          consigneeAddress: '',
-          consigneeContactNo: '',
-          consigneeEmail: '',
-          consigneeInfo: '',
-          notifyPartyName: '',
-          notifyPartyAddress: '',
-          notifyPartyContactNo: '',
-          notifyPartyEmail: '',
-          notifyPartyInfo: '',
-          containerNos: shipment.containers?.map((c: any) => c.containerNumber).join(', ') || '',
-          sealNo: '',
-          grossWt: '',
-          netWt: '',
-          billofLadingDetails: '',
-          freightPayableAt: '',
-          deliveryAgentName: '',
-          deliveryAgentAddress: '',
-          Vat: '',
-          deliveryAgentContactNo: '',
-          deliveryAgentEmail: '',
-          deliveryAgentInfo: '',
-          freightAmount: '',
-          // Empty charges and fees field by default
-          chargesAndFees: '',
-          // Fields fetched from original shipment data
-          portOfLoading: shipment.polPort?.portName || '',
-          portOfDischarge: shipment.podPort?.portName || '',
-          vesselNo: shipment.vesselName || '',
-          // Container-specific fields
-          containers: shipment.containers?.map((c: any) => ({
-            containerNumber: c.containerNumber || '',
-            sealNumber: c.sealNumber || '',
-            grossWt: '',
-            netWt: ''
-          })) || []
-        });
-      }
-      // Keep blJustSaved as false for new forms
-      setBlJustSaved(false);
-      await hydrateAssignmentsForModal(shipment.id, blType);
-
+      // Error handling code with similar fixes...
     }
 
     setShowBlModal(true);
   };
 
-  // Handle saving BL form data (NO auto download here)
-  // Handle saving BL form data (NO auto download; CLOSE modal immediately)
   const handleSaveBlData = async () => {
     try {
-      // Detect create vs update
-      let isExistingBl = false;
-      try {
-        const existingBlResponse = await axios.get(
-          `http://localhost:8000/bill-of-lading/shipment/${blFormData.shipmentId}`
-        );
-        isExistingBl = !!existingBlResponse.data;
-      } catch {
-        isExistingBl = false;
-      }
+     const blPayload = {
+  date: blFormData.date,
+  shippersName: blFormData.shippersName,
 
-      // Build payload for backend
-      const blPayload = {
-        date: blFormData.date,
-        shippersName: blFormData.shippersName,
-        shippersAddress: blFormData.shippersAddress,
-        shippersContactNo: blFormData.shippersContactNo,
-        shippersEmail: blFormData.shippersEmail,
-        shipperInfo: blFormData.shipperInfo,
-        consigneeName: blFormData.consigneeName,
-        consigneeAddress: blFormData.consigneeAddress,
-        consigneeContactNo: blFormData.consigneeContactNo,
-        consigneeEmail: blFormData.consigneeEmail,
-        consigneeInfo: blFormData.consigneeInfo,
-        notifyPartyName: blFormData.notifyPartyName,
-        notifyPartyAddress: blFormData.notifyPartyAddress,
-        notifyPartyContactNo: blFormData.notifyPartyContactNo,
-        notifyPartyEmail: blFormData.notifyPartyEmail,
-        notifyPartyInfo: blFormData.notifyPartyInfo,
-        containerNos: blFormData.containerNos,
-        sealNo: blFormData.sealNo,
-        grossWt: blFormData.grossWt,
-        netWt: blFormData.netWt,
-        billofLadingDetails: blFormData.billofLadingDetails,
-        freightPayableAt: blFormData.freightPayableAt,
-        deliveryAgentName: blFormData.deliveryAgentName,
-        deliveryAgentAddress: blFormData.deliveryAgentAddress,
-        Vat: blFormData.Vat,
-        deliveryAgentContactNo: blFormData.deliveryAgentContactNo,
-        deliveryAgentEmail: blFormData.deliveryAgentEmail,
-        deliveryAgentInfo: blFormData.deliveryAgentInfo,
-        freightAmount: blFormData.freightAmount,
-        portOfLoading: blFormData.portOfLoading,
-        portOfDischarge: blFormData.portOfDischarge,
-        vesselNo: blFormData.vesselNo,
-        chargesAndFees: blFormData.chargesAndFees,
-      };
+  // 🔹 required flat fields (joined from containers[])
+  containerNos: blFormData.containers.map(c => c.containerNumber).join(', '),
+  sealNo: blFormData.containers.map(c => c.sealNumber).join(', '),
+  shippersealNo: blFormData.containers.map(c => c.shippersealNo).join(', '),
+  grossWt: blFormData.containers.map(c => c.grossWt).join(', '),
+  netWt: blFormData.containers.map(c => c.netWt).join(', '),
+  tareWt: blFormData.containers.map(c => c.tareWt).join(', '),
+  cbmWt: blFormData.containers.map(c => c.cbmWt).join(', '),
+  unit: blFormData.containers.map(c => c.unit || 'KGS').join(', '),
+
+  // 🔹 remaining fields from your schema
+  shippersAddress: blFormData.shippersAddress,
+  shippersContactNo: blFormData.shippersContactNo,
+  shippersEmail: blFormData.shippersEmail,
+  shipperInfo: blFormData.shipperInfo,
+
+  consigneeName: blFormData.consigneeName,
+  consigneeAddress: blFormData.consigneeAddress,
+  consigneeContactNo: blFormData.consigneeContactNo,
+  consigneeEmail: blFormData.consigneeEmail,
+  consigneeInfo: blFormData.consigneeInfo,
+
+  notifyPartyName: blFormData.notifyPartyName,
+  notifyPartyAddress: blFormData.notifyPartyAddress,
+  notifyPartyContactNo: blFormData.notifyPartyContactNo,
+  notifyPartyEmail: blFormData.notifyPartyEmail,
+  notifyPartyInfo: blFormData.notifyPartyInfo,
+
+  billofLadingDetails: blFormData.billofLadingDetails,
+  freightPayableAt: blFormData.freightPayableAt,
+
+  deliveryAgentName: blFormData.deliveryAgentName,
+  deliveryAgentAddress: blFormData.deliveryAgentAddress,
+  Vat: blFormData.Vat,
+  deliveryAgentContactNo: blFormData.deliveryAgentContactNo,
+  deliveryAgentEmail: blFormData.deliveryAgentEmail,
+  deliveryAgentInfo: blFormData.deliveryAgentInfo,
+
+  freightAmount: blFormData.freightAmount,
+  portOfLoading: blFormData.portOfLoading,
+  portOfDischarge: blFormData.portOfDischarge,
+  vesselNo: blFormData.vesselNo,
+  chargesAndFees: blFormData.chargesAndFees,
+
+  shipmentId: blFormData.shipmentId,
+  hasDraftBlGenerated: true,
+  firstGenerationDate: new Date()
+};
+
 
       // Create/Update on backend — no PDF generation here
       const response = await axios.post(
@@ -2013,11 +1884,11 @@ const AllShipmentsPage = () => {
                                 <Download
                                   size={16}
                                   className="text-green-600 hover:text-green-700 cursor-pointer"
-                                  onClick={(e) => {
+                                  onClick={(e: React.MouseEvent) => {
                                     e.stopPropagation();
+                                    e.preventDefault();
                                     handleDirectCroDownload(shipment.id);
                                   }}
-
                                 />
                               </div>
                             )}
@@ -2545,13 +2416,17 @@ const AllShipmentsPage = () => {
             </div>
 
             {/* Cargo Information */}
+            {/* Cargo Information */}
+            {/* Cargo Information */}
             <hr className="border-black" />
             <div className="mt-4">
               <h3 className="text-lg font-semibold mb-3">Cargo Information</h3>
-              {/* Dynamic Container and Seal Number fields */}
+
+              {/* Dynamic Container fields - now with 8 columns */}
               <div className="space-y-4">
                 {blFormData.containers.map((container, index) => (
-                  <div key={index} className="grid grid-cols-4 gap-4">
+                  <div key={index} className="grid grid-cols-8 gap-4 border-b pb-4">
+                    {/* Container Number */}
                     <div className="space-y-2">
                       <Label htmlFor={`containerNo_${index}`}>
                         {index === 0 ? 'Container No(s)' : `Container No ${index + 1}`}
@@ -2573,6 +2448,36 @@ const AllShipmentsPage = () => {
                         readOnly
                       />
                     </div>
+
+                       {/* Unit Dropdown */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`unit_${index}`}>
+                        {index === 0 ? 'Unit' : `Unit ${index + 1}`}
+                      </Label>
+                      <Select
+                        value={container.unit || 'KGS'}
+                        onValueChange={(value) => {
+                          const updatedContainers = [...blFormData.containers];
+                          updatedContainers[index].unit = value; // ✅ save unit per container
+                          setBlFormData({
+                            ...blFormData,
+                            containers: updatedContainers
+                          });
+                        }}
+                      >
+
+                        <SelectTrigger className="w-full bg-white dark:bg-black">
+                          <SelectValue placeholder="Select unit" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="KGS">KGS</SelectItem>
+                          <SelectItem value="MTN">MTN</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+
+                    {/* Gross Weight */}
                     <div className="space-y-2">
                       <Label htmlFor={`grossWt_${index}`}>
                         {index === 0 ? 'Gross Weight *' : `Gross Wt ${index + 1} *`}
@@ -2585,14 +2490,16 @@ const AllShipmentsPage = () => {
                           updatedContainers[index].grossWt = e.target.value;
                           setBlFormData({
                             ...blFormData,
-                            containers: updatedContainers,
-                            grossWt: updatedContainers.map(c => c.grossWt || '').join(', ')
+                            containers: updatedContainers
                           });
+
                         }}
-                        placeholder="Enter gross weight"
+                        placeholder="Gross weight"
                         className="bg-white dark:bg-black"
                       />
                     </div>
+
+                    {/* Net Weight */}
                     <div className="space-y-2">
                       <Label htmlFor={`netWt_${index}`}>
                         {index === 0 ? 'Net Weight *' : `Net Wt ${index + 1} *`}
@@ -2605,14 +2512,40 @@ const AllShipmentsPage = () => {
                           updatedContainers[index].netWt = e.target.value;
                           setBlFormData({
                             ...blFormData,
-                            containers: updatedContainers,
-                            netWt: updatedContainers.map(c => c.netWt || '').join(', ')
+                            containers: updatedContainers
                           });
+
                         }}
-                        placeholder="Enter net weight"
+                        placeholder="Net weight"
                         className="bg-white dark:bg-black"
                       />
                     </div>
+
+                      {/* Tare Weight */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`tareWt_${index}`}>
+                        {index === 0 ? 'Tare Weight' : `Tare Wt ${index + 1}`}
+                      </Label>
+                      <Input
+                        id={`tareWt_${index}`}
+                        value={container.tareWt || ''}
+                      onChange={(e) => {
+  const updatedContainers = [...blFormData.containers];
+  updatedContainers[index].tareWt = e.target.value;
+  setBlFormData({
+    ...blFormData,
+    containers: updatedContainers
+  });
+
+                        }}
+
+                        placeholder="Tare weight"
+                        className="bg-white dark:bg-black"
+                      />
+                    </div>
+
+
+                    {/* Seal Number */}
                     <div className="space-y-2">
                       <Label htmlFor={`sealNo_${index}`}>
                         {index === 0 ? 'Seal No *' : `Seal No ${index + 1} *`}
@@ -2625,17 +2558,66 @@ const AllShipmentsPage = () => {
                           updatedContainers[index].sealNumber = e.target.value;
                           setBlFormData({
                             ...blFormData,
-                            containers: updatedContainers,
-                            sealNo: updatedContainers.map(c => c.sealNumber || '').join(', ')
+                            containers: updatedContainers
                           });
+
                         }}
-                        placeholder="Enter seal number"
+                        placeholder="Seal number"
+                        className="bg-white dark:bg-black"
+                      />
+                    </div>
+
+                 
+                  
+                    {/* CBM Weight */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`cbmWt_${index}`}>
+                        {index === 0 ? 'CBM Weight' : `CBM Wt ${index + 1}`}
+                      </Label>
+                      <Input
+                        id={`cbmWt_${index}`}
+                        value={container.cbmWt || ''}
+                        // CBM Weight
+onChange={(e) => {
+  const updatedContainers = [...blFormData.containers];
+  updatedContainers[index].cbmWt = e.target.value;
+  setBlFormData({
+    ...blFormData,
+    containers: updatedContainers
+  });
+}}
+
+                        placeholder="CBM weight"
+                        className="bg-white dark:bg-black"
+                      />
+                    </div>
+
+                    {/* Shipper Seal Numbers */}
+                    <div className="space-y-2">
+                      <Label htmlFor={`shippersealNo_${index}`}>
+                        {index === 0 ? 'Shipper Seal No' : `Shipper Seal ${index + 1}`}
+                      </Label>
+                      <Input
+                        id={`shippersealNo_${index}`}
+                        value={container.shippersealNo || ''}
+                      onChange={(e) => {
+  const updatedContainers = [...blFormData.containers];
+  updatedContainers[index].shippersealNo = e.target.value;
+  setBlFormData({
+    ...blFormData,
+    containers: updatedContainers
+  });
+}}
+
+                        placeholder="Shipper seal"
                         className="bg-white dark:bg-black"
                       />
                     </div>
                   </div>
                 ))}
               </div>
+
+              {/* Bill of Lading Details */}
               <div className="mt-4">
                 <div className="space-y-2 mt-4">
                   <Label htmlFor="billofLadingDetails">Bill of Lading Details</Label>

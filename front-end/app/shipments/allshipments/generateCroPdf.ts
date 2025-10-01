@@ -121,23 +121,22 @@ export async function generateCroPdf(
     );
 
     // Format dates - use provided date for CRO if available (for consistency), otherwise use shipment date
-    const croDate = providedDate ? dayjs(providedDate).format("DD MMM YYYY") : dayjs(shipment.date).format("DD MMM YYYY");
-   const releaseDate =
-  shipment.gsDate && dayjs(shipment.gsDate).isValid()
-    ? dayjs(shipment.gsDate).format("DD-MM-YYYY")
-    : "date not set yet";
+    const croDate = providedDate
+      ? dayjs(providedDate).format("DD MMM YYYY")
+      : dayjs(shipment.date).format("DD MMM YYYY");
+    const releaseDate =
+      shipment.gsDate && dayjs(shipment.gsDate).isValid()
+        ? dayjs(shipment.gsDate).format("DD-MM-YYYY")
+        : "date not set yet";
 
-// Safe ETD / ETA
-const etd =
-  shipment.gsDate && dayjs(shipment.gsDate).isValid()
-    ? dayjs(shipment.gsDate).format("DD-MM-YYYY")
-    : "(date not set yet)";
+    // Safe ETD / ETA
+    const etd = shipment.gsDate && dayjs(shipment.gsDate).isValid()
+  ? dayjs(shipment.gsDate).format("DD MMM YYYY")  // Changed to match CRO date
+  : "date not set yet";
 
-const eta =
-  shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
-    ? dayjs(shipment.etaTopod).format("DD-MM-YYYY")
-    : "(date not set yet)";
-
+const eta = shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
+  ? dayjs(shipment.etaTopod).format("DD MMM YYYY")  // Changed to match CRO date
+  : "date not set yet";
 
     // Get port information
     const pol = shipment.polPort?.portName || "N/A";
@@ -473,17 +472,24 @@ const eta =
         if (containerMovements.length > 0) {
           const latestMovement = containerMovements[0];
 
-          if (latestMovement.shipmentId && allShipmentsData[latestMovement.shipmentId]) {
-            const movementShipment = allShipmentsData[latestMovement.shipmentId];
-groupEta =
-  movementShipment.etaTopod && dayjs(movementShipment.etaTopod).isValid()
-    ? dayjs(movementShipment.etaTopod).format("DD-MM-YYYY")
-    : eta;
+          if (
+            latestMovement.shipmentId &&
+            allShipmentsData[latestMovement.shipmentId]
+          ) {
+            const movementShipment =
+              allShipmentsData[latestMovement.shipmentId];
+            groupEta =
+              movementShipment.etaTopod &&
+              dayjs(movementShipment.etaTopod).isValid()
+                ? dayjs(movementShipment.etaTopod).format("DD-MM-YYYY")
+                : eta;
 
-groupEtd =
-  movementShipment.gsDate && dayjs(movementShipment.gsDate).isValid()
-    ? dayjs(movementShipment.gsDate).format("DD-MM-YYYY")
-    : etd;etd;
+            groupEtd =
+              movementShipment.gsDate &&
+              dayjs(movementShipment.gsDate).isValid()
+                ? dayjs(movementShipment.gsDate).format("DD-MM-YYYY")
+                : etd;
+            etd;
           } else {
             groupEta = eta;
             groupEtd = etd;
@@ -577,7 +583,9 @@ groupEtd =
       }
       // Format country value - first letter capital, rest lowercase
       if (countryValue !== "N/A") {
-        countryValue = countryValue.charAt(0).toUpperCase() + countryValue.slice(1).toLowerCase();
+        countryValue =
+          countryValue.charAt(0).toUpperCase() +
+          countryValue.slice(1).toLowerCase();
       }
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
@@ -674,16 +682,19 @@ groupEtd =
       addTextWithSpacing(
         doc,
         "FINAL DESTINATION:",
-        finalDestination.charAt(0).toUpperCase() + finalDestination.slice(1).toLowerCase(),
+        finalDestination.charAt(0).toUpperCase() +
+          finalDestination.slice(1).toLowerCase(),
         14,
         shipmentDetailsStartY + 12,
         45
       );
       // Format tank preparation - first letter capital, rest lowercase
       const tankPrepValue = shipment.tankPreparation || "N/A";
-      const formattedTankPrep = tankPrepValue !== "N/A" 
-        ? tankPrepValue.charAt(0).toUpperCase() + tankPrepValue.slice(1).toLowerCase()
-        : tankPrepValue;
+      const formattedTankPrep =
+        tankPrepValue !== "N/A"
+          ? tankPrepValue.charAt(0).toUpperCase() +
+            tankPrepValue.slice(1).toLowerCase()
+          : tankPrepValue;
       addTextWithSpacing(
         doc,
         "TANK PREP:",
@@ -732,114 +743,116 @@ groupEtd =
         50
       );
 
-      // --- TERMS AND CONDITIONS ---
-      const termsStartY = 150 + baseYOffset;
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("TERMS AND CONDITIONS:", 14, termsStartY);
+        // --- TERMS AND CONDITIONS ---
+        const termsStartY = 150 + baseYOffset;
+        doc.setFont("arial", "bold");
+        doc.setFontSize(10);
+        doc.text("TERMS AND CONDITIONS:", 14, termsStartY);
 
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
+        doc.setFont("arial", "normal");
+        doc.setFontSize(10);
 
-      // Point 1: Cancellation Costs - No gap
-      doc.text("1.", 18, termsStartY + 7);
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("Cancellation Costs:", 25, termsStartY + 7);
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
-      doc.text(
-        "Should there be a cancellation of the shipment after the tank has been prepared and a clean certificate has been issued, all",
-        56,
-        termsStartY + 7
-      );
-      doc.text(
-        "incurred costs shall be the responsibility of the shipper.",
-        25,
-        termsStartY + 12
-      );
+        // Point 1: Cancellation Costs - No gap
+        doc.text("1.", 18, termsStartY + 7);
+        doc.setFont("arial", "bold");
+        doc.setFontSize(10);
+        doc.text("Cancellation Costs:", 25, termsStartY + 7);
+        doc.setFont("arial", "normal");
+        doc.setFontSize(10);
+        doc.text(
+          "Should there be a cancellation of the shipment after the tank has been prepared and a clean certificate has been issued, all",
+          56,
+          termsStartY + 7
+        );
+        doc.text(
+          "incurred costs shall be the responsibility of the shipper.",
+          25,
+          termsStartY + 12
+        );
 
-      // Point 2: Validity and Liability - No gap
-      doc.text("2.", 18, termsStartY + 17);
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("Validity and Liability:", 25, termsStartY + 17);
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
-      doc.text(
-        "The clean certificate is valid for a period of seven days from the date of issuance. If the tank container is picked up after",
-        60,
-        termsStartY + 17
-      );
-      doc.text(
-        "this validity period without cargo loading, we disclaim any liability for cargo contamination, deterioration in cargo quality, or any other related",
-        25,
-        termsStartY + 22
-      );
-      doc.text("issues.", 25, termsStartY + 27);
+        // Point 2: Validity and Liability - No gap
+        doc.text("2.", 18, termsStartY + 17);
+        doc.setFont("arial", "bold");
+        doc.setFontSize(10);
+        doc.text("Validity and Liability:", 25, termsStartY + 17);
+        doc.setFont("arial", "normal");
+        doc.setFontSize(10);
+        doc.text(
+          "The clean certificate is valid for a period of seven days from the date of issuance. If the tank container is picked up after",
+          60,
+          termsStartY + 17
+        );
+        doc.text(
+          "this validity period without cargo loading, we disclaim any liability for cargo contamination, deterioration in cargo quality, or any other related",
+          25,
+          termsStartY + 22
+        );
+        doc.text("issues.", 25, termsStartY + 27);
 
-      // Point 3: Resurvey Requirement - No gap
-      doc.text("3.", 18, termsStartY + 32);
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("Resurvey Requirement:", 25, termsStartY + 32);
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
-      doc.text(
-        "In the event that the tank container is not picked up after the expiration of the clean certificate, a resurvey will be",
-        62,
-        termsStartY + 32
-      );
-      doc.text(
-        "required. The shipper shall bear all costs associated with this resurvey.",
-        25,
-        termsStartY + 37
-      );
+        // Point 3: Resurvey Requirement - No gap
+        doc.text("3.", 18, termsStartY + 32);
+        doc.setFont("arial", "bold");
+        doc.setFontSize(10);
+        doc.text("Resurvey Requirement:", 25, termsStartY + 32);
+        doc.setFont("arial", "normal");
+        doc.setFontSize(10);
+        doc.text(
+          "In the event that the tank container is not picked up after the expiration of the clean certificate, a resurvey will be",
+          62,
+          termsStartY + 32
+        );
+        doc.text(
+          "required. The shipper shall bear all costs associated with this resurvey.",
+          25,
+          termsStartY + 37
+        );
 
-      // Add horizontal line after terms and conditions
-      const vesselTableStartY = 190 + baseYOffset;
-      doc.setDrawColor(0, 0, 0);
-      doc.setLineWidth(0.5);
-      doc.line(14, vesselTableStartY, 240, vesselTableStartY);
+        // Add horizontal line after terms and conditions
+        const vesselTableStartY = 190 + baseYOffset;
+        doc.setDrawColor(0, 0, 0);
+        doc.setLineWidth(0.5);
+        doc.line(14, vesselTableStartY, 240, vesselTableStartY);
 
-      // --- VESSEL/VOYAGE DETAILS TABLE ---
-      doc.setFont("arial", "bold");
-      doc.setFontSize(10);
-      doc.text("VESSEL / VOY", 40, vesselTableStartY + 5);
-      doc.text("ETA", 110, vesselTableStartY + 5);
-      doc.text("ETD", 160, vesselTableStartY + 5);
+        // --- VESSEL/VOYAGE DETAILS TABLE ---
+        // --- VESSEL/VOYAGE DETAILS TABLE ---
+        doc.setFont("arial", "bold");
+        doc.setFontSize(10);
+        doc.text("VESSEL / VOY", 40, vesselTableStartY + 5);
+        doc.text("ETD", 110, vesselTableStartY + 5); // Moved ETD to left position
+        doc.text("ETA", 160, vesselTableStartY + 5); // Moved ETA to right position
 
-      // Add horizontal line under headers
-      doc.setLineWidth(0.5);
-      doc.line(14, vesselTableStartY + 8, 240, vesselTableStartY + 8);
+        // Add horizontal line under headers
+        doc.setLineWidth(0.5);
+        doc.line(14, vesselTableStartY + 8, 240, vesselTableStartY + 8);
 
-      // Vessel data
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
-      doc.text(vesselVoyage || "N/A", 40, vesselTableStartY + 14);
-      const etaDisplay = eta ? `${groupPod} ${eta}` : `${groupPod}`;
-      const etdDisplay = etd ? `${groupPol} ${etd}` : `${groupPol}`;
-      doc.text(etaDisplay, 110, vesselTableStartY + 14);
-      doc.text(etdDisplay, 160, vesselTableStartY + 14);
+        // Vessel data
+        doc.setFont("arial", "normal");
+        doc.setFontSize(10);
+        doc.text(vesselVoyage || "N/A", 40, vesselTableStartY + 14);
+        const etdDisplay = etd ? `${groupPol} ${etd}` : `${groupPol}`;
+        const etaDisplay = eta ? `${groupPod} ${eta}` : `${groupPod}`;
+      doc.text(etdDisplay, 110, vesselTableStartY + 14);  // ETD goes first
+  doc.text(etaDisplay, 160, vesselTableStartY + 14);  // ETA goes second
 
-      // Add horizontal line after vessel table
-      doc.line(14, vesselTableStartY + 18, 240, vesselTableStartY + 18);
 
-      // --- CONTAINER RELEASE INSTRUCTION ---
-      const instructionY = vesselTableStartY + 24;
-      doc.setFont("arial", "bold");
-      doc.setFontSize(8);
-      // Keep the text on one line as in reference
-      doc.text(
-        `KINDLY RELEASE ${containerCount} X 20' ISO TANK CONTAINERS WITH THE FOLLOWING CONTAINER NUMBER ACCORDING TO THE ABOVE MENTIONED SHIPPER DETAILS.`,
-        124,
-        instructionY,
-        { align: "center" }
-      );
+        // Add horizontal line after vessel table
+        doc.line(14, vesselTableStartY + 18, 240, vesselTableStartY + 18);
 
-      // Add horizontal line after instruction
-      doc.setLineWidth(0.5);
-      doc.line(14, instructionY + 4, 240, instructionY + 4);
+        // --- CONTAINER RELEASE INSTRUCTION ---
+        const instructionY = vesselTableStartY + 24;
+        doc.setFont("arial", "bold");
+        doc.setFontSize(8);
+        // Keep the text on one line as in reference
+        doc.text(
+          `KINDLY RELEASE ${containerCount} X 20' ISO TANK CONTAINERS WITH THE FOLLOWING CONTAINER NUMBER ACCORDING TO THE ABOVE MENTIONED SHIPPER DETAILS.`,
+          124,
+          instructionY,
+          { align: "center" }
+        );
+
+        // Add horizontal line after instruction
+        doc.setLineWidth(0.5);
+        doc.line(14, instructionY + 4, 240, instructionY + 4);
 
       // --- CONTAINER DETAILS TABLE ---
       const containerTableStartY = instructionY + 10;
@@ -859,85 +872,108 @@ groupEtd =
 
       // Display containers in proper table format with rows and borders
       const containerStartY = containerTableStartY + 10;
-      
+
       doc.setFont("arial", "normal");
       doc.setFontSize(9); // Slightly smaller font for better fit
-      
+
       // Create serial number range (e.g., "1-50" for 50 containers)
       const totalContainers = containersToShow.length;
       const serialRange = totalContainers === 1 ? "1" : `1-${totalContainers}`;
-      
+
       // Display serial range
       doc.text(serialRange, 20, containerStartY);
-      
+
       // Get all container numbers
-      const containerNumbers = containersToShow.map((container: any) => 
-        container.containerNumber || "N/A"
+      const containerNumbers = containersToShow.map(
+        (container: any) => container.containerNumber || "N/A"
       );
-      
+
       // Table configuration
       const containersPerRow = 8; // Number of containers per row for optimal space usage
       const cellWidth = 22; // Width of each cell
       const cellHeight = 6; // Height of each row
       const tableStartX = 50; // Shift table to left - reduce space between SR.NO and TANK NO
       const tableWidth = containersPerRow * cellWidth; // Total table width
-      
+
       // Calculate number of rows needed
-      const numberOfRows = Math.ceil(containerNumbers.length / containersPerRow);
-      
+      const numberOfRows = Math.ceil(
+        containerNumbers.length / containersPerRow
+      );
+
       // Draw table with borders and container numbers
       let currentY = containerStartY;
-      
+
       // Draw top horizontal line first
       doc.setLineWidth(0.3);
-      const topRowContainers = containerNumbers.slice(0, Math.min(containersPerRow, containerNumbers.length));
+      const topRowContainers = containerNumbers.slice(
+        0,
+        Math.min(containersPerRow, containerNumbers.length)
+      );
       const topRowWidth = topRowContainers.length * cellWidth;
-      doc.line(tableStartX, currentY - 2, tableStartX + topRowWidth, currentY - 2);
-      
+      doc.line(
+        tableStartX,
+        currentY - 2,
+        tableStartX + topRowWidth,
+        currentY - 2
+      );
+
       for (let row = 0; row < numberOfRows; row++) {
         // Get containers for this row first
         const rowStart = row * containersPerRow;
-        const rowEnd = Math.min(rowStart + containersPerRow, containerNumbers.length);
+        const rowEnd = Math.min(
+          rowStart + containersPerRow,
+          containerNumbers.length
+        );
         const rowContainers = containerNumbers.slice(rowStart, rowEnd);
-        
+
         // Draw containers and vertical lines for this row - only for actual containers
         const cellsToDrawInThisRow = rowContainers.length; // Only draw cells for actual containers
-        
+
         for (let col = 0; col < cellsToDrawInThisRow; col++) {
-          const cellX = tableStartX + (col * cellWidth);
-          
+          const cellX = tableStartX + col * cellWidth;
+
           // Draw vertical line
           doc.line(cellX, currentY - 2, cellX, currentY + cellHeight - 2);
-          
+
           // Add container number
           const containerText = rowContainers[col];
           // Center the text in the cell
           doc.text(containerText, cellX + 1, currentY + 2);
         }
-        
+
         // Draw the last vertical line only after the last actual container
-        const lastCellX = tableStartX + (cellsToDrawInThisRow * cellWidth);
+        const lastCellX = tableStartX + cellsToDrawInThisRow * cellWidth;
         doc.line(lastCellX, currentY - 2, lastCellX, currentY + cellHeight - 2);
-        
+
         // Draw horizontal line under this row (except for the last row, which will be drawn separately)
         if (row < numberOfRows - 1) {
           doc.setLineWidth(0.3);
           const actualRowWidth = rowContainers.length * cellWidth;
-          doc.line(tableStartX, currentY + cellHeight - 2, tableStartX + actualRowWidth, currentY + cellHeight - 2);
+          doc.line(
+            tableStartX,
+            currentY + cellHeight - 2,
+            tableStartX + actualRowWidth,
+            currentY + cellHeight - 2
+          );
         }
-        
+
         currentY += cellHeight;
       }
-      
+
       // Draw final horizontal line to close the table - match the actual table width
       const lastRowContainers = containerNumbers.slice(
-        (numberOfRows - 1) * containersPerRow, 
+        (numberOfRows - 1) * containersPerRow,
         containerNumbers.length
       );
       const actualTableWidth = lastRowContainers.length * cellWidth;
       doc.setLineWidth(0.3);
-      doc.line(tableStartX, currentY - 2, tableStartX + actualTableWidth, currentY - 2);
-      
+      doc.line(
+        tableStartX,
+        currentY - 2,
+        tableStartX + actualTableWidth,
+        currentY - 2
+      );
+
       // Calculate the bottom position for the main horizontal line - match the width of the top line
       const lastContainerY = currentY + 2;
       doc.setLineWidth(0.5);
@@ -945,7 +981,7 @@ groupEtd =
 
       // Add footer to the page - position it properly below horizontal line with adequate spacing
       const footerStartY = 290; // Fixed position to match reference image - footer should be at bottom
-      
+
       doc.setFont("arial", "bold");
       doc.setFontSize(9);
       doc.text(
@@ -980,4 +1016,3 @@ groupEtd =
     console.error("Error generating CRO PDF", err);
   }
 }
-

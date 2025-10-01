@@ -17,21 +17,13 @@ export class MovementHistoryService {
         port: true,
         addressBook: true,
         shipment: {
-          select: {
-            jobNumber: true,
-            vesselName: true,
-          },
+          select: { jobNumber: true, vesselName: true },
         },
         emptyRepoJob: {
-          select: {
-            jobNumber: true,
-            vesselName: true,
-          },
+          select: { jobNumber: true, vesselName: true },
         },
       },
-      orderBy: {
-        date: 'desc',
-      },
+      orderBy: { date: 'desc' },
     });
   }
 
@@ -50,17 +42,12 @@ export class MovementHistoryService {
     if (!movement) {
       throw new NotFoundException(`MovementHistory with ID ${id} not found`);
     }
-
     return movement;
   }
 
   async findAllExceptAvailable() {
     return this.prisma.movementHistory.findMany({
-      where: {
-        NOT: {
-          status: 'AVAILABLE',
-        },
-      },
+      where: { NOT: { status: 'AVAILABLE' } },
       include: {
         inventory: true,
         port: true,
@@ -68,14 +55,12 @@ export class MovementHistoryService {
         shipment: true,
         emptyRepoJob: true,
       },
-      orderBy: {
-        date: 'desc',
-      },
+      orderBy: { date: 'desc' },
     });
   }
 
   /**
-   * Shared logic for handling status transitions
+   * Shared logic for handling status transitions including maintenance statuses
    */
   private async resolveStatusTransition(
     status: string,
@@ -90,7 +75,9 @@ export class MovementHistoryService {
     let addressBookId: number | null =
       addressBookIdFromFrontend ?? prev.addressBookId ?? null;
 
-    switch (status) {
+    const statusUpper = status.toUpperCase();
+
+    switch (statusUpper) {
       case 'EMPTY PICKED UP':
         portId =
           prev.portId ?? shipment?.polPortId ?? emptyRepoJob?.polPortId ?? null;
@@ -135,7 +122,7 @@ export class MovementHistoryService {
         addressBookId = null;
         break;
 
-      case 'EMPTY DISCHARGE': // ✅ allow frontend to send it directly
+      case 'EMPTY DISCHARGE':
         status = 'EMPTY DISCHARGE';
         portId = emptyRepoJob?.podPortId ?? null;
         addressBookId = null;
@@ -149,6 +136,9 @@ export class MovementHistoryService {
           null;
         break;
 
+      case 'UNDER CLEANING':
+      case 'UNDER SURVEY':
+      case 'UNDER REPAIR/UNDER TESTING':
       case 'AVAILABLE':
       case 'UNAVAILABLE':
       case 'DAMAGED':
@@ -164,103 +154,111 @@ export class MovementHistoryService {
         );
     }
 
-    if (!portId) {
-      throw new BadRequestException(
-        `portId cannot be null or undefined for movement ID ${prev.id}`,
-      );
-    }
-
     return {
       portId,
       addressBookId,
       remarks: remarks?.trim() || null,
       vesselName: vesselName?.trim() || null,
-      status, // return possibly updated status
+      status: statusUpper,
     };
   }
 
   async bulkUpdateStatus(
-  ids: number[],
-  newStatus: string,
-  jobNumber: string,
-  remarks?: string,
-  vesselName?: string,
-  addressBookIdFromFrontend?: number,
-) {
-  const shipment = await this.prisma.shipment.findFirst({
-    where: { jobNumber },
-    include: {
-      polPort: true,
-      podPort: true,
-      carrierAddressBook: true,
-    },
-  });
+    ids: number[],
+    newStatus: string,
+    jobNumber: string,
+    remarks?: string,
+    maintenanceStatus?: string,
+    vesselName?: string,
+    addressBookIdFromFrontend?: number,
+  ) {
+    const shipment = await this.prisma.shipment.findFirst({
+      where: { jobNumber },
+      include: { polPort: true, podPort: true, carrierAddressBook: true },
+    });
 
-  const emptyRepoJob = !shipment
-    ? await this.prisma.emptyRepoJob.findFirst({
-        where: { jobNumber },
-        select: {
-          id: true,
-          polPortId: true,
-          podPortId: true,
-          carrierAddressBookId: true,
-          emptyReturnDepotAddressBookId: true,
-        },
-      })
-    : null;
+    const emptyRepoJob = !shipment
+      ? await this.prisma.emptyRepoJob.findFirst({
+          where: { jobNumber },
+          select: {
+            id: true,
+            polPortId: true,
+            podPortId: true,
+            carrierAddressBookId: true,
+            emptyReturnDepotAddressBookId: true,
+          },
+        })
+      : null;
 
-  const status = newStatus.toUpperCase();
+    const status = newStatus.toUpperCase();
 
-  // Step 1: Precompute transition data outside of the transaction
-  const movementsData = await Promise.all(
-    ids.map(async (id) => {
-      const prev = await this.prisma.movementHistory.findUnique({ where: { id } });
-      if (!prev) throw new NotFoundException(`MovementHistory ${id} not found`);
+    const movementsData = await Promise.all(
+      ids.map(async (id) => {
+        const prev = await this.prisma.movementHistory.findUnique({
+          where: { id },
+        });
+        if (!prev) throw new NotFoundException(`MovementHistory ${id} not found`);
 
-      const {
-        portId,
-        addressBookId,
-        remarks: finalRemarks,
-        vesselName: finalVesselName,
-        status: finalStatus,
-      } = await this.resolveStatusTransition(
-        status,
-        prev,
-        shipment,
-        emptyRepoJob,
-        addressBookIdFromFrontend,
-        remarks,
-        vesselName,
-      );
+        const {
+          portId,
+          addressBookId,
+          remarks: finalRemarks,
+          vesselName: finalVesselName,
+          status: finalStatus,
+        } = await this.resolveStatusTransition(
+          status,
+          prev,
+          shipment,
+          emptyRepoJob,
+          addressBookIdFromFrontend,
+          remarks,
+          vesselName,
+        );
 
-      return {
-        inventoryId: prev.inventoryId,
-        shipmentId: prev.shipmentId ?? shipment?.id ?? null,
-        emptyRepoJobId: prev.emptyRepoJobId ?? emptyRepoJob?.id ?? null,
-        portId,
-        addressBookId,
-        status: finalStatus,
-        date: new Date(),
-        remarks: finalRemarks,
-        vesselName: finalVesselName,
-      };
-    })
-  );
+        const createData: any = {
+          inventoryId: prev.inventoryId,
+          status: finalStatus,
+          date: new Date(),
+        };
 
-  // Step 2: Run only pure Prisma calls inside the transaction
-  return this.prisma.$transaction(
-    movementsData.map((data) =>
-      this.prisma.movementHistory.create({ data })
-    )
-  );
+        if (portId !== null && portId !== undefined) createData.portId = portId;
+        if (addressBookId !== null && addressBookId !== undefined)
+          createData.addressBookId = addressBookId;
+       if (prev.shipmentId != null) {
+  createData.shipmentId = prev.shipmentId;
+} else if (shipment?.id != null) {
+  createData.shipmentId = shipment.id;
+}
+
+     if (prev.emptyRepoJobId != null) {
+  createData.emptyRepoJobId = prev.emptyRepoJobId;
+} else if (emptyRepoJob?.id != null) {
+  createData.emptyRepoJobId = emptyRepoJob.id;
 }
 
 
+        if (finalRemarks !== null) createData.remarks = finalRemarks;
+        if (finalVesselName !== null) createData.vesselName = finalVesselName;
+
+        // ✅ save maintenance status if provided
+        if (maintenanceStatus) createData.maintenanceStatus = maintenanceStatus;
+
+        return createData;
+      }),
+    );
+
+    return this.prisma.$transaction(
+      movementsData.map((data) => this.prisma.movementHistory.create({ data })),
+    );
+  }
+
   async updateMovement(id: number, data: Partial<MovementHistory>) {
-    const updatedData = {
-      ...data,
-      date: data.date ? new Date(data.date) : undefined,
-    };
+    const updatedData: any = { ...data };
+    if (data.date) updatedData.date = new Date(data.date);
+
+    Object.keys(updatedData).forEach((key) => {
+      if (updatedData[key] === undefined) delete updatedData[key];
+    });
 
     return this.prisma.movementHistory.update({
       where: { id },
@@ -274,6 +272,7 @@ export class MovementHistoryService {
     portId?: number | null,
     addressBookId?: number | null,
     remarks?: string,
+    maintenanceStatus?: string,
     vesselName?: string,
   ) {
     const previous = await this.prisma.movementHistory.findUnique({
@@ -281,12 +280,9 @@ export class MovementHistoryService {
     });
 
     if (!previous) {
-      throw new NotFoundException(
-        `MovementHistory with ID ${prevId} not found`,
-      );
+      throw new NotFoundException(`MovementHistory with ID ${prevId} not found`);
     }
 
-    // fetch shipment or emptyRepoJob if needed
     let shipment: any | null = null;
     let emptyRepoJob: any | null = null;
 
@@ -330,26 +326,30 @@ export class MovementHistoryService {
       vesselName,
     );
 
-    return this.prisma.movementHistory.create({
-      data: {
-        inventoryId: previous.inventoryId,
-        shipmentId: previous.shipmentId ?? null,
-        emptyRepoJobId: previous.emptyRepoJobId ?? null,
-        portId: finalPortId,
-        addressBookId: finalAddressBookId,
-        status: finalStatus,
-        date: new Date(),
-        remarks: finalRemarks,
-        vesselName: finalVesselName,
-      },
-    });
+    const createData: any = {
+      inventoryId: previous.inventoryId,
+      status: finalStatus,
+      date: new Date(),
+    };
+
+    if (finalPortId !== null) createData.portId = finalPortId;
+    if (finalAddressBookId !== null) createData.addressBookId = finalAddressBookId;
+    if (previous.shipmentId !== null) createData.shipmentId = previous.shipmentId;
+    if (previous.emptyRepoJobId !== null) createData.emptyRepoJobId = previous.emptyRepoJobId;
+    if (finalRemarks !== null) createData.remarks = finalRemarks;
+    if (finalVesselName !== null) createData.vesselName = finalVesselName;
+
+    // ✅ save maintenance status
+    if (maintenanceStatus) createData.maintenanceStatus = maintenanceStatus;
+
+    return this.prisma.movementHistory.create({ data: createData });
   }
 
   async findLatestPerContainer() {
     const latestMovements = await this.prisma.$queryRaw<
       MovementHistory[]
-    >`SELECT DISTINCT ON ("inventoryId") *
-       FROM "MovementHistory"
+    >`SELECT DISTINCT ON ("inventoryId") * 
+       FROM "MovementHistory" 
        ORDER BY "inventoryId", "date" DESC`;
 
     const ids = latestMovements.map((m) => m.id);
@@ -363,9 +363,7 @@ export class MovementHistoryService {
         shipment: true,
         emptyRepoJob: true,
       },
-      orderBy: {
-        date: 'desc',
-      },
+      orderBy: { date: 'desc' },
     });
   }
 }

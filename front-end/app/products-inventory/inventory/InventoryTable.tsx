@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
-
   TableCell,
   TableHead,
   TableHeader,
@@ -39,7 +38,7 @@ const StatusBadge = ({ status }: { status: string }) => (
 const ProductsInventoryPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  type AddressBookEntry = { id: number; companyName: string;[key: string]: any };
+  type AddressBookEntry = { id: number; companyName: string; [key: string]: any };
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -58,83 +57,89 @@ const ProductsInventoryPage = () => {
     initialSurveyDate: ""
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
-  const [containerEditStatus, setContainerEditStatus] = useState<{[key: number]: {canEdit: boolean, reason: string | null, action: string | null}}>({});
+  const [containerEditStatus, setContainerEditStatus] = useState<{ [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } }>({});
 
-useEffect(() => {
-  const userId = localStorage.getItem("userId");
-  if (userId) {
-    fetch(`http://localhost:8000/permissions?userId=${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const perm = data.find(
-          (p: any) => p.module.toLowerCase() === "inventory"
-        );
-        setInventoryPermissions(perm);
-      })
-      .catch((err) => console.error("Failed to fetch permissions:", err));
-  }
-}, []);
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    if (userId) {
+      fetch(`http://localhost:8000/permissions?userId=${userId}`)
+        .then((res) => res.json())
+        .then((data) => {
+          const perm = data.find(
+            (p: any) => p.module.toLowerCase() === "inventory"
+          );
+          setInventoryPermissions(perm);
+        })
+        .catch((err) => console.error("Failed to fetch permissions:", err));
+    }
+  }, []);
 
-const handleAddInventoryWithPermission = () => {
-  if (inventoryPermissions?.canCreate) {
-    setSelectedInventoryId(null);
-    setShowModal(true);
-  } else {
-    alert("You don't have access to create inventory.");
-  }
-};
+  const handleAddInventoryWithPermission = () => {
+    if (inventoryPermissions?.canCreate) {
+      setSelectedInventoryId(null);
+      setShowModal(true);
+    } else {
+      alert("You don't have access to create inventory.");
+    }
+  };
 
-const checkContainerEditStatus = async (id: number) => {
-  try {
-    const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
-    const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
-    
-    setContainerEditStatus(prev => ({
-      ...prev,
-      [id]: {
-        canEdit: editResponse.data.canEdit,
-        reason: editResponse.data.reason,
-        action: editResponse.data.action,
-        canDelete: deleteResponse.data.canDelete,
-        deleteReason: deleteResponse.data.reason
+  const checkContainerEditStatus = async (id: number) => {
+    try {
+      const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
+      const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+
+      setContainerEditStatus(prev => ({
+        ...prev,
+        [id]: {
+          canEdit: editResponse.data.canEdit,
+          reason: editResponse.data.reason,
+          action: editResponse.data.action,
+          canDelete: deleteResponse.data.canDelete,
+          deleteReason: deleteResponse.data.reason
+        }
+      }));
+    } catch (error) {
+      console.error('Error checking container edit status:', error);
+    }
+  };
+
+  const handleEditInventoryWithPermission = async (id: number) => {
+    if (!inventoryPermissions?.canEdit) {
+      alert("You don't have access to edit inventory.");
+      return;
+    }
+
+    try {
+      const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
+      if (!editResponse.data.canEdit) {
+        alert(editResponse.data.reason || "Cannot edit this container.");
+        return;
       }
-    }));
-  } catch (error) {
-    console.error('Error checking container edit status:', error);
-  }
-};
+      handleEditClick(id);
+    } catch (error) {
+      console.error('Error checking edit status:', error);
+      alert("Error checking container status. Please try again.");
+    }
+  };
 
-const handleEditInventoryWithPermission = (id: number) => {
-  if (!inventoryPermissions?.canEdit) {
-    alert("You don't have access to edit inventory.");
-    return;
-  }
+  const handleDeleteInventoryWithPermission = async (id: number) => {
+    if (!inventoryPermissions?.canDelete) {
+      alert("You don't have access to delete inventory.");
+      return;
+    }
 
-  const editStatus = containerEditStatus[id];
-  if (!editStatus?.canEdit) {
-    alert(editStatus?.reason || "Cannot edit this container.");
-    return;
-  }
-
-  handleEditClick(id);
-};
-
-const handleDeleteInventoryWithPermission = (id: number) => {
-  if (!inventoryPermissions?.canDelete) {
-    alert("You don't have access to delete inventory.");
-    return;
-  }
-
-  const editStatus = containerEditStatus[id];
-  if (!editStatus?.canDelete) {
-    alert(editStatus?.deleteReason || "Cannot delete this container.");
-    return;
-  }
-
-  handleDelete(id);
-};
-
-
+    try {
+      const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+      if (!deleteResponse.data.canDelete) {
+        alert(deleteResponse.data.reason || "Cannot delete this container.");
+        return;
+      }
+      handleDelete(id);
+    } catch (error) {
+      console.error('Error checking delete status:', error);
+      alert("Error checking container status. Please try again.");
+    }
+  };
 
   const handleAddContainerClick = () => {
     setSelectedInventoryId(null);
@@ -150,13 +155,14 @@ const handleDeleteInventoryWithPermission = (id: number) => {
     try {
       const response = await axios.get('http://localhost:8000/inventory');
       setInventoryData(response.data);
-      
-      // Check edit status for all containers
+
       const editStatusPromises = response.data.map(async (item: any) => {
         try {
-          const editResponse = await axios.get(`http://localhost:8000/inventory/${item.id}/can-edit`);
-          const deleteResponse = await axios.get(`http://localhost:8000/inventory/${item.id}/can-delete`);
-          
+          const [editResponse, deleteResponse] = await Promise.all([
+            axios.get(`http://localhost:8000/inventory/${item.id}/can-edit`),
+            axios.get(`http://localhost:8000/inventory/${item.id}/can-delete`)
+          ]);
+
           return {
             id: item.id,
             editStatus: {
@@ -181,15 +187,18 @@ const handleDeleteInventoryWithPermission = (id: number) => {
           };
         }
       });
-      
-      const editResults = await Promise.all(editStatusPromises);
-      const editStatusMap = editResults.reduce((acc, item) => {
-        acc[item.id] = item.editStatus;
-        return acc;
-      }, {} as {[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}});
-      
-      setContainerEditStatus(editStatusMap);
+
       setLoading(false);
+
+      Promise.all(editStatusPromises).then(editResults => {
+        const editStatusMap = editResults.reduce((acc, item) => {
+          acc[item.id] = item.editStatus;
+          return acc;
+        }, {} as { [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } });
+
+        setContainerEditStatus(editStatusMap);
+      });
+
     } catch (error) {
       console.error('Error fetching inventory data:', error);
       setLoading(false);
@@ -203,15 +212,12 @@ const handleDeleteInventoryWithPermission = (id: number) => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
-      // First check if container can be deleted
       const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
-      
       if (!deletionCheck.data.canDelete) {
         alert(deletionCheck.data.reason);
         return;
       }
 
-      // If deletion is allowed, proceed with deletion
       await axios.delete(`http://localhost:8000/inventory/${id}`);
       setInventoryData(inventoryData.filter((item) => item.id !== id));
       alert('Inventory deleted successfully');
@@ -228,13 +234,10 @@ const handleDeleteInventoryWithPermission = (id: number) => {
       .catch((err) => console.error("Failed to fetch address book", err));
   }, []);
 
-
-
   const getCompanyName = (addressbookId: any) => {
     const entry = addressBook.find((ab) => ab.id === addressbookId);
     return entry ? entry.companyName : "Unknown";
   };
-
 
   const handleCloseModal = () => {
     setShowModal(false);
@@ -242,21 +245,20 @@ const handleDeleteInventoryWithPermission = (id: number) => {
     fetchInventoryData();
   };
 
-  // Filter data based on search term AND filters
   const filteredData = inventoryData.filter((item) => {
     const matchesSearch = item.containerNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.containerType.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.containerClass.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesOwnership = !filters.ownership || 
+
+    const matchesOwnership = !filters.ownership ||
       (item.leasingInfo?.[0]?.ownershipType || item.ownershipType || "Own").toLowerCase() === filters.ownership.toLowerCase();
-    
-    const matchesStatus = !filters.status || 
+
+    const matchesStatus = !filters.status ||
       item.status.toLowerCase() === filters.status.toLowerCase();
-    
-    const matchesInitialSurveyDate = !filters.initialSurveyDate || 
+
+    const matchesInitialSurveyDate = !filters.initialSurveyDate ||
       (item.InitialSurveyDate && item.InitialSurveyDate.startsWith(filters.initialSurveyDate));
-    
+
     return matchesSearch && matchesOwnership && matchesStatus && matchesInitialSurveyDate;
   });
 
@@ -264,8 +266,6 @@ const handleDeleteInventoryWithPermission = (id: number) => {
     setFilters(tempFilters);
     setShowFilterModal(false);
   };
-
- 
 
   const handleResetTempFilters = () => {
     setTempFilters({
@@ -275,8 +275,11 @@ const handleDeleteInventoryWithPermission = (id: number) => {
     });
   };
 
-  // Check if any filters are active
   const hasActiveFilters = filters.ownership || filters.status || filters.initialSurveyDate;
+
+  // counts
+  const totalCount = inventoryData.length;
+  const filteredCount = filteredData.length;
 
   return (
     <div className="px-4 py-6 bg-white dark:bg-black min-h-screen">
@@ -291,34 +294,32 @@ const handleDeleteInventoryWithPermission = (id: number) => {
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          
-          {/* Filter Button */}
+
+          {/* Filter Button with Count */}
           <Button
             onClick={() => setShowFilterModal(true)}
             className={`flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none ${
-              hasActiveFilters 
-                ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+              hasActiveFilters
+                ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-white dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-black dark:text-white'
             }`}
           >
             <Filter className="h-4 w-4" />
             Filter
-            {hasActiveFilters && (
-              <span className="ml-1 bg-white text-blue-600 rounded-full px-2 py-0.5 text-xs font-medium">
-                {Object.values(filters).filter(Boolean).length}
-              </span>
-            )}
+           
           </Button>
+           <span className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none">
+              {hasActiveFilters ? filteredCount : totalCount}
+            </span>
         </div>
 
         <Button
-  className={`bg-blue-600 hover:bg-blue-700 text-white ${!inventoryPermissions?.canCreate ? "opacity-50 cursor-not-allowed" : ""}`}
-  onClick={handleAddInventoryWithPermission}
->
-  <Plus className="mr-2 h-4 w-4" />
-  Add Container
-</Button>
-
+          className={`bg-blue-600 hover:bg-blue-700 text-white ${!inventoryPermissions?.canCreate ? "opacity-50 cursor-not-allowed" : ""}`}
+          onClick={handleAddInventoryWithPermission}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Container
+        </Button>
       </div>
 
       {/* Active Filters Display */}

@@ -65,9 +65,17 @@ export class CreateBillOfLadingDto {
   @IsString()
   notifyPartyInfo?: string;
 
+  @IsString()
+  unit:string
+
   @IsNotEmpty()
   @IsString()
   sealNo: string;
+
+  @IsOptional()
+  @IsString()
+  shippersealNo:string;
+
 
   @IsNotEmpty()
   @IsString()
@@ -76,6 +84,14 @@ export class CreateBillOfLadingDto {
   @IsNotEmpty()
   @IsString()
   netWt: string;
+
+  @IsOptional()
+  @IsString()
+  tareWt: string;
+
+  @IsOptional()
+  @IsOptional()
+  cbmWt:string;
 
   @IsOptional()
   @IsString()
