@@ -262,10 +262,10 @@ const AddShipmentModal = ({
         // Single search term
         return containerNumber.includes(searchTerms[0]);
       }).sort(
-        (a, b) =>
-          new Date(a.inventory?.createdAt || a.createdAt).getTime() -
-          new Date(b.inventory?.createdAt || b.createdAt).getTime()
-      ); // FIFO: oldest first
+          (a, b) =>
+            new Date(a.inventory?.createdAt || a.createdAt).getTime() -
+            new Date(b.inventory?.createdAt || b.createdAt).getTime()
+        ); // FIFO: oldest first
 
       setSuggestions(matched);
     } else {

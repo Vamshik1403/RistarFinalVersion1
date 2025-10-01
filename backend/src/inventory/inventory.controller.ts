@@ -37,6 +37,11 @@ create(@Body() data: CreateInventoryDto) {
     return this.inventoryService.canEditContainer(id);
   }
 
+  @Post('bulk-edit-status')
+  async getBulkEditStatus(@Body() body: { containerIds: number[] }) {
+    return this.inventoryService.getBulkEditStatus(body.containerIds);
+  }
+
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.inventoryService.remove(id);
