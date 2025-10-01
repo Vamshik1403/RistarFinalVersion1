@@ -57,7 +57,6 @@ const ProductsInventoryPage = () => {
     initialSurveyDate: ""
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
-<<<<<<< HEAD
   const [containerEditStatus, setContainerEditStatus] = useState<{ [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } }>({});
 
   useEffect(() => {
@@ -74,24 +73,7 @@ const ProductsInventoryPage = () => {
         .catch((err) => console.error("Failed to fetch permissions:", err));
     }
   }, []);
-=======
-  const [containerEditStatus, setContainerEditStatus] = useState<{[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}}>({});
 
-useEffect(() => {
-  const userId = localStorage.getItem("userId");
-  if (userId) {
-    fetch(`http://128.199.19.28:8000/permissions?userId=${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const perm = data.find(
-          (p: any) => p.module.toLowerCase() === "inventory"
-        );
-        setInventoryPermissions(perm);
-      })
-      .catch((err) => console.error("Failed to fetch permissions:", err));
-  }
-}, []);
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleAddInventoryWithPermission = () => {
     if (inventoryPermissions?.canCreate) {
@@ -102,7 +84,6 @@ useEffect(() => {
     }
   };
 
-<<<<<<< HEAD
   const checkContainerEditStatus = async (id: number) => {
     try {
       const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
@@ -141,67 +122,6 @@ useEffect(() => {
       alert("Error checking container status. Please try again.");
     }
   };
-=======
-const checkContainerEditStatus = async (id: number) => {
-  try {
-    const editResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-edit`);
-    const deleteResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-    
-    setContainerEditStatus(prev => ({
-      ...prev,
-      [id]: {
-        canEdit: editResponse.data.canEdit,
-        reason: editResponse.data.reason,
-        action: editResponse.data.action,
-        canDelete: deleteResponse.data.canDelete,
-        deleteReason: deleteResponse.data.reason
-      }
-    }));
-  } catch (error) {
-    console.error('Error checking container edit status:', error);
-  }
-};
-
-const handleEditInventoryWithPermission = async (id: number) => {
-  if (!inventoryPermissions?.canEdit) {
-    alert("You don't have access to edit inventory.");
-    return;
-  }
-
-  // Check edit status on-demand when button is clicked
-  try {
-    const editResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-edit`);
-    if (!editResponse.data.canEdit) {
-      alert(editResponse.data.reason || "Cannot edit this container.");
-      return;
-    }
-    handleEditClick(id);
-  } catch (error) {
-    console.error('Error checking edit status:', error);
-    alert("Error checking container status. Please try again.");
-  }
-};
-
-const handleDeleteInventoryWithPermission = async (id: number) => {
-  if (!inventoryPermissions?.canDelete) {
-    alert("You don't have access to delete inventory.");
-    return;
-  }
-
-  // Check delete status on-demand when button is clicked
-  try {
-    const deleteResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-    if (!deleteResponse.data.canDelete) {
-      alert(deleteResponse.data.reason || "Cannot delete this container.");
-      return;
-    }
-    handleDelete(id);
-  } catch (error) {
-    console.error('Error checking delete status:', error);
-    alert("Error checking container status. Please try again.");
-  }
-};
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleDeleteInventoryWithPermission = async (id: number) => {
     if (!inventoryPermissions?.canDelete) {
@@ -232,7 +152,6 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
     fetchInventoryData();
   }, []);
 
-<<<<<<< HEAD
   const fetchInventoryData = async () => {
     try {
       const response = await axios.get('http://localhost:8000/inventory');
@@ -286,64 +205,6 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
       setLoading(false);
     }
   };
-=======
-   const fetchInventoryData = async () => {
-     try {
-       const response = await axios.get('http://128.199.19.28:8000/inventory');
-       setInventoryData(response.data);
-       
-       // Check edit/delete status for visual indication (gray buttons) but don't block loading
-       const editStatusPromises = response.data.map(async (item: any) => {
-         try {
-           const [editResponse, deleteResponse] = await Promise.all([
-             axios.get(`http://128.199.19.28:8000/inventory/${item.id}/can-edit`),
-             axios.get(`http://128.199.19.28:8000/inventory/${item.id}/can-delete`)
-           ]);
-           
-           return {
-             id: item.id,
-             editStatus: {
-               canEdit: editResponse.data.canEdit,
-               reason: editResponse.data.reason,
-               action: editResponse.data.action,
-               canDelete: deleteResponse.data.canDelete,
-               deleteReason: deleteResponse.data.reason
-             }
-           };
-         } catch (error) {
-           console.error(`Error checking status for container ${item.id}:`, error);
-           return {
-             id: item.id,
-             editStatus: {
-               canEdit: true,
-               reason: null,
-               action: null,
-               canDelete: true,
-               deleteReason: null
-             }
-           };
-         }
-       });
-       
-       // Set loading to false immediately so page loads fast
-       setLoading(false);
-       
-       // Update button states in background (non-blocking)
-       Promise.all(editStatusPromises).then(editResults => {
-         const editStatusMap = editResults.reduce((acc, item) => {
-           acc[item.id] = item.editStatus;
-           return acc;
-         }, {} as {[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}});
-         
-         setContainerEditStatus(editStatusMap);
-       });
-       
-     } catch (error) {
-       console.error('Error fetching inventory data:', error);
-       setLoading(false);
-     }
-   };
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleEditClick = (id: number): void => {
     setSelectedInventoryId(id);
@@ -352,24 +213,15 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
-<<<<<<< HEAD
       const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
-=======
-      // First check if container can be deleted
-      const deletionCheck = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-      
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
+
       if (!deletionCheck.data.canDelete) {
         alert(deletionCheck.data.reason);
         return;
       }
 
-<<<<<<< HEAD
       await axios.delete(`http://localhost:8000/inventory/${id}`);
-=======
-      // If deletion is allowed, proceed with deletion
-      await axios.delete(`http://128.199.19.28:8000/inventory/${id}`);
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
+
       setInventoryData(inventoryData.filter((item) => item.id !== id));
       alert('Inventory deleted successfully');
     } catch (error: any) {
