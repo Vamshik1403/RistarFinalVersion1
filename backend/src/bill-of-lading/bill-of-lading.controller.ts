@@ -57,6 +57,11 @@ export class BillOfLadingController {
     return this.billOfLadingService.markOriginalBLGenerated(shipmentId);
   }
 
+  @Post('mark-non-negotiable-generated/:shipmentId')
+  markNonNegotiableBLGenerated(@Param('shipmentId', ParseIntPipe) shipmentId: number) {
+    return this.billOfLadingService.markNonNegotiableBLGenerated(shipmentId);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.billOfLadingService.remove(id);

@@ -46,6 +46,10 @@ const SalesInvoicesPage = () => {
     paidAmount: ''
   });
   const [permissions, setPermissions] = useState<any>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   useEffect(() => {
     fetchSalesInvoices();
@@ -220,6 +224,18 @@ const SalesInvoicesPage = () => {
     return matchesSearch && matchesBillingStatus && matchesPaymentStatus;
   });
 
+  // Pagination logic
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  // Reset to first page when search term or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters]);
+
   // Check if any filters are active
   const hasActiveFilters = filters.billingStatus || filters.paymentStatus;
 
@@ -342,14 +358,14 @@ const SalesInvoicesPage = () => {
                    Loading...
                  </TableCell>
                </TableRow>
-             ) : filteredData.length === 0 ? (
-               <TableRow>
-                 <TableCell colSpan={12} className="text-center py-4 text-neutral-400">
-                   No sales invoices found
-                 </TableCell>
-               </TableRow>
+            ) : filteredData.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={12} className="text-center py-4 text-neutral-400">
+                  No sales invoices found
+                </TableCell>
+              </TableRow>
             ) : (
-              filteredData.map((invoice) => (
+              paginatedData.map((invoice) => (
                 <TableRow key={invoice.id} className="border-b border-border bg-background text-foreground">
                   <TableCell className="bg-background text-foreground font-medium">
                     {invoice.invoiceNo || '-'}
@@ -442,6 +458,67 @@ const SalesInvoicesPage = () => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-4">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Previous
+            </Button>
+            
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={
+                      currentPage === pageNum
+                        ? "bg-blue-600 text-white"
+                        : "bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+                    }
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Filter Modal */}
       {showFilterModal && (

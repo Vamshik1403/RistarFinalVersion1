@@ -624,10 +624,11 @@ model BillofLading {
   createdAt              DateTime  @default(now())
   shipmentId             Int?
   updatedAt              DateTime  @default(now()) @updatedAt
-  firstGenerationDate    DateTime?
-  hasDraftBlGenerated    Boolean   @default(false)
-  hasOriginalBLGenerated Boolean   @default(false)
-  shipment               Shipment? @relation(fields: [shipmentId], references: [id])
+  firstGenerationDate        DateTime?
+  hasDraftBlGenerated        Boolean   @default(false)
+  hasOriginalBLGenerated     Boolean   @default(false)
+  hasNonNegotiableBlGenerated Boolean  @default(false)
+  shipment                   Shipment? @relation(fields: [shipmentId], references: [id])
 }
 
 

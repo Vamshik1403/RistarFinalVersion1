@@ -12,12 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "../../lib/api";
 
-<<<<<<< HEAD
-
-=======
 // These components are no longer needed as we now use bulk caching approach
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
-
 interface MovementRow {
   id: number;
   date: string;
@@ -48,7 +43,7 @@ type AddressBook = {
 
 const MovementHistoryTable = () => {
   const [data, setData] = useState<MovementRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [containerSearch, setContainerSearch] = useState("");
   const [jobSearch, setJobSearch] = useState("");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
@@ -77,16 +72,15 @@ const MovementHistoryTable = () => {
   const [selectedCarrierId, setSelectedCarrierId] = useState<number | null>(null);
   const [carriers, setCarriers] = useState<any[]>([]);
   const [movementPermissions, setMovementPermissions] = useState<any>(null);
-<<<<<<< HEAD
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
   const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
 
   // Cache for container location data to avoid multiple API calls
   const [containerLocationCache, setContainerLocationCache] = useState<{ [key: number]: { depotName: string, portName: string } }>({});
-=======
-  
-  // Cache for container location data to avoid multiple API calls
-  const [containerLocationCache, setContainerLocationCache] = useState<{[key: number]: {depotName: string, portName: string}}>({});
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
 
   const statusTransitions: Record<string, string[]> = {
@@ -234,7 +228,6 @@ const MovementHistoryTable = () => {
     setShowHistoryModal(true);
   };
 
-<<<<<<< HEAD
   // Function to fetch container location data in bulk
   const fetchContainerLocationData = async (inventoryIds: number[]) => {
     const locationCache: { [key: number]: { depotName: string, portName: string } } = {};
@@ -283,83 +276,6 @@ const MovementHistoryTable = () => {
 
       await Promise.all(inventoryPromises);
       setContainerLocationCache(locationCache);
-=======
-  // Function to fetch container location data in bulk - optimized version
-  const fetchContainerLocationData = async (inventoryIds: number[]) => {
-    const locationCache: {[key: number]: {depotName: string, portName: string}} = {};
-    
-    try {
-      // Fetch all inventory data in parallel (limit concurrent requests to avoid overwhelming server)
-      const batchSize = 10; // Process 10 containers at a time
-      const batches = [];
-      
-      for (let i = 0; i < inventoryIds.length; i += batchSize) {
-        const batch = inventoryIds.slice(i, i + batchSize);
-        batches.push(batch);
-      }
-      
-      // Process each batch
-      for (const batch of batches) {
-        const inventoryPromises = batch.map(async (inventoryId) => {
-          if (inventoryId) {
-            try {
-              const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-              const inventory = inventoryResponse.data;
-              const latestLeasingInfo = inventory.leasingInfo?.[0];
-              
-              let portName = "N/A";
-              let depotName = "N/A";
-              
-              if (latestLeasingInfo) {
-                // Create promises for port and depot fetching
-                const promises = [];
-                
-                if (latestLeasingInfo.portId) {
-                  promises.push(
-                    axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`)
-                      .then(response => ({ type: 'port', data: response.data.portName }))
-                      .catch(error => {
-                        console.warn("Failed to fetch port name:", error);
-                        return { type: 'port', data: 'N/A' };
-                      })
-                  );
-                }
-                
-                if (latestLeasingInfo.onHireDepotaddressbookId) {
-                  promises.push(
-                    axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`)
-                      .then(response => ({ type: 'depot', data: response.data.companyName }))
-                      .catch(error => {
-                        console.warn("Failed to fetch depot name:", error);
-                        return { type: 'depot', data: 'N/A' };
-                      })
-                  );
-                }
-                
-                // Wait for both port and depot data
-                const results = await Promise.all(promises);
-                results.forEach(result => {
-                  if (result.type === 'port') portName = result.data;
-                  if (result.type === 'depot') depotName = result.data;
-                });
-              }
-              
-              locationCache[inventoryId] = { depotName, portName };
-            } catch (error) {
-              console.error(`Failed to fetch location for inventory ${inventoryId}:`, error);
-              locationCache[inventoryId] = { depotName: "N/A", portName: "N/A" };
-            }
-          }
-        });
-        
-        // Wait for current batch to complete before processing next batch
-        await Promise.all(inventoryPromises);
-        
-        // Update cache progressively
-        setContainerLocationCache(prev => ({ ...prev, ...locationCache }));
-      }
-      
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
     } catch (error) {
       console.error("Error fetching container location data:", error);
     }
@@ -380,47 +296,27 @@ const MovementHistoryTable = () => {
           const dateB = new Date(b.date || b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
         });
-<<<<<<< HEAD
 
+        // Set data and ports immediately to show the table
         setData(sortedData);
         setPorts(portsRes.data);
-
+        
         // Extract unique inventory IDs and fetch location data in background
-=======
-        
-        setPorts(portsRes.data);
-        
-        // Extract unique inventory IDs and fetch location data BEFORE setting data
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
         const uniqueInventoryIds = [...new Set(sortedData
           .map((row: any) => row.inventory?.id)
           .filter((id: any) => id && typeof id === 'number')
         )] as number[];
-<<<<<<< HEAD
 
         if (uniqueInventoryIds.length > 0) {
+          // Fetch location data in background without blocking the table display
           fetchContainerLocationData(uniqueInventoryIds);
         }
-
-      } catch (error) {
-        console.error("Error fetching movement history data:", error);
-=======
-        
-        if (uniqueInventoryIds.length > 0) {
-          // Wait for location data to be fetched before showing the table
-          await fetchContainerLocationData(uniqueInventoryIds);
-        }
-        
-        // Set data after location cache is populated
-        setData(sortedData);
-        setLoading(false);
         
       } catch (error) {
         console.error("Error fetching movement history data:", error);
         // Even if location fetch fails, show the table with fallback data
         setData([]);
-        setLoading(false);
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
+
       }
     };
 
@@ -453,6 +349,18 @@ const MovementHistoryTable = () => {
 
   const uniqueJobNumbers = getUniqueJobNumbers();
   const canSelectAll = uniqueJobNumbers.length === 1 && filteredData.length > 0;
+
+  // Pagination logic
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  // Reset to first page when search terms or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [containerSearch, jobSearch, statusFilter, portFilter, locationFilter]);
 
   // Calculate status counts for all data (not just filtered)
   // Calculate status counts for all data (not just filtered)
@@ -963,7 +871,7 @@ const MovementHistoryTable = () => {
                       No movement history data found
                     </TableCell>
                   </TableRow>
-                ) : filteredData.map((row) => (
+                ) : paginatedData.map((row) => (
                   <TableRow
                     key={row.id}
                     className={`hover:bg-muted/50 transition-colors ${selectedIds.includes(row.id) ? 'bg-orange-50 dark:bg-orange-900/20' : ''
@@ -1017,11 +925,7 @@ const MovementHistoryTable = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-<<<<<<< HEAD
-                      {containerLocationCache[row.inventory?.id || 0]?.portName || row.port?.portName || "-"}
-=======
                       {containerLocationCache[row.inventory?.id || 0]?.portName || "-"}
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
                     </TableCell>
                     <TableCell>
                       {row.status?.toUpperCase() === "SOB" ? (
@@ -1035,19 +939,13 @@ const MovementHistoryTable = () => {
                           "-"
                         )
                       ) : (
-<<<<<<< HEAD
                         containerLocationCache[row.inventory?.id || 0] ?
                           `${containerLocationCache[row.inventory?.id || 0].depotName} - ${containerLocationCache[row.inventory?.id || 0].portName}` :
                           (row.addressBook?.companyName && row.port?.portName ?
                             `${row.addressBook.companyName} - ${row.port.portName}` :
                             row.addressBook?.companyName || row.port?.portName || "-"
                           )
-=======
-                        containerLocationCache[row.inventory?.id || 0] ? 
-                          `${containerLocationCache[row.inventory?.id || 0].depotName} - ${containerLocationCache[row.inventory?.id || 0].portName}` :
-                          "-"
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
-                      )}
+                        )}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{row.remarks}</TableCell>
                     <TableCell className="text-center">
@@ -1090,6 +988,67 @@ const MovementHistoryTable = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-4">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Previous
+            </Button>
+            
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={
+                      currentPage === pageNum
+                        ? "bg-blue-600 text-white"
+                        : "bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+                    }
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Bulk Status Modal */}
       {modalOpen && (

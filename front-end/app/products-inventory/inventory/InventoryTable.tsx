@@ -38,8 +38,12 @@ const StatusBadge = ({ status }: { status: string }) => (
 const ProductsInventoryPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  type AddressBookEntry = { id: number; companyName: string; [key: string]: any };
+  type AddressBookEntry = { id: number; companyName: string;[key: string]: any };
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
 
   const [loading, setLoading] = useState(true);
   const [inventoryData, setInventoryData] = useState<any[]>([]);
@@ -57,7 +61,6 @@ const ProductsInventoryPage = () => {
     initialSurveyDate: ""
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
-<<<<<<< HEAD
   const [containerEditStatus, setContainerEditStatus] = useState<{ [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } }>({});
 
   useEffect(() => {
@@ -74,24 +77,7 @@ const ProductsInventoryPage = () => {
         .catch((err) => console.error("Failed to fetch permissions:", err));
     }
   }, []);
-=======
-  const [containerEditStatus, setContainerEditStatus] = useState<{[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}}>({});
 
-useEffect(() => {
-  const userId = localStorage.getItem("userId");
-  if (userId) {
-    fetch(`http://128.199.19.28:8000/permissions?userId=${userId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const perm = data.find(
-          (p: any) => p.module.toLowerCase() === "inventory"
-        );
-        setInventoryPermissions(perm);
-      })
-      .catch((err) => console.error("Failed to fetch permissions:", err));
-  }
-}, []);
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleAddInventoryWithPermission = () => {
     if (inventoryPermissions?.canCreate) {
@@ -102,7 +88,7 @@ useEffect(() => {
     }
   };
 
-<<<<<<< HEAD
+
   const checkContainerEditStatus = async (id: number) => {
     try {
       const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
@@ -129,6 +115,7 @@ useEffect(() => {
       return;
     }
 
+    // Check edit status on-demand when button is clicked
     try {
       const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
       if (!editResponse.data.canEdit) {
@@ -141,67 +128,6 @@ useEffect(() => {
       alert("Error checking container status. Please try again.");
     }
   };
-=======
-const checkContainerEditStatus = async (id: number) => {
-  try {
-    const editResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-edit`);
-    const deleteResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-    
-    setContainerEditStatus(prev => ({
-      ...prev,
-      [id]: {
-        canEdit: editResponse.data.canEdit,
-        reason: editResponse.data.reason,
-        action: editResponse.data.action,
-        canDelete: deleteResponse.data.canDelete,
-        deleteReason: deleteResponse.data.reason
-      }
-    }));
-  } catch (error) {
-    console.error('Error checking container edit status:', error);
-  }
-};
-
-const handleEditInventoryWithPermission = async (id: number) => {
-  if (!inventoryPermissions?.canEdit) {
-    alert("You don't have access to edit inventory.");
-    return;
-  }
-
-  // Check edit status on-demand when button is clicked
-  try {
-    const editResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-edit`);
-    if (!editResponse.data.canEdit) {
-      alert(editResponse.data.reason || "Cannot edit this container.");
-      return;
-    }
-    handleEditClick(id);
-  } catch (error) {
-    console.error('Error checking edit status:', error);
-    alert("Error checking container status. Please try again.");
-  }
-};
-
-const handleDeleteInventoryWithPermission = async (id: number) => {
-  if (!inventoryPermissions?.canDelete) {
-    alert("You don't have access to delete inventory.");
-    return;
-  }
-
-  // Check delete status on-demand when button is clicked
-  try {
-    const deleteResponse = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-    if (!deleteResponse.data.canDelete) {
-      alert(deleteResponse.data.reason || "Cannot delete this container.");
-      return;
-    }
-    handleDelete(id);
-  } catch (error) {
-    console.error('Error checking delete status:', error);
-    alert("Error checking container status. Please try again.");
-  }
-};
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleDeleteInventoryWithPermission = async (id: number) => {
     if (!inventoryPermissions?.canDelete) {
@@ -209,6 +135,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
       return;
     }
 
+    // Check delete status on-demand when button is clicked
     try {
       const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
       if (!deleteResponse.data.canDelete) {
@@ -222,6 +149,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
     }
   };
 
+
   const handleAddContainerClick = () => {
     setSelectedInventoryId(null);
     setShowModal(true);
@@ -232,12 +160,12 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
     fetchInventoryData();
   }, []);
 
-<<<<<<< HEAD
   const fetchInventoryData = async () => {
     try {
       const response = await axios.get('http://localhost:8000/inventory');
       setInventoryData(response.data);
 
+      // Check edit/delete status for visual indication (gray buttons) but don't block loading
       const editStatusPromises = response.data.map(async (item: any) => {
         try {
           const [editResponse, deleteResponse] = await Promise.all([
@@ -270,8 +198,10 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
         }
       });
 
+      // Set loading to false immediately so page loads fast
       setLoading(false);
 
+      // Update button states in background (non-blocking)
       Promise.all(editStatusPromises).then(editResults => {
         const editStatusMap = editResults.reduce((acc, item) => {
           acc[item.id] = item.editStatus;
@@ -286,64 +216,6 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
       setLoading(false);
     }
   };
-=======
-   const fetchInventoryData = async () => {
-     try {
-       const response = await axios.get('http://128.199.19.28:8000/inventory');
-       setInventoryData(response.data);
-       
-       // Check edit/delete status for visual indication (gray buttons) but don't block loading
-       const editStatusPromises = response.data.map(async (item: any) => {
-         try {
-           const [editResponse, deleteResponse] = await Promise.all([
-             axios.get(`http://128.199.19.28:8000/inventory/${item.id}/can-edit`),
-             axios.get(`http://128.199.19.28:8000/inventory/${item.id}/can-delete`)
-           ]);
-           
-           return {
-             id: item.id,
-             editStatus: {
-               canEdit: editResponse.data.canEdit,
-               reason: editResponse.data.reason,
-               action: editResponse.data.action,
-               canDelete: deleteResponse.data.canDelete,
-               deleteReason: deleteResponse.data.reason
-             }
-           };
-         } catch (error) {
-           console.error(`Error checking status for container ${item.id}:`, error);
-           return {
-             id: item.id,
-             editStatus: {
-               canEdit: true,
-               reason: null,
-               action: null,
-               canDelete: true,
-               deleteReason: null
-             }
-           };
-         }
-       });
-       
-       // Set loading to false immediately so page loads fast
-       setLoading(false);
-       
-       // Update button states in background (non-blocking)
-       Promise.all(editStatusPromises).then(editResults => {
-         const editStatusMap = editResults.reduce((acc, item) => {
-           acc[item.id] = item.editStatus;
-           return acc;
-         }, {} as {[key: number]: {canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null}});
-         
-         setContainerEditStatus(editStatusMap);
-       });
-       
-     } catch (error) {
-       console.error('Error fetching inventory data:', error);
-       setLoading(false);
-     }
-   };
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
 
   const handleEditClick = (id: number): void => {
     setSelectedInventoryId(id);
@@ -352,24 +224,16 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
-<<<<<<< HEAD
+
       const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
-=======
-      // First check if container can be deleted
-      const deletionCheck = await axios.get(`http://128.199.19.28:8000/inventory/${id}/can-delete`);
-      
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
+
       if (!deletionCheck.data.canDelete) {
         alert(deletionCheck.data.reason);
         return;
       }
 
-<<<<<<< HEAD
       await axios.delete(`http://localhost:8000/inventory/${id}`);
-=======
-      // If deletion is allowed, proceed with deletion
-      await axios.delete(`http://128.199.19.28:8000/inventory/${id}`);
->>>>>>> c4b28b4b3058839fca8f8cc4cbee98089b2e847e
+      // If deletion is allowed, proceed with deletion;
       setInventoryData(inventoryData.filter((item) => item.id !== id));
       alert('Inventory deleted successfully');
     } catch (error: any) {
@@ -379,7 +243,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
   };
 
   useEffect(() => {
-    fetch("http://128.199.19.28:8000/addressbook")
+    fetch("http://localhost:8000/addressbook")
       .then((res) => res.json())
       .then((data) => setAddressBook(data))
       .catch((err) => console.error("Failed to fetch address book", err));
@@ -428,6 +292,18 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
 
   const hasActiveFilters = filters.ownership || filters.status || filters.initialSurveyDate;
 
+  // Pagination logic
+  const totalItems = filteredData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedData = filteredData.slice(startIndex, endIndex);
+
+  // Reset to first page when search term or filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filters]);
+
   // counts
   const totalCount = inventoryData.length;
   const filteredCount = filteredData.length;
@@ -449,19 +325,18 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
           {/* Filter Button with Count */}
           <Button
             onClick={() => setShowFilterModal(true)}
-            className={`flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none ${
-              hasActiveFilters
+            className={`flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none ${hasActiveFilters
                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                 : 'bg-white dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-black dark:text-white'
-            }`}
+              }`}
           >
             <Filter className="h-4 w-4" />
             Filter
-           
+
           </Button>
-           <span className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none">
-              {hasActiveFilters ? filteredCount : totalCount}
-            </span>
+          <span className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none">
+            {hasActiveFilters ? filteredCount : totalCount}
+          </span>
         </div>
 
         <Button
@@ -544,7 +419,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                 </TableCell>
               </TableRow>
             ) : (
-              filteredData.map((item) => (
+              paginatedData.map((item) => (
                 <TableRow key={item.id} className="border-b border-border bg-background text-foreground">
                   <TableCell className="bg-background text-foreground">
                     {/* First check if there are leasing records with ownershipType */}
@@ -584,31 +459,29 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                   </TableCell>
                   <TableCell className="bg-background text-foreground text-right">
                     <div className="flex gap-2 justify-end">
-                     <Button
-  variant="ghost"
-  size="icon"
-  className={`h-8 w-8 ${
-    !inventoryPermissions?.canEdit || !containerEditStatus[item.id]?.canEdit
-      ? "text-gray-400 opacity-50 cursor-pointer"
-      : "text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 dark:hover:bg-blue-900/40"
-  }`}
-  onClick={() => handleEditInventoryWithPermission(item.id)}
->
-  <Pencil size={16} />
-</Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${!inventoryPermissions?.canEdit || !containerEditStatus[item.id]?.canEdit
+                            ? "text-gray-400 opacity-50 cursor-pointer"
+                            : "text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 dark:hover:bg-blue-900/40"
+                          }`}
+                        onClick={() => handleEditInventoryWithPermission(item.id)}
+                      >
+                        <Pencil size={16} />
+                      </Button>
 
-<Button
-  variant="ghost"
-  size="icon"
-  className={`h-8 w-8 ${
-    !inventoryPermissions?.canDelete || !containerEditStatus[item.id]?.canDelete
-      ? "text-gray-400 opacity-50 cursor-pointer"
-      : "text-red-400 hover:text-red-300 hover:bg-red-900/40 dark:hover:bg-red-900/40"
-  }`}
-  onClick={() => handleDeleteInventoryWithPermission(item.id)}
->
-  <Trash2 size={16} />
-</Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${!inventoryPermissions?.canDelete || !containerEditStatus[item.id]?.canDelete
+                            ? "text-gray-400 opacity-50 cursor-pointer"
+                            : "text-red-400 hover:text-red-300 hover:bg-red-900/40 dark:hover:bg-red-900/40"
+                          }`}
+                        onClick={() => handleDeleteInventoryWithPermission(item.id)}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
 
                     </div>
                   </TableCell>
@@ -618,6 +491,67 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination Controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 px-4">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Previous
+            </Button>
+
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                }
+
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={
+                      currentPage === pageNum
+                        ? "bg-blue-600 text-white"
+                        : "bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+                    }
+                  >
+                    {pageNum}
+                  </Button>
+                );
+              })}
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+            >
+              Next
+            </Button>
+          </div>
+        </div>
+      )}
 
       <Dialog open={showModal} onOpenChange={(open) => {
         if (!open) handleCloseModal();
@@ -649,7 +583,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
         </DialogContent>
       </Dialog>
 
-          
+
 
       {/* Filter Modal */}
       {showFilterModal && (
@@ -666,7 +600,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                 <X className="h-4 w-4" />
               </Button>
             </div>
-            
+
             <div className="space-y-4">
               {/* Ownership Filter */}
               <div>
@@ -680,10 +614,10 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                 >
                   <option value="">All Ownership Types</option>
                   <option value="Own">Own</option>
-                                              <option value="Leased">Lease</option>
+                  <option value="Leased">Lease</option>
                 </select>
               </div>
-              
+
               {/* Status Filter */}
               <div>
                 <label className="block text-sm font-medium text-black-300 mb-2">
@@ -699,7 +633,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                   <option value="Inactive">Inactive</option>
                 </select>
               </div>
-              
+
               {/* Initial Survey Date Filter */}
               <div>
                 <label className="block text-sm font-medium text-black-300 mb-2">
@@ -717,7 +651,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
                 </p>
               </div>
             </div>
-            
+
             <div className="flex justify-between items-center mt-6">
               <Button
                 variant="ghost"
@@ -726,7 +660,7 @@ const handleDeleteInventoryWithPermission = async (id: number) => {
               >
                 Reset
               </Button>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="ghost"

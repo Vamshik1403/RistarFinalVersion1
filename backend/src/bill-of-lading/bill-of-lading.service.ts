@@ -91,6 +91,31 @@ export class BillOfLadingService {
     }
   }
 
+  async markNonNegotiableBLGenerated(shipmentId: number) {
+    try {
+      // Check if BL already exists for this shipment
+      const existingBl = await this.prisma.billofLading.findFirst({
+        where: { shipmentId: shipmentId },
+      });
+
+      if (existingBl) {
+        // Update existing BL to mark non-negotiable BL as generated
+        return await this.prisma.billofLading.update({
+          where: { id: existingBl.id },
+          data: {
+            hasNonNegotiableBlGenerated: true,
+            updatedAt: new Date(),
+          },
+        });
+      } else {
+        throw new NotFoundException('Bill of lading not found for this shipment');
+      }
+    } catch (error) {
+      console.error('❌ Failed to mark non-negotiable BL as generated:', error);
+      throw new Error('Failed to update non-negotiable BL generation status. See logs for details.');
+    }
+  }
+
   async findAll() {
     return this.prisma.billofLading.findMany({
       orderBy: { id: 'desc' },

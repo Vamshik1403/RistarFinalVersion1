@@ -6,7 +6,7 @@ const ristarLogoBase64 =
   "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABj 'lines tariff.',AAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAEPA5kDASIAAhEBAxEB/8QAHgABAAICAgMBAAAAAAAAAAAAAAgJBgcBBQIDBAr/xABvEAABAgUCAwUDBQgHDRMJCQEBAgMABAUGEQcIEiExCRNBUWEUInEVIzKBkRVCUmJyobGyCR";
 
 // Define BL types
-export type BLType = "original" | "draft" | "seaway";
+export type BLType = "original" | "draft" | "seaway" | "non-negotiable";
 
 export interface BLFormData {
   shipmentId: number;
@@ -86,48 +86,65 @@ export async function generateBlPdf(
         : [];
 
     if (containersToShow.length > 3) {
-      // If more than 3 containers, they go to a separate page
-      totalHeight += 50; // Just the notice text
+      // If more than 3 containers, they go to a separate page - reduced height to eliminate empty space
+      totalHeight += 55; // Increased from 50 to 55 to make page number visible for 4+ containers
     } else if (containersToShow.length === 1) {
-      // For 1 container, keep the current height calculation
-
-      const containerHeightMm = Math.max(60, 60 + 1 * 20); // 80mm for single container
+      // For 1 container, increase height to prevent terms cutoff
+      const containerHeightMm = 50; // Increased from 30mm to 50mm to fix terms cutoff
       totalHeight += containerHeightMm;
-    } else {
-      // For 2 and 3 containers, reduce height to minimize empty space
-      const containerHeightMm = 60 + containersToShow.length * 5; // Further reduced from 8 to 5mm per container
+    } else if (containersToShow.length === 2) {
+      // For 2 containers, increase height to prevent terms cutoff
+      const containerHeightMm = 60; // Increased from 40mm to 60mm to fix terms cutoff
+      totalHeight += containerHeightMm;
+    } else if (containersToShow.length === 3) {
+      // For 3 containers, more height to prevent cutoff (reduced due to smaller font and spacing)
+      const containerHeightMm = 50; // Reduced from 70mm to 50mm due to smaller font and spacing
       totalHeight += containerHeightMm;
     }
 
-    // Bottom section (delivery agent, freight, etc.): ~50mm
-    totalHeight += 50;
+    // Bottom section (delivery agent, freight, etc.): dynamic height based on container count
+    const bottomSectionHeight = containersToShow.length > 3 ? 65 : 
+                                containersToShow.length === 1 ? 60 : 
+                                containersToShow.length === 2 ? 65 : 50; // Increased height for 1 and 2 containers to fix terms cutoff
+    totalHeight += bottomSectionHeight;
 
-    // Terms section height (varies based on charges content)
+    // Terms section height (constant for all container counts - increased for 1 container to prevent cutoff)
     let termsHeight = 0;
     if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
-      // Estimate height based on charges content length
+      // Height varies slightly based on container count - more height for 1 container
       const chargesLength = blFormData.chargesAndFees.length;
-      termsHeight = Math.max(
-        80,
-        Math.min(120, 80 + (chargesLength / 100) * 10)
-      );
+      if (containersToShow.length === 1) {
+        termsHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+      } else {
+        termsHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
+      }
     } else {
-      // Minimal height when no charges
-      termsHeight = 60;
+      // Height varies based on container count - more height for 1 container
+      if (containersToShow.length === 1) {
+        termsHeight = 160; // Increased height for 1 container
+      } else {
+        termsHeight = 140; // Standard height for other container counts
+      }
     }
     totalHeight += termsHeight;
 
-    // Bottom margin
-    totalHeight += 20;
+     // Footer text height (For RISTAR LOGISTICS PVT LTD + As Agent for the Carrier) - positioned above terms
+     // totalHeight += 20; // Removed - footer is positioned above terms section
+
+     // Page number height - positioned below border (increased to prevent cutoff)
+     totalHeight += 10; // Increased from 5 to 10 to prevent page number cutoff
+
+     // Bottom margin - increased to ensure page number visibility
+     totalHeight += 8; // Increased from 5 to 8 for better page number spacing
 
     // Minimum height for proper proportions
     return Math.max(totalHeight, 250);
   };
 
-  const dynamicPageHeight = calculateRequiredHeight();
+  const initialPageHeight = calculateRequiredHeight();
 
-  // Create PDF with A3 width and calculated dynamic height
-  const doc = new jsPDF("p", "mm", [297, dynamicPageHeight]);
+  // Create PDF with A3 width and initial calculated height
+  const doc = new jsPDF("p", "mm", [297, initialPageHeight]);
 
   // Get container count early for dynamic positioning calculations
   const containersToShow =
@@ -257,15 +274,12 @@ export async function generateBlPdf(
 const pageHeight = doc.internal.pageSize.getHeight();
 
 // small margins
-const marginX = 10;
-const marginY = 10;
+const marginX = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
+const marginY = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
 
 // usable area
 const contentWidth = pageWidth - marginX * 2;
 const contentHeight = pageHeight - marginY * 2;
-
-// Example border
-doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
 
 
     // Main border (centered) with dynamic height
@@ -275,7 +289,7 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
     doc.line(marginX, marginY, marginX + contentWidth, marginY); // top
 
     // Track border positions - will be updated after terms section is calculated
-    let bottomBorderY = dynamicPageHeight - 15; // Default position
+     let bottomBorderY = initialPageHeight - 15; // Default position
     let leftBorderY = bottomBorderY; // Track left border position
     let rightBorderY = bottomBorderY; // Track right border position
     // Vertical borders will be drawn later after calculating correct position
@@ -299,8 +313,9 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
     const rightMaxWidth = headerRightX - rightX - 5;
 
     // Left column content with very compact spacing to prevent footer cutoff
-    let y = headerTop + 6;
-    const sectionPadding = 5; // Reduced title padding
+    // Reduced gap from headerTop + 6 to headerTop + 2 to minimize gap above shipper
+    let y = headerTop + 2;
+    const sectionPadding = 8; // Increased title padding to prevent overlap
     const fieldSpacing = 3; // Space between fields
     const sectionGap = 3; // Reduced gap between sections
 
@@ -309,10 +324,10 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
     const consigneeMaxHeight = 24; // Significantly reduced
     const notifyMaxHeight = 24; // Significantly reduced
 
-    // SHIPPER section - very compact
+     // SHIPPER section - very compact with more padding from top
     doc.setFontSize(11);
     doc.setFont("arial", "bold");
-    doc.text("Shipper", leftX, y);
+     doc.text("Shipper", leftX, y + 2); // Added +2 to prevent overlap with borderline while maintaining gap to content
     y += sectionPadding;
 
     const shipperStartY = y;
@@ -393,8 +408,8 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       }
     }
 
-    // Fixed shipper underline position
-    const shipperUnderlineY = headerTop + 6 + sectionPadding + shipperMaxHeight;
+    // Fixed shipper underline position - moved down to prevent overlapping with text
+    const shipperUnderlineY = headerTop + 2 + sectionPadding + shipperMaxHeight + 2; // Added +2 to move underline down
     doc.setLineWidth(0.4);
     // Extend underline fully to the panel borders (no side gaps)
     doc.line(headerLeft, shipperUnderlineY, headerSplitX, shipperUnderlineY);
@@ -795,6 +810,14 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       } else if (copyNumber === 2) {
         blTypeText = "3rd COPY B/L";
       }
+    } else if (blType === "non-negotiable") {
+      if (copyNumber === 0) {
+        blTypeText = "1st NON NEGOTIABLE B/L";
+      } else if (copyNumber === 1) {
+        blTypeText = "2nd COPY NON NEGOTIABLE B/L";
+      } else if (copyNumber === 2) {
+        blTypeText = "3rd COPY NON NEGOTIABLE B/L";
+      }
     }
     // Move title to the right section centered within the right panel
     const rightPanelCenterX = headerSplitX + (headerRightX - headerSplitX) / 2;
@@ -936,13 +959,13 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
         const getContainerHeight = (container: any) => {
       let height = 20; // Base height for container number
       
-      // Add height for each data field that has actual data
-      if (container.sealNumber && container.sealNumber !== "N/A") height += 7;
-      if (container.shippersealNo && container.shippersealNo !== "N/A") height += 7;
-      if (container.grossWt && container.grossWt !== "N/A") height += 7;
-      if (container.netWt && container.netWt !== "N/A") height += 7;
-      if (container.tareWt && container.tareWt !== "N/A") height += 7;
-      if (container.cbmWt && container.cbmWt !== "N/A") height += 7;
+      // Add height for each data field that has actual data (reduced from 7 to 5)
+      if (container.sealNumber && container.sealNumber !== "N/A") height += 5;
+      if (container.shippersealNo && container.shippersealNo !== "N/A") height += 5;
+      if (container.grossWt && container.grossWt !== "N/A") height += 5;
+      if (container.netWt && container.netWt !== "N/A") height += 5;
+      if (container.tareWt && container.tareWt !== "N/A") height += 5;
+      if (container.cbmWt && container.cbmWt !== "N/A") height += 5;
       
       return Math.max(height, 25); // Minimum height
     };
@@ -978,9 +1001,9 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
       : "N/A";
     if (carrierSeals !== "N/A") {
-      doc.setFontSize(9);
+       doc.setFontSize(9); // Increased from 8 to 9 for better readability
       doc.text(`CARRIER SEAL: ${carrierSeals}`, containerStartX, yPos + lineOffset);
-      lineOffset += 7;
+       lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
     }
   }
 
@@ -990,57 +1013,80 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
       : "N/A";
     if (shipperSeals !== "N/A") {
-      doc.setFontSize(9);
+       doc.setFontSize(9); // Increased from 8 to 9 for better readability
       doc.text(`SHIPPER SEAL: ${shipperSeals}`, containerStartX, yPos + lineOffset);
-      lineOffset += 7;
+       lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
     }
   }
   
   // Weights - use formatted values that include units
+  // Get the unit for this specific container (handle comma-separated units from multiple containers)
+  const containerUnit = container.unit 
+    ? (container.unit.includes(',') ? container.unit.split(',')[0].trim() : container.unit)
+    : unit;
+  
   if (container.grossWt && container.grossWt !== "N/A") {
-    // Parse the weight and format it with unit
-    const grossNum = parseFloat(container.grossWt);
-    const formattedGross = !isNaN(grossNum) ? 
-      `${grossNum} ${container.unit || unit}` : 
-      container.grossWt;
+    // Handle comma-separated values properly
+    const grossValues = container.grossWt.split(',').map((s: string) => s.trim());
+    const formattedGrossValues = grossValues.map((value: string) => {
+      const grossNum = parseFloat(value);
+      return !isNaN(grossNum) ? 
+        `${grossNum} ${containerUnit}` : 
+        value;
+    });
     
-    doc.setFontSize(9);
-    doc.text(`GROSS WT: ${formattedGross}`, containerStartX, yPos + lineOffset);
-    lineOffset += 7;
+     doc.setFontSize(8); // Reduced from 9 to 8
+    doc.text(`GROSS WT: ${formattedGrossValues.join(', ')}`, containerStartX, yPos + lineOffset);
+     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
   }
 
   if (container.netWt && container.netWt !== "N/A") {
-    // Parse the weight and format it with unit
-    const netNum = parseFloat(container.netWt);
-    const formattedNet = !isNaN(netNum) ? 
-      `${netNum} ${container.unit || unit}` : 
-      container.netWt;
+    // Handle comma-separated values properly
+    const netValues = container.netWt.split(',').map((s: string) => s.trim());
+    const formattedNetValues = netValues.map((value: string) => {
+      const netNum = parseFloat(value);
+      return !isNaN(netNum) ? 
+        `${netNum} ${containerUnit}` : 
+        value;
+    });
     
-    doc.setFontSize(9);
-    doc.text(`NET WT: ${formattedNet}`, containerStartX, yPos + lineOffset);
-    lineOffset += 7;
+     doc.setFontSize(8); // Reduced from 9 to 8
+    doc.text(`NET WT: ${formattedNetValues.join(', ')}`, containerStartX, yPos + lineOffset);
+     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
   }
 
   if (container.tareWt && container.tareWt !== "N/A") {
-    // Parse the weight and format it with unit
-    const tareNum = parseFloat(container.tareWt);
-    const formattedTare = !isNaN(tareNum) ? 
-      `${tareNum} ${container.unit || unit}` : 
-      container.tareWt;
+    // Handle comma-separated values properly
+    const tareValues = container.tareWt.split(',').map((s: string) => s.trim());
+    const formattedTareValues = tareValues.map((value: string) => {
+      const tareNum = parseFloat(value);
+      return !isNaN(tareNum) ? 
+        `${tareNum} ${containerUnit}` : 
+        value;
+    });
     
-    doc.setFontSize(9);
-    doc.text(`TARE WT: ${formattedTare}`, containerStartX, yPos + lineOffset);
-    lineOffset += 7;
+     doc.setFontSize(8); // Reduced from 9 to 8
+    doc.text(`TARE WT: ${formattedTareValues.join(', ')}`, containerStartX, yPos + lineOffset);
+     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
   }
 
   if (container.cbmWt && container.cbmWt !== "N/A") {
-    doc.setFontSize(9);
-    doc.text(`CBM: ${container.cbmWt} CBM`, containerStartX, yPos + lineOffset);
-    lineOffset += 7;
+    // Handle comma-separated values properly
+    const cbmValues = container.cbmWt.split(',').map((s: string) => s.trim());
+    const formattedCbmValues = cbmValues.map((value: string) => {
+      const cbmNum = parseFloat(value);
+      return !isNaN(cbmNum) ? 
+        `${cbmNum} CBM` : 
+        value;
+    });
+    
+     doc.setFontSize(8); // Reduced from 9 to 8
+    doc.text(`CBM: ${formattedCbmValues.join(', ')}`, containerStartX, yPos + lineOffset);
+     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
   }
 
-  // Add spacing between containers
-  currentContainerY += containerHeight + 8;
+  // Add spacing between containers (reduced from 8 to 5)
+  currentContainerY += containerHeight + 5;
 });
 
     containerY = currentContainerY;
@@ -1049,16 +1095,16 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
   } else {
     // Table format for more than 3 containers
     const tableStartY = containerY;
-    const tableWidth = 280;
+    const tableWidth = 280; // Reduced table width to add proper margins
     const tableX = (pageWidth - tableWidth) / 2;
     
-    // Define column widths based on available data
-    const col1Width = 70; // CONTAINER NO
-    const col2Width = 50; // GROSS WT
-    const col3Width = 50; // NET WT
-    const col4Width = 50; // TARE WT
-    const col5Width = 40; // CBM
-    const col6Width = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width); // SEAL NO
+    // Define column widths - optimized for better space distribution with proper margins
+    const col1Width = 60; // CONTAINER NO - adjusted for reduced table width
+    const col2Width = 40; // GROSS WT - adjusted for reduced table width
+    const col3Width = 40; // NET WT - adjusted for reduced table width
+    const col4Width = 40; // TARE WT - adjusted for reduced table width
+    const col5Width = 30; // CBM - adjusted for reduced table width
+    const col6Width = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width); // SEAL NO - gets remaining space (70mm)
 
     // Table header with borders
     doc.setFont("arial", "bold");
@@ -1105,16 +1151,46 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       if (!container.containerNumber) return;
 
       const rowY = containerY;
+      
+      // Calculate dynamic row height based on SEAL NO text length
+      let rowHeight = 12; // Default row height
+      const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A") 
+        ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
+        : "";
+      const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A") 
+        ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
+        : "";
+      
+      let allSeals = "";
+      if (carrierSeals && shipperSeals) {
+        allSeals = `C:${carrierSeals} S:${shipperSeals}`;
+      } else if (carrierSeals) {
+        allSeals = carrierSeals;
+      } else if (shipperSeals) {
+        allSeals = shipperSeals;
+      } else {
+        allSeals = "-";
+      }
+      
+      // Check if SEAL NO text needs wrapping
+      const maxSealWidth = col6Width - 4;
+      const textWidth = doc.getTextWidth(allSeals);
+      if (textWidth > maxSealWidth) {
+        const wrappedSealText = doc.splitTextToSize(allSeals, maxSealWidth);
+        if (wrappedSealText.length > 1) {
+          rowHeight = 16; // Increase row height for wrapped text
+        }
+      }
 
-      // Draw row borders
-      doc.rect(tableX, rowY, tableWidth, 12);
+      // Draw row borders with dynamic height
+      doc.rect(tableX, rowY, tableWidth, rowHeight);
 
-      // Draw vertical lines for data rows
-      doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + 12);
-      doc.line(tableX + col1Width + col2Width, rowY, tableX + col1Width + col2Width, rowY + 12);
-      doc.line(tableX + col1Width + col2Width + col3Width, rowY, tableX + col1Width + col2Width + col3Width, rowY + 12);
-      doc.line(tableX + col1Width + col2Width + col3Width + col4Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width, rowY + 12);
-      doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY + 12);
+      // Draw vertical lines for data rows with dynamic height
+      doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + col2Width, rowY, tableX + col1Width + col2Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + col2Width + col3Width, rowY, tableX + col1Width + col2Width + col3Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + col2Width + col3Width + col4Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY + rowHeight);
 
 
           // Container data (centered in each column)
@@ -1144,28 +1220,30 @@ doc.rect(marginX, marginY, contentWidth, contentHeight, "S");
       doc.text(cbmWt, cell5CenterX, rowY + 8, { align: "center" });
 
 
-        // Combine both seal types for display, only if they exist
-      const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A") 
-        ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
-        : "";
-      const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A") 
-        ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
-        : "";
+      // Handle SEAL NO text wrapping to prevent overflow
+      const sealText = allSeals || "-";
       
-      let allSeals = "";
-      if (carrierSeals && shipperSeals) {
-        allSeals = `C:${carrierSeals} S:${shipperSeals}`;
-      } else if (carrierSeals) {
-        allSeals = carrierSeals;
-      } else if (shipperSeals) {
-        allSeals = shipperSeals;
+      // Check if text fits in the column (reuse variables from earlier calculation)
+      if (textWidth > maxSealWidth) {
+        // Text is too long, wrap it
+        const wrappedSealText = doc.splitTextToSize(sealText, maxSealWidth);
+        if (wrappedSealText.length === 1) {
+          // Single line, center it
+          doc.text(wrappedSealText[0], cell6CenterX, rowY + 8, { align: "center" });
+        } else {
+          // Multiple lines, center the first line
+          doc.text(wrappedSealText[0], cell6CenterX, rowY + 6, { align: "center" });
+          // If there's a second line, show it below
+          if (wrappedSealText[1]) {
+            doc.text(wrappedSealText[1], cell6CenterX, rowY + 10, { align: "center" });
+          }
+        }
       } else {
-        allSeals = "-";
+        // Text fits, display normally
+        doc.text(sealText, cell6CenterX, rowY + 8, { align: "center" });
       }
-      
-      doc.text(allSeals, cell6CenterX, rowY + 8, { align: "center" });
 
-      containerY += 12;
+      containerY += rowHeight; // Use dynamic row height
     });
 
         // Add TOTAL row at the bottom
@@ -1310,19 +1388,23 @@ const freeDaysText = freeDays
   : "";
 if (freeDaysText) {
   doc.text(freeDaysText, marginX + 110, addY);
-  addY += 5;
+  addY += 8; // Increased from 5 to 8 for better spacing
 }
 
 // Dynamic detention rate text
 const detentionText = detentionRate ? `USD ${detentionRate} /DAY/TANK` : "";
 if (detentionText) {
   doc.text(detentionText, marginX + 110, addY);
-  addY += 8;
+  // Dynamic spacing based on container count - reduced spacing for 4+ containers to create room for charges
+  const detentionSpacing = actualContainerCount > 3 ? 8 : 15; // Reduced spacing for 4+ containers to create room
+  addY += detentionSpacing;
 }
 
     // Charge lines with better formatting - Use single charges field or default format
     doc.setFont("arial", "bold");
-    doc.setFontSize(8);
+    // Dynamic font size based on container count - reduced font size for 4+ containers
+    const chargesFontSize = actualContainerCount > 3 ? 9 : 8; // Reduced font size for 4+ containers from 10 to 9
+    doc.setFontSize(chargesFontSize);
 
     let chargeLines: string[] = [];
 
@@ -1355,14 +1437,25 @@ if (detentionText) {
       if (t.includes("SHIPPING LINE") || t.includes("COLLECT CHARGES")) {
         // These are the header lines, render them as is
         doc.text(normalized, marginX + 110, addY);
-        addY += 3.5;
+        // Increased spacing to prevent overlap with borderlines
+        const headerSpacing = actualContainerCount > 3 ? 6 : 7; // Increased spacing to prevent overlap
+        addY += headerSpacing;
       } else {
         // These are the charges lines from textarea, render each line separately
         doc.text(normalized, marginX + 110, addY);
-        addY += 3.5;
+        // Increased spacing to prevent overlap with borderlines
+        const chargeSpacing = actualContainerCount > 3 ? 6 : 7; // Increased spacing to prevent overlap
+        addY += chargeSpacing;
       }
 
     });
+
+    // Add extra spacing after charges section to prevent overlap with borderline
+    if (actualContainerCount > 3) {
+      addY += 10; // Increased buffer space to prevent overlap with borderline
+    } else {
+      addY += 8; // Add buffer space for all container counts to prevent overlap
+    }
 
     rowEndY = Math.max(rowEndY, addY);
 
@@ -1381,40 +1474,35 @@ if (detentionText) {
       bottomBoxTop = tableBottomY + 15; // Move down 25mm for single container to create more space above
     } else if (actualContainerCount === 2) {
       bottomBoxTop = tableBottomY + 5; // Move down 15mm for two containers to provide more space for charges and fees section
+    } else if (actualContainerCount > 3) {
+      bottomBoxTop = tableBottomY + 15; // Reduced from 25 to 15 to prevent charges text overlap while maintaining space
     }
     // Reduced height to free more space for the terms section below
     const bottomBoxHeight = 48; // Reduced from 52 to 48
 
 
-    // Calculate terms section positioning early for border calculations
-    const termsBoxTop = bottomBoxTop + bottomBoxHeight;
-    const termsBoxHeight = 50; // Increased height to accommodate all terms text content
+     // Calculate terms section positioning early for border calculations
+     const termsBoxTop = bottomBoxTop + bottomBoxHeight;
+     // Terms box height varies based on container count - increased for 1 container to prevent cutoff
+     let termsBoxHeight;
+     if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+       // Height varies based on container count - more height for 1 container
+       const chargesLength = blFormData?.chargesAndFees?.length || 0;
+       if (actualContainerCount === 1) {
+         termsBoxHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+       } else {
+         termsBoxHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
+       }
+     } else {
+       // Height varies based on container count - more height for 1 container
+       if (actualContainerCount === 1) {
+         termsBoxHeight = 160; // Increased height for 1 container
+       } else {
+         termsBoxHeight = 140; // Standard height for other container counts
+       }
+     }
 
-    // Update bottom border position based on container count and fixed terms section height
-    if (actualContainerCount === 1) {
-      bottomBorderY = termsBoxTop + termsBoxHeight - 3; // Move up for single container to reduce empty space
-    } else if (actualContainerCount === 2) {
-      bottomBorderY = termsBoxTop + termsBoxHeight; // Keep current position for two containers
-    } else {
-      bottomBorderY = termsBoxTop + termsBoxHeight - 6; // Move up 5mm for three containers to reduce empty space
-    }
-
-
-    // Now draw the bottom border at the correct position
-    doc.line(marginX, bottomBorderY, marginX + contentWidth, bottomBorderY); // bottom
-
-    // Update left and right borders to match the new bottom position
-    leftBorderY = bottomBorderY;
-    rightBorderY = bottomBorderY;
-
-    // Now draw the left and right vertical borders at the correct position
-    doc.line(marginX, marginY, marginX, leftBorderY); // left
-    doc.line(
-      marginX + contentWidth,
-      marginY,
-      marginX + contentWidth,
-      rightBorderY
-    ); // right
+     // Bottom border position will be calculated after terms content is processed
 
     doc.setLineWidth(0.5);
     // Draw bottom box without bottom edge so there is only one line between this box and the terms box below
@@ -1583,42 +1671,19 @@ if (detentionText) {
 
     // Place and date of issue - right aligned with extra padding from border
     doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
-    doc.text("For RISTAR LOGISTICS PVT LTD", rightColX, bottomBoxTop + 28);
-
-
-    
-
-    // Dynamic positioning for "As Agent for the Carrier" based on container count
-    // Move it down much closer to the bottom line for all container counts
-    let asAgentY = bottomBoxTop + 40; // Base position
-    if (actualContainerCount === 1) {
-      // For 1-container PDFs, move it down significantly more for better visual balance
-      asAgentY = bottomBoxTop + 90; // Move down 50mm more than base position
-    } else if (actualContainerCount === 2) {
-      // For 2-container PDFs, move it down more for better balance
-      asAgentY = bottomBoxTop + 85; // Move down 45mm more than base position
-    } else if (actualContainerCount === 3) {
-      // For 3-container PDFs, move it down for better balance
-      asAgentY = bottomBoxTop + 80; // Move down 40mm more than base position
-    }
-
-
-    // Add "As Agent for the Carrier" with dynamic positioning
-    doc.text("As Agent for the Carrier", rightColX, asAgentY);
 
     // Terms block moved below the bottom grid (new section)
     // Using fixed terms box height calculated earlier
     // Draw the top separator only under Delivery Agent + Freight sections (exclude rightmost section)
     doc.line(marginX, termsBoxTop, colNUM_X, termsBoxTop);
-    // Extend the middle vertical separator to match the bottom border position
-    doc.line(colNUM_X, termsBoxTop, colNUM_X, bottomBorderY);
+     // Note: Vertical separator will be drawn after bottom border position is calculated
     // Remove left and right vertical borders of terms box as requested
     // Omit bottom edge of terms box so only the outer page border shows at the end
     // Reduce top padding so the first line starts higher (closer to the separator line)
     // Add some spacing from the top separator before the terms text begins
     const miniTermsY = termsBoxTop + 4; // Reduced padding from 6 to 4
     doc.setFont("arial", "bold"); // Set font to bold for terms text
-    doc.setFontSize(7); // Further reduced from 7 to 6 for better fit inside the section
+    doc.setFontSize(8); // Further reduced from 7 to 6 for better fit inside the section
     const miniTerms = [
       "By accepting this Bill of lading shipper accepts and abides by all terms, conditions clauses printed and stamped on the face or reverse side of this bill of lading.",
       "By accepting this Bill of lading, the shipper accepts his responsibility towards the carrier for payment of freight (in case of freight collect shipments), Accrued",
@@ -1634,9 +1699,27 @@ if (detentionText) {
     // Constrain terms text to the left of the new vertical separator
     const miniTermsMaxWidth = Math.max(40, colNUM_X - (marginX + 9));
 
-    // Fixed height for terms text to match the fixed section height
-    const availableHeight = 50; // Fixed height that fits within the 50mm section height
-    const maxBottomY = termsBoxTop + availableHeight;
+     // Height for terms text varies based on container count - increased for 1 container to prevent cutoff
+     let availableHeight;
+     if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+       // Height varies based on container count - more height for 1 container
+       const chargesLength = blFormData?.chargesAndFees?.length || 0;
+       if (actualContainerCount === 1) {
+         availableHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+       } else {
+         availableHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
+       }
+     } else {
+       // Height varies based on container count - more height for 1 container
+       if (actualContainerCount === 1) {
+         availableHeight = 160; // Increased height for 1 container
+       } else {
+         availableHeight = 140; // Standard height for other container counts
+       }
+     }
+     const maxBottomY = termsBoxTop + availableHeight;
+
+     let lastDrawnTextY = mtY; // Track the actual Y position of the last drawn text
 
     miniTerms.forEach((t) => {
       // Check if we have space for more text
@@ -1648,9 +1731,55 @@ if (detentionText) {
       const textBlockHeight = wrapped.length * 2.5 + 0.5;
       if (mtY + textBlockHeight <= maxBottomY) {
         doc.text(wrapped, marginX + 7, mtY); // Slightly indented for alignment
+         lastDrawnTextY = mtY + (wrapped.length * 2.5); // Track actual end of drawn text (without extra spacing)
         mtY += textBlockHeight;
       }
     });
+
+     // Calculate actual content height used
+     const actualTermsContentHeight = lastDrawnTextY - miniTermsY;
+
+     // Update bottom border position to create equal margins above and below
+     // Calculate the proper bottom border position to balance top and bottom margins
+     const topMargin = marginY; // Top margin (2mm)
+     const bottomMargin = topMargin; // Equal bottom margin (2mm)
+     const availableContentHeight = initialPageHeight - topMargin - bottomMargin;
+     const contentUsedHeight = lastDrawnTextY - topMargin;
+     const extraSpace = availableContentHeight - contentUsedHeight;
+     
+     // Position bottom border to create equal margins
+     bottomBorderY = lastDrawnTextY + (extraSpace / 2); // Add half the extra space below content
+
+     // Calculate the actual required page height based on content
+     const actualPageHeight = bottomBorderY + 5; // Add small margin for page number
+     
+     // Note: jsPDF doesn't support dynamic page resizing, so we'll work with the calculated height
+
+     // Add footer text positioned above the terms content, below the "0(ZERO) Nhava Sheva" section
+     const footerY = bottomBoxTop + bottomBoxHeight - 12; // Move up closer to "0(ZERO) Nhava Sheva"
+     doc.setFont("arial", "bold");
+     doc.setFontSize(10);
+     doc.text("For RISTAR LOGISTICS PVT LTD", rightColX, footerY - 7);
+     doc.text("As Agent for the Carrier", rightColX, footerY + (actualContainerCount > 3 ? 50 : 55)); // Moved down for 4+ containers to fix positioning
+
+     // Now draw the bottom border at the correct position
+     doc.line(marginX, bottomBorderY, marginX + contentWidth, bottomBorderY); // bottom
+
+     // Draw the vertical separator from terms top to bottom border
+     doc.line(colNUM_X, termsBoxTop, colNUM_X, bottomBorderY);
+
+     // Update left and right borders to match the new bottom position
+     leftBorderY = bottomBorderY;
+     rightBorderY = bottomBorderY;
+
+     // Now draw the left and right vertical borders at the correct position
+     doc.line(marginX, marginY, marginX, leftBorderY); // left
+     doc.line(
+       marginX + contentWidth,
+       marginY,
+       marginX + contentWidth,
+       rightBorderY
+     ); // right
 
     // Removed rightmost stamp cell per request
 
@@ -1691,8 +1820,9 @@ if (detentionText) {
       doc.setFont("arial", "normal");
       doc.setFontSize(10);
       const pageNumberText = `Page ${p} of ${totalPages}`;
-      // Keep position consistent with prior single "Page 2" placement
-      doc.text(pageNumberText, pageWidth - 40, dynamicPageHeight - 5);
+       // Position page number below the main borderline with equal margin, moved down a bit
+       const pageNumberY = bottomBorderY + bottomMargin + (actualContainerCount > 3 ? 3 : 2); // Increased spacing for 4+ containers to make page number visible
+       doc.text(pageNumberText, pageWidth - 40, pageNumberY);
     }
 
     doc.save(fileName);

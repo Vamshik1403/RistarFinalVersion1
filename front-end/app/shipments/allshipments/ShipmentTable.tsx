@@ -70,6 +70,10 @@ const AllShipmentsPage = () => {
   const [containerSearch, setContainerSearch] = useState('');
   const [blGroups, setBlGroups] = useState<string[][]>([]);
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
   // --- helpers (place near getAllContainersFromForm / above Multi BL UI) ---
   const clamp = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
@@ -104,7 +108,7 @@ const AllShipmentsPage = () => {
   const [showBlModal, setShowBlModal] = useState(false);
   const [currentBlType, setCurrentBlType] = useState<BLType>('original');
   const [blJustSaved, setBlJustSaved] = useState(false);
-  const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, firstGenerationDate: string | null } }>({});
+  const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, firstGenerationDate: string | null } }>({});
   const [croGenerationStatus, setCroGenerationStatus] = useState<{ [key: number]: { hasCroGenerated: boolean, firstCroGenerationDate: string | null } }>({});
 
   // Add state to track copy downloads for each shipment and BL type
@@ -258,7 +262,7 @@ const AllShipmentsPage = () => {
   });
 
   // === MULTI BL: state & helpers ===
-  type BLType = 'draft' | 'original' | 'seaway';
+  type BLType = 'draft' | 'original' | 'seaway' | 'non-negotiable';
   interface ApiResponse {
     [key: string]: any;
   }
@@ -500,6 +504,11 @@ const sortedData = res.data.sort((a: any, b: any) => {
           originalDownloaded: false,
           secondCopyDownloaded: false,
           thirdCopyDownloaded: false
+        },
+        'non-negotiable': {
+          originalDownloaded: false,
+          secondCopyDownloaded: false,
+          thirdCopyDownloaded: false
         }
       };
     });
@@ -534,7 +543,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
   // Function to fetch BL generation statuses for all shipments
   const fetchBlGenerationStatuses = async (shipments: any[]) => {
     try {
-      const statusMap: { [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, firstGenerationDate: string | null } } = {};
+      const statusMap: { [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, firstGenerationDate: string | null } } = {};
 
       // Fetch BL status for each shipment
       for (const shipment of shipments) {
@@ -544,12 +553,14 @@ const sortedData = res.data.sort((a: any, b: any) => {
             statusMap[shipment.id] = {
               hasDraftBlGenerated: response.data.hasDraftBlGenerated || false,
               hasOriginalBLGenerated: response.data.hasOriginalBLGenerated || false,
+              hasNonNegotiableBlGenerated: response.data.hasNonNegotiableBlGenerated || false,
               firstGenerationDate: response.data.firstGenerationDate || null
             };
           } else {
             statusMap[shipment.id] = {
               hasDraftBlGenerated: false,
               hasOriginalBLGenerated: false,
+              hasNonNegotiableBlGenerated: false,
               firstGenerationDate: null
             };
           }
@@ -558,6 +569,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
           statusMap[shipment.id] = {
             hasDraftBlGenerated: false,
             hasOriginalBLGenerated: false,
+            hasNonNegotiableBlGenerated: false,
             firstGenerationDate: null
           };
         }
@@ -591,6 +603,11 @@ const sortedData = res.data.sort((a: any, b: any) => {
   useEffect(() => {
     fetchShipments();
   }, []);
+
+  // Reset to first page when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [containerSearch]);
 
   useEffect(() => {
     // Fetch allMovements data from backend (update the URL as needed)
@@ -959,27 +976,36 @@ const sortedData = res.data.sort((a: any, b: any) => {
           [shipment.id]: {
             hasDraftBlGenerated: existingBl.hasDraftBlGenerated || false,
             hasOriginalBLGenerated: existingBl.hasOriginalBLGenerated || false,
+            hasNonNegotiableBlGenerated: existingBl.hasNonNegotiableBlGenerated || false,
             firstGenerationDate: existingBl.firstGenerationDate || null
           }
         }));
 
-        const savedSealNumbers = existingBl.sealNo ? String(existingBl.sealNo).split(',').map((s: string) => s.trim()) : [];
-const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
-const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
-const savedUnits = existingBl.unit ? String(existingBl.unit).split(',').map((s: string) => s.trim()) : [];
-const savedTareWts = existingBl.tareWt ? String(existingBl.tareWt).split(',').map((s: string) => s.trim()) : [];
-const savedCbmWts = existingBl.cbmWt ? String(existingBl.cbmWt).split(',').map((s: string) => s.trim()) : [];
-const savedShipperSealNos = existingBl.shippersealNo ? String(existingBl.shippersealNo).split(',').map((s: string) => s.trim()) : [];
+
+// Helper function to get values for a container, handling single container with multiple values
+const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
+  if (!fieldValue) return defaultValue;
+  const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
+  
+  // If there's only one container, and the field itself contains semicolons,
+  // it means multiple values for that single container.
+  // In this case, return the entire field value for the first (and only) container.
+  if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
+    return fieldValue;
+  }
+  // Otherwise, return the value corresponding to the current container's index
+  return values[index] || defaultValue;
+};
 
 const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
   containerNumber: container.containerNumber || '',
-  sealNumber: savedSealNumbers[index] || '',
-  grossWt: savedGrossWeights[index] || '',
-  netWt: savedNetWeights[index] || '',
-  unit: savedUnits[index] || 'KGS',
-  tareWt: savedTareWts[index] || '',
-  cbmWt: savedCbmWts[index] || '',
-  shippersealNo: savedShipperSealNos[index] || ''
+  sealNumber: getValuesForContainer(existingBl.sealNo, index),
+  grossWt: getValuesForContainer(existingBl.grossWt, index),
+  netWt: getValuesForContainer(existingBl.netWt, index),
+  unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
+  tareWt: getValuesForContainer(existingBl.tareWt, index),
+  cbmWt: getValuesForContainer(existingBl.cbmWt, index),
+  shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
 })) || [];
 
 
@@ -1040,6 +1066,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           [shipment.id]: {
             hasDraftBlGenerated: false,
             hasOriginalBLGenerated: false,
+            hasNonNegotiableBlGenerated: false,
             firstGenerationDate: null
           }
         }));
@@ -1111,19 +1138,23 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
   const handleSaveBlData = async () => {
     try {
+     // Debug: Log container data before saving
+     console.log('Saving BL data - Containers:', blFormData.containers);
+     console.log('Shipper seal values:', blFormData.containers.map(c => c.shippersealNo));
+     
      const blPayload = {
-  date: blFormData.date,
-  shippersName: blFormData.shippersName,
+     date: blFormData.date,
+     shippersName: blFormData.shippersName,
 
-  // 🔹 required flat fields (joined from containers[])
-  containerNos: blFormData.containers.map(c => c.containerNumber).join(', '),
-  sealNo: blFormData.containers.map(c => c.sealNumber).join(', '),
-  shippersealNo: blFormData.containers.map(c => c.shippersealNo).join(', '),
-  grossWt: blFormData.containers.map(c => c.grossWt).join(', '),
-  netWt: blFormData.containers.map(c => c.netWt).join(', '),
-  tareWt: blFormData.containers.map(c => c.tareWt).join(', '),
-  cbmWt: blFormData.containers.map(c => c.cbmWt).join(', '),
-  unit: blFormData.containers.map(c => c.unit || 'KGS').join(', '),
+  // 🔹 required flat fields (joined from containers[]) - use semicolon to separate containers, allow commas within fields
+  containerNos: blFormData.containers.map(c => c.containerNumber).join('; '),
+  sealNo: blFormData.containers.map(c => c.sealNumber).join('; '),
+  shippersealNo: blFormData.containers.map(c => c.shippersealNo || '').join('; '),
+  grossWt: blFormData.containers.map(c => c.grossWt).join('; '),
+  netWt: blFormData.containers.map(c => c.netWt).join('; '),
+  tareWt: blFormData.containers.map(c => c.tareWt).join('; '),
+  cbmWt: blFormData.containers.map(c => c.cbmWt).join('; '),
+  unit: blFormData.containers.map(c => c.unit || 'KGS').join('; '),
 
   // 🔹 remaining fields from your schema
   shippersAddress: blFormData.shippersAddress,
@@ -1178,6 +1209,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         [blFormData.shipmentId]: {
           hasDraftBlGenerated: savedBl.hasDraftBlGenerated || true,
           hasOriginalBLGenerated: savedBl.hasOriginalBLGenerated || false,
+          hasNonNegotiableBlGenerated: savedBl.hasNonNegotiableBlGenerated || false,
           firstGenerationDate: savedBl.firstGenerationDate || new Date().toISOString(),
         },
       }));
@@ -1325,6 +1357,25 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         }
       }
 
+      // If this is a non-negotiable BL download and hasn't been generated before, mark it as generated
+      if (currentBlType === 'non-negotiable' && !blGenerationStatus[blFormData.shipmentId]?.hasNonNegotiableBlGenerated) {
+        try {
+          await axios.post(`http://localhost:8000/bill-of-lading/mark-non-negotiable-generated/${blFormData.shipmentId}`);
+
+          // Update the local state to reflect that non-negotiable BL has been generated
+          setBlGenerationStatus(prev => ({
+            ...prev,
+            [blFormData.shipmentId]: {
+              ...prev[blFormData.shipmentId],
+              hasNonNegotiableBlGenerated: true
+            }
+          }));
+        } catch (error) {
+          console.error('Error marking non-negotiable BL as generated:', error);
+          // Don't block the download process if this fails
+        }
+      }
+
       // Mark original as downloaded in local state (for UI purposes)
       setBlCopyDownloadStatus(prev => ({
         ...prev,
@@ -1349,10 +1400,6 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
   // Handler for 2nd copy download
   const handleDownload2ndCopyBlPdf = async (shipmentId: number, blType: BLType) => {
     try {
-      // Fetch the latest shipment data to get current container information
-      const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipmentId}`);
-      const latestShipment = latestShipmentResponse.data;
-
       // Fetch the existing BL data for this shipment
       const existingBlResponse = await axios.get(`http://localhost:8000/bill-of-lading/shipment/${shipmentId}`);
       const existingBl = existingBlResponse.data;
@@ -1362,31 +1409,40 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         return;
       }
 
+      // ALWAYS fetch the latest shipment data to get current container information (same as BL form modal)
+      const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipmentId}`);
+      const latestShipment = latestShipmentResponse.data;
+
+      // Process containers the same way as BL form modal
+      const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
+        if (!fieldValue) return defaultValue;
+        const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
+        
+        // If there's only one container, and the field itself contains semicolons,
+        // it means multiple values for that single container.
+        // In this case, return the entire field value for the first (and only) container.
+        if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
+          return fieldValue;
+        }
+        // Otherwise, return the value corresponding to the current container's index
+        return values[index] || defaultValue;
+      };
+
+      const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
+        containerNumber: container.containerNumber || '',
+        sealNumber: getValuesForContainer(existingBl.sealNo, index),
+        grossWt: getValuesForContainer(existingBl.grossWt, index),
+        netWt: getValuesForContainer(existingBl.netWt, index),
+        unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
+        tareWt: getValuesForContainer(existingBl.tareWt, index),
+        cbmWt: getValuesForContainer(existingBl.cbmWt, index),
+        shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
+      })) || [];
+
       // Use the saved date from existing BL or current date as fallback
       const formDate = existingBl.date || new Date().toISOString().split('T')[0];
 
-      // Use LATEST container data with preserved BL-specific information
-      const savedSealNumbers = existingBl.sealNo ? String(existingBl.sealNo).split(',').map((s: string) => s.trim()) : [];
-      const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
-      const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
-
-      // Build containers using LATEST shipment data but preserve BL-specific values
-      const latestContainers = latestShipment.containers?.map((container: any, index: number) => ({
-        containerNumber: container.containerNumber || '',
-        sealNumber: savedSealNumbers[index] || '', // Preserve saved seal numbers
-        grossWt: savedGrossWeights[index] || '', // Preserve saved gross weights  
-        netWt: savedNetWeights[index] || ''  // Preserve saved net weights
-      })) || [];
-
-      const blDataWithCurrentContainers = {
-        ...existingBl,
-        containers: latestContainers, // Use latest containers
-        vesselNo: latestShipment.vesselName || '', // Always use latest vessel name
-        portOfLoading: latestShipment.polPort?.portName || '', // Always use latest port
-        portOfDischarge: latestShipment.podPort?.portName || '', // Always use latest port
-        containerNos: latestContainers.map((c: any) => c.containerNumber).join(', ') // Update container numbers
-      };
-
+      // Build BL data using the same structure as BL form modal
       const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
@@ -1414,7 +1470,30 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         containers: []
       };
 
-      await generateBlPdf(blType, pdfData, blDataWithCurrentContainers, 1); // 1 = 2nd copy
+      // Convert existingBl to blFormData structure to match BL form modal exactly
+      const blFormDataForPdf = {
+        ...existingBl,
+        shipmentId: shipmentId,
+        date: formDate,
+        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+        chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
+        grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
+        netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
+        freightAmount: existingBl.freightAmount || existingBl.freightCharges || '', // Map freight field
+        shippersName: existingBl.shippersName || existingBl.shipper || '', // Map shipper field
+        consigneeName: existingBl.consigneeName || existingBl.consignee || '', // Map consignee field
+        notifyPartyName: existingBl.notifyPartyName || existingBl.notifyParty || '', // Map notify party field
+        // Add other required fields with proper mapping
+        deliveryAgentInfo: existingBl.deliveryAgentInfo || existingBl.deliveryAgent || '',
+        freightPayableAt: existingBl.freightPayableAt || existingBl.portOfDischarge || '',
+        portOfLoading: existingBl.portOfLoading || '',
+        portOfDischarge: existingBl.portOfDischarge || '',
+        vesselNo: existingBl.vesselNo || existingBl.vesselVoyageNo || ''
+      };
+
+      // Use the converted data structure (same as BL form modal approach)
+      await generateBlPdf(blType, pdfData, blFormDataForPdf, 1); // 1 = 2nd copy - use same data structure as BL form modal
 
       // Mark 2nd copy as downloaded
       setBlCopyDownloadStatus(prev => ({
@@ -1437,10 +1516,6 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
   // Handler for 3rd copy download
   const handleDownload3rdCopyBlPdf = async (shipmentId: number, blType: BLType) => {
     try {
-      // Fetch the latest shipment data to get current container information
-      const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipmentId}`);
-      const latestShipment = latestShipmentResponse.data;
-
       // Fetch the existing BL data for this shipment
       const existingBlResponse = await axios.get(`http://localhost:8000/bill-of-lading/shipment/${shipmentId}`);
       const existingBl = existingBlResponse.data;
@@ -1450,31 +1525,40 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         return;
       }
 
+      // ALWAYS fetch the latest shipment data to get current container information (same as BL form modal)
+      const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipmentId}`);
+      const latestShipment = latestShipmentResponse.data;
+
+      // Process containers the same way as BL form modal
+      const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
+        if (!fieldValue) return defaultValue;
+        const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
+        
+        // If there's only one container, and the field itself contains semicolons,
+        // it means multiple values for that single container.
+        // In this case, return the entire field value for the first (and only) container.
+        if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
+          return fieldValue;
+        }
+        // Otherwise, return the value corresponding to the current container's index
+        return values[index] || defaultValue;
+      };
+
+      const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
+        containerNumber: container.containerNumber || '',
+        sealNumber: getValuesForContainer(existingBl.sealNo, index),
+        grossWt: getValuesForContainer(existingBl.grossWt, index),
+        netWt: getValuesForContainer(existingBl.netWt, index),
+        unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
+        tareWt: getValuesForContainer(existingBl.tareWt, index),
+        cbmWt: getValuesForContainer(existingBl.cbmWt, index),
+        shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
+      })) || [];
+
       // Use the saved date from existing BL or current date as fallback
       const formDate = existingBl.date || new Date().toISOString().split('T')[0];
 
-      // Use LATEST container data with preserved BL-specific information
-      const savedSealNumbers = existingBl.sealNo ? String(existingBl.sealNo).split(',').map((s: string) => s.trim()) : [];
-      const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
-      const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
-
-      // Build containers using LATEST shipment data but preserve BL-specific values
-      const latestContainers = latestShipment.containers?.map((container: any, index: number) => ({
-        containerNumber: container.containerNumber || '',
-        sealNumber: savedSealNumbers[index] || '', // Preserve saved seal numbers
-        grossWt: savedGrossWeights[index] || '', // Preserve saved gross weights  
-        netWt: savedNetWeights[index] || ''  // Preserve saved net weights
-      })) || [];
-
-      const blDataWithCurrentContainers = {
-        ...existingBl,
-        containers: latestContainers, // Use latest containers
-        vesselNo: latestShipment.vesselName || '', // Always use latest vessel name
-        portOfLoading: latestShipment.polPort?.portName || '', // Always use latest port
-        portOfDischarge: latestShipment.podPort?.portName || '', // Always use latest port
-        containerNos: latestContainers.map((c: any) => c.containerNumber).join(', ') // Update container numbers
-      };
-
+      // Build BL data using the same structure as BL form modal
       const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
@@ -1502,7 +1586,30 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         containers: []
       };
 
-      await generateBlPdf(blType, pdfData, blDataWithCurrentContainers, 2); // 2 = 3rd copy
+      // Convert existingBl to blFormData structure to match BL form modal exactly
+      const blFormDataForPdf = {
+        ...existingBl,
+        shipmentId: shipmentId,
+        date: formDate,
+        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+        chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
+        grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
+        netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
+        freightAmount: existingBl.freightAmount || existingBl.freightCharges || '', // Map freight field
+        shippersName: existingBl.shippersName || existingBl.shipper || '', // Map shipper field
+        consigneeName: existingBl.consigneeName || existingBl.consignee || '', // Map consignee field
+        notifyPartyName: existingBl.notifyPartyName || existingBl.notifyParty || '', // Map notify party field
+        // Add other required fields with proper mapping
+        deliveryAgentInfo: existingBl.deliveryAgentInfo || existingBl.deliveryAgent || '',
+        freightPayableAt: existingBl.freightPayableAt || existingBl.portOfDischarge || '',
+        portOfLoading: existingBl.portOfLoading || '',
+        portOfDischarge: existingBl.portOfDischarge || '',
+        vesselNo: existingBl.vesselNo || existingBl.vesselVoyageNo || ''
+      };
+
+      // Use the converted data structure (same as BL form modal approach)
+      await generateBlPdf(blType, pdfData, blFormDataForPdf, 2); // 2 = 3rd copy - use same data structure as BL form modal
 
       // Mark 3rd copy as downloaded
       setBlCopyDownloadStatus(prev => ({
@@ -1534,15 +1641,41 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         return;
       }
 
-      // Fetch the latest shipment data to get current container information
+      // ALWAYS fetch the latest shipment data to get current container information (same as BL form modal)
       const latestShipmentResponse = await axios.get(`http://localhost:8000/shipment/${shipmentId}`);
       const latestShipment = latestShipmentResponse.data;
+
+      // Process containers the same way as BL form modal
+      const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
+        if (!fieldValue) return defaultValue;
+        const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
+        
+        // If there's only one container, and the field itself contains semicolons,
+        // it means multiple values for that single container.
+        // In this case, return the entire field value for the first (and only) container.
+        if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
+          return fieldValue;
+        }
+        // Otherwise, return the value corresponding to the current container's index
+        return values[index] || defaultValue;
+      };
+
+      const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
+        containerNumber: container.containerNumber || '',
+        sealNumber: getValuesForContainer(existingBl.sealNo, index),
+        grossWt: getValuesForContainer(existingBl.grossWt, index),
+        netWt: getValuesForContainer(existingBl.netWt, index),
+        unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
+        tareWt: getValuesForContainer(existingBl.tareWt, index),
+        cbmWt: getValuesForContainer(existingBl.cbmWt, index),
+        shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
+      })) || [];
 
       // Use the saved date from existing BL or current date as fallback
       const formDate = existingBl.date || new Date().toISOString().split('T')[0];
 
-      // Build BL data using the saved BL data
-      const pdfData = {
+      // Build BL data using the same structure as BL form modal
+      const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
         date: formDate,
@@ -1569,29 +1702,30 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         containers: []
       };
 
-      // Use LATEST container data with preserved BL-specific information
-      const savedSealNumbers = existingBl.sealNo ? String(existingBl.sealNo).split(',').map((s: string) => s.trim()) : [];
-      const savedGrossWeights = existingBl.grossWt ? String(existingBl.grossWt).split(',').map((s: string) => s.trim()) : [];
-      const savedNetWeights = existingBl.netWt ? String(existingBl.netWt).split(',').map((s: string) => s.trim()) : [];
-
-      // Build containers using LATEST shipment data but preserve BL-specific values
-      const latestContainers = latestShipment.containers?.map((container: any, index: number) => ({
-        containerNumber: container.containerNumber || '',
-        sealNumber: savedSealNumbers[index] || '', // Preserve saved seal numbers
-        grossWt: savedGrossWeights[index] || '', // Preserve saved gross weights  
-        netWt: savedNetWeights[index] || ''  // Preserve saved net weights
-      })) || [];
-
-      const blDataWithCurrentContainers = {
+      // Convert existingBl to blFormData structure to match BL form modal exactly
+      const blFormDataForPdf = {
         ...existingBl,
-        containers: latestContainers, // Use latest containers
-        vesselNo: latestShipment.vesselName || '', // Always use latest vessel name
-        portOfLoading: latestShipment.polPort?.portName || '', // Always use latest port
-        portOfDischarge: latestShipment.podPort?.portName || '', // Always use latest port
-        containerNos: latestContainers.map((c: any) => c.containerNumber).join(', ') // Update container numbers
+        shipmentId: shipmentId,
+        date: formDate,
+        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+        chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
+        grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
+        netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
+        freightAmount: existingBl.freightAmount || existingBl.freightCharges || '', // Map freight field
+        shippersName: existingBl.shippersName || existingBl.shipper || '', // Map shipper field
+        consigneeName: existingBl.consigneeName || existingBl.consignee || '', // Map consignee field
+        notifyPartyName: existingBl.notifyPartyName || existingBl.notifyParty || '', // Map notify party field
+        // Add other required fields with proper mapping
+        deliveryAgentInfo: existingBl.deliveryAgentInfo || existingBl.deliveryAgent || '',
+        freightPayableAt: existingBl.freightPayableAt || existingBl.portOfDischarge || '',
+        portOfLoading: existingBl.portOfLoading || '',
+        portOfDischarge: existingBl.portOfDischarge || '',
+        vesselNo: existingBl.vesselNo || existingBl.vesselVoyageNo || ''
       };
 
-      await generateBlPdf(blType, pdfData, blDataWithCurrentContainers, 0); // 0 = original copy
+      // Use the converted data structure (same as BL form modal approach)
+      await generateBlPdf(blType, pdfData, blFormDataForPdf, 0); // 0 = original copy - use same data structure as BL form modal
 
       // Update BL generation status for direct downloads so copy options appear
       if (blType === 'original') {
@@ -1803,27 +1937,38 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
             </TableRow>
           </TableHeader>
           <TableBody>
-            {shipments.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
-                  No shipments found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              shipments
-                .filter((s: any) => {
-                  // If search is empty, show all shipments
-                  if (!containerSearch.trim()) return true;
+            {(() => {
+              // Filter shipments first
+              const filteredShipments = shipments.filter((s: any) => {
+                // If search is empty, show all shipments
+                if (!containerSearch.trim()) return true;
 
-                  // If containers array doesn't exist or is empty, don't filter it out
-                  if (!s.containers || s.containers.length === 0) return false;
+                // If containers array doesn't exist or is empty, don't filter it out
+                if (!s.containers || s.containers.length === 0) return false;
 
-                  // Otherwise check if any container matches search
-                  return s.containers.some((c: any) =>
-                    c.containerNumber?.toLowerCase().includes(containerSearch.toLowerCase())
-                  );
-                })
-                .map((shipment: any) => (
+                // Otherwise check if any container matches search
+                return s.containers.some((c: any) =>
+                  c.containerNumber?.toLowerCase().includes(containerSearch.toLowerCase())
+                );
+              });
+
+              // Pagination logic
+              const totalItems = filteredShipments.length;
+              const totalPages = Math.ceil(totalItems / itemsPerPage);
+              const startIndex = (currentPage - 1) * itemsPerPage;
+              const endIndex = startIndex + itemsPerPage;
+              const paginatedShipments = filteredShipments.slice(startIndex, endIndex);
+
+              return (
+                <>
+                  {shipments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
+                        No shipments found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedShipments.map((shipment: any) => (
                   <TableRow
                     key={shipment.id}
                     className="text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900"
@@ -1982,6 +2127,52 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                                 label="Seaway"
                                 onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'seaway', i)}
                               />
+
+                              {/* Non Negotiable BL Options */}
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center justify-between py-2"
+                                onClick={() => handleOpenBlModal(shipment, 'non-negotiable')}
+                              >
+                                <span className="flex-1 hover:text-blue-600">Generate Non Negotiable BL</span>
+                                {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
+                                  <div className="ml-4 border-l border-gray-200 pl-3">
+                                    <Download
+                                      size={16}
+                                      className="text-green-600 hover:text-green-700 cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDirectBlDownload(shipment.id, 'non-negotiable');
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </DropdownMenuItem>
+
+                              {/* Assigned BL downloads — Non Negotiable */}
+                              <AssignedBlDownloads
+                                shipmentId={shipment.id}
+                                blType="non-negotiable"
+                                label="Non Negotiable"
+                                onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'non-negotiable', i)}
+                              />
+                            </>
+                          )}
+
+                          {/* Non Negotiable BL Copy Options */}
+                          {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
+                            <>
+                              <DropdownMenuItem
+                                onClick={() => handleDownload2ndCopyBlPdf(shipment.id, 'non-negotiable')}
+                                className="cursor-pointer text-blue-600"
+                              >
+                                Download Non Negotiable BL 2nd Copy
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDownload3rdCopyBlPdf(shipment.id, 'non-negotiable')}
+                                className="cursor-pointer text-blue-600"
+                              >
+                                Download Non Negotiable BL 3rd Copy
+                              </DropdownMenuItem>
                             </>
                           )}
 
@@ -2008,10 +2199,88 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                     </TableCell>
                   </TableRow>
                 ))
-            )}
+              )}
+                </>
+              );
+            })()}
           </TableBody>
         </Table>
       </div>
+
+      {/* Pagination Controls */}
+      {(() => {
+        const filteredShipments = shipments.filter((s: any) => {
+          if (!containerSearch.trim()) return true;
+          if (!s.containers || s.containers.length === 0) return false;
+          return s.containers.some((c: any) =>
+            c.containerNumber?.toLowerCase().includes(containerSearch.toLowerCase())
+          );
+        });
+        const totalItems = filteredShipments.length;
+        const totalPages = Math.ceil(totalItems / itemsPerPage);
+        const startIndex = (currentPage - 1) * itemsPerPage;
+        const endIndex = startIndex + itemsPerPage;
+
+        return totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-4">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+              >
+                Previous
+              </Button>
+              
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={
+                        currentPage === pageNum
+                          ? "bg-blue-600 text-white"
+                          : "bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+                      }
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* CRO Form Modal */}
       <Dialog open={showCroModal} onOpenChange={setShowCroModal}>
@@ -2270,7 +2539,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           } as React.CSSProperties}
         >
           <DialogHeader>
-            <DialogTitle>Generate {currentBlType === 'original' ? 'Original' : currentBlType === 'draft' ? 'Draft' : 'Seaway'} Bill of Lading</DialogTitle>
+            <DialogTitle>Generate {currentBlType === 'original' ? 'Original' : currentBlType === 'draft' ? 'Draft' : currentBlType === 'seaway' ? 'Seaway' : 'Non Negotiable'} Bill of Lading</DialogTitle>
           </DialogHeader>
 
           <div className="grid gap-4 py-4">
@@ -2296,7 +2565,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                 <Label htmlFor="blTypeDisplay">BL Type</Label>
                 <Input
                   id="blTypeDisplay"
-                  value={currentBlType === 'original' ? 'Original' : currentBlType === 'draft' ? 'Draft' : 'Seaway'}
+                  value={currentBlType === 'original' ? 'Original' : currentBlType === 'draft' ? 'Draft' : currentBlType === 'seaway' ? 'Seaway' : 'Non Negotiable'}
                   disabled
                   className="bg-gray-100 cursor-not-allowed"
                 />
@@ -2609,7 +2878,7 @@ onChange={(e) => {
   });
 }}
 
-                        placeholder="Shipper seal"
+                        placeholder="Enter shipper seal (e.g., 2000 or 2000,3000)"
                         className="bg-white dark:bg-black"
                       />
                     </div>

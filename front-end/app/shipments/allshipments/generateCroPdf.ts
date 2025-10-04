@@ -743,78 +743,12 @@ const eta = shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
         50
       );
 
-        // --- TERMS AND CONDITIONS ---
-        const termsStartY = 150 + baseYOffset;
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("TERMS AND CONDITIONS:", 14, termsStartY);
-
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-
-        // Point 1: Cancellation Costs - No gap
-        doc.text("1.", 18, termsStartY + 7);
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("Cancellation Costs:", 25, termsStartY + 7);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(
-          "Should there be a cancellation of the shipment after the tank has been prepared and a clean certificate has been issued, all",
-          56,
-          termsStartY + 7
-        );
-        doc.text(
-          "incurred costs shall be the responsibility of the shipper.",
-          25,
-          termsStartY + 12
-        );
-
-        // Point 2: Validity and Liability - No gap
-        doc.text("2.", 18, termsStartY + 17);
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("Validity and Liability:", 25, termsStartY + 17);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(
-          "The clean certificate is valid for a period of seven days from the date of issuance. If the tank container is picked up after",
-          60,
-          termsStartY + 17
-        );
-        doc.text(
-          "this validity period without cargo loading, we disclaim any liability for cargo contamination, deterioration in cargo quality, or any other related",
-          25,
-          termsStartY + 22
-        );
-        doc.text("issues.", 25, termsStartY + 27);
-
-        // Point 3: Resurvey Requirement - No gap
-        doc.text("3.", 18, termsStartY + 32);
-        doc.setFont("arial", "bold");
-        doc.setFontSize(10);
-        doc.text("Resurvey Requirement:", 25, termsStartY + 32);
-        doc.setFont("arial", "normal");
-        doc.setFontSize(10);
-        doc.text(
-          "In the event that the tank container is not picked up after the expiration of the clean certificate, a resurvey will be",
-          62,
-          termsStartY + 32
-        );
-        doc.text(
-          "required. The shipper shall bear all costs associated with this resurvey.",
-          25,
-          termsStartY + 37
-        );
-
-        // Add horizontal line after terms and conditions
-        const vesselTableStartY = 190 + baseYOffset;
+        // --- VESSEL/VOYAGE DETAILS TABLE --- (MOVED UP)
+        const vesselTableStartY = 150 + baseYOffset;
         doc.setDrawColor(0, 0, 0);
         doc.setLineWidth(0.5);
         doc.line(14, vesselTableStartY, 240, vesselTableStartY);
 
-        // --- VESSEL/VOYAGE DETAILS TABLE ---
-        // --- VESSEL/VOYAGE DETAILS TABLE ---
         doc.setFont("arial", "bold");
         doc.setFontSize(10);
         doc.text("VESSEL / VOY", 40, vesselTableStartY + 5);
@@ -834,11 +768,10 @@ const eta = shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
       doc.text(etdDisplay, 110, vesselTableStartY + 14);  // ETD goes first
   doc.text(etaDisplay, 160, vesselTableStartY + 14);  // ETA goes second
 
-
         // Add horizontal line after vessel table
         doc.line(14, vesselTableStartY + 18, 240, vesselTableStartY + 18);
 
-        // --- CONTAINER RELEASE INSTRUCTION ---
+        // --- CONTAINER RELEASE INSTRUCTION --- (MOVED UP)
         const instructionY = vesselTableStartY + 24;
         doc.setFont("arial", "bold");
         doc.setFontSize(8);
@@ -979,8 +912,72 @@ const eta = shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
       doc.setLineWidth(0.5);
       doc.line(14, lastContainerY, 240, lastContainerY); // Same width as top horizontal line
 
+      // --- TERMS AND CONDITIONS --- (MOVED DOWN)
+      const termsStartY = lastContainerY + 10;
+      doc.setFont("arial", "bold");
+      doc.setFontSize(10);
+      doc.text("TERMS AND CONDITIONS:", 14, termsStartY);
+
+      doc.setFont("arial", "normal");
+      doc.setFontSize(10);
+
+      // Point 1: Cancellation Costs - No gap
+      doc.text("1.", 18, termsStartY + 7);
+      doc.setFont("arial", "bold");
+      doc.setFontSize(10);
+      doc.text("Cancellation Costs:", 25, termsStartY + 7);
+      doc.setFont("arial", "normal");
+      doc.setFontSize(10);
+      doc.text(
+        "Should there be a cancellation of the shipment after the tank has been prepared and a clean certificate has been issued, all",
+        56,
+        termsStartY + 7
+      );
+      doc.text(
+        "incurred costs shall be the responsibility of the shipper.",
+        25,
+        termsStartY + 12
+      );
+
+      // Point 2: Validity and Liability - No gap
+      doc.text("2.", 18, termsStartY + 17);
+      doc.setFont("arial", "bold");
+      doc.setFontSize(10);
+      doc.text("Validity and Liability:", 25, termsStartY + 17);
+      doc.setFont("arial", "normal");
+      doc.setFontSize(10);
+      doc.text(
+        "The clean certificate is valid for a period of seven days from the date of issuance. If the tank container is picked up after",
+        60,
+        termsStartY + 17
+      );
+      doc.text(
+        "this validity period without cargo loading, we disclaim any liability for cargo contamination, deterioration in cargo quality, or any other related",
+        25,
+        termsStartY + 22
+      );
+      doc.text("issues.", 25, termsStartY + 27);
+
+      // Point 3: Resurvey Requirement - No gap
+      doc.text("3.", 18, termsStartY + 32);
+      doc.setFont("arial", "bold");
+      doc.setFontSize(10);
+      doc.text("Resurvey Requirement:", 25, termsStartY + 32);
+      doc.setFont("arial", "normal");
+      doc.setFontSize(10);
+      doc.text(
+        "In the event that the tank container is not picked up after the expiration of the clean certificate, a resurvey will be",
+        62,
+        termsStartY + 32
+      );
+      doc.text(
+        "required. The shipper shall bear all costs associated with this resurvey.",
+        25,
+        termsStartY + 37
+      );
+
       // Add footer to the page - position it properly below horizontal line with adequate spacing
-      const footerStartY = 290; // Fixed position to match reference image - footer should be at bottom
+      const footerStartY = termsStartY + 60; // Position footer slightly higher after terms and conditions
 
       doc.setFont("arial", "bold");
       doc.setFontSize(9);
@@ -1000,7 +997,7 @@ const eta = shipment.etaTopod && dayjs(shipment.etaTopod).isValid()
       // Add page number with correct numbering
       doc.setFont("arial", "normal");
       doc.setFontSize(10);
-      doc.text(`Page ${currentPage} of ${totalPages}`, 220, footerStartY + 5);
+      doc.text(`Page ${currentPage} of ${totalPages}`, 220, footerStartY + 10);
 
       // Set flag for next iteration and increment page counter
       isFirstGroup = false;
