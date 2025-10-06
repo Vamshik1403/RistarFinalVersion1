@@ -108,7 +108,7 @@ const AllShipmentsPage = () => {
   const [showBlModal, setShowBlModal] = useState(false);
   const [currentBlType, setCurrentBlType] = useState<BLType>('original');
   const [blJustSaved, setBlJustSaved] = useState(false);
-  const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, firstGenerationDate: string | null } }>({});
+  const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, hasRfsBlGenerated: boolean, firstGenerationDate: string | null } }>({});
   const [croGenerationStatus, setCroGenerationStatus] = useState<{ [key: number]: { hasCroGenerated: boolean, firstCroGenerationDate: string | null } }>({});
 
   // Add state to track copy downloads for each shipment and BL type
@@ -158,6 +158,8 @@ const AllShipmentsPage = () => {
     freightAmount: '',
     // Empty charges and fees field by default
     chargesAndFees: '',
+    // Empty marks and numbers field by default
+    marksAndNumbers: '',
     // Fields fetched from shipment
     portOfLoading: '',
     portOfDischarge: '',
@@ -262,7 +264,7 @@ const AllShipmentsPage = () => {
   });
 
   // === MULTI BL: state & helpers ===
-  type BLType = 'draft' | 'original' | 'seaway' | 'non-negotiable';
+  type BLType = 'draft' | 'original' | 'seaway' | 'non-negotiable' | 'rfs';
   interface ApiResponse {
     [key: string]: any;
   }
@@ -509,6 +511,11 @@ const sortedData = res.data.sort((a: any, b: any) => {
           originalDownloaded: false,
           secondCopyDownloaded: false,
           thirdCopyDownloaded: false
+        },
+        rfs: {
+          originalDownloaded: false,
+          secondCopyDownloaded: false,
+          thirdCopyDownloaded: false
         }
       };
     });
@@ -543,7 +550,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
   // Function to fetch BL generation statuses for all shipments
   const fetchBlGenerationStatuses = async (shipments: any[]) => {
     try {
-      const statusMap: { [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, firstGenerationDate: string | null } } = {};
+      const statusMap: { [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, hasRfsBlGenerated: boolean, firstGenerationDate: string | null } } = {};
 
       // Fetch BL status for each shipment
       for (const shipment of shipments) {
@@ -554,6 +561,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
               hasDraftBlGenerated: response.data.hasDraftBlGenerated || false,
               hasOriginalBLGenerated: response.data.hasOriginalBLGenerated || false,
               hasNonNegotiableBlGenerated: response.data.hasNonNegotiableBlGenerated || false,
+              hasRfsBlGenerated: response.data.hasRfsBlGenerated || false,
               firstGenerationDate: response.data.firstGenerationDate || null
             };
           } else {
@@ -561,6 +569,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
               hasDraftBlGenerated: false,
               hasOriginalBLGenerated: false,
               hasNonNegotiableBlGenerated: false,
+              hasRfsBlGenerated: false,
               firstGenerationDate: null
             };
           }
@@ -570,6 +579,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
             hasDraftBlGenerated: false,
             hasOriginalBLGenerated: false,
             hasNonNegotiableBlGenerated: false,
+            hasRfsBlGenerated: false,
             firstGenerationDate: null
           };
         }
@@ -977,6 +987,7 @@ const sortedData = res.data.sort((a: any, b: any) => {
             hasDraftBlGenerated: existingBl.hasDraftBlGenerated || false,
             hasOriginalBLGenerated: existingBl.hasOriginalBLGenerated || false,
             hasNonNegotiableBlGenerated: existingBl.hasNonNegotiableBlGenerated || false,
+            hasRfsBlGenerated: existingBl.hasRfsBlGenerated || false,
             firstGenerationDate: existingBl.firstGenerationDate || null
           }
         }));
@@ -1049,6 +1060,8 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           freightAmount: existingBl.freightAmount || '',
           // Charges and fees field with existing value or empty
           chargesAndFees: existingBl.chargesAndFees || '',
+          // Marks and numbers field with existing value or empty
+          marksAndNumbers: existingBl.marksAndNumbers || '',
           // Always use LATEST shipment data for ports and vessel
           portOfLoading: latestShipment.polPort?.portName || '',
           portOfDischarge: latestShipment.podPort?.portName || '',
@@ -1067,6 +1080,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
             hasDraftBlGenerated: false,
             hasOriginalBLGenerated: false,
             hasNonNegotiableBlGenerated: false,
+            hasRfsBlGenerated: false,
             firstGenerationDate: null
           }
         }));
@@ -1110,6 +1124,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           deliveryAgentInfo: '',
           freightAmount: '',
           chargesAndFees: '',
+          marksAndNumbers: '',
           portOfLoading: latestShipment.polPort?.portName || '',
           portOfDischarge: latestShipment.podPort?.portName || '',
           vesselNo: latestShipment.vesselName || '',
@@ -1189,6 +1204,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
   portOfDischarge: blFormData.portOfDischarge,
   vesselNo: blFormData.vesselNo,
   chargesAndFees: blFormData.chargesAndFees,
+  marksAndNumbers: blFormData.marksAndNumbers,
 
   shipmentId: blFormData.shipmentId,
   hasDraftBlGenerated: true,
@@ -1210,6 +1226,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           hasDraftBlGenerated: savedBl.hasDraftBlGenerated || true,
           hasOriginalBLGenerated: savedBl.hasOriginalBLGenerated || false,
           hasNonNegotiableBlGenerated: savedBl.hasNonNegotiableBlGenerated || false,
+          hasRfsBlGenerated: savedBl.hasRfsBlGenerated || false,
           firstGenerationDate: savedBl.firstGenerationDate || new Date().toISOString(),
         },
       }));
@@ -1333,6 +1350,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        marksAndNumbers: blFormData.marksAndNumbers,
         containers: []
       };
 
@@ -1372,6 +1390,25 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           }));
         } catch (error) {
           console.error('Error marking non-negotiable BL as generated:', error);
+          // Don't block the download process if this fails
+        }
+      }
+
+      // If this is an RFS BL download and hasn't been generated before, mark it as generated
+      if (currentBlType === 'rfs' && !blGenerationStatus[blFormData.shipmentId]?.hasRfsBlGenerated) {
+        try {
+          await axios.post(`http://localhost:8000/bill-of-lading/mark-rfs-generated/${blFormData.shipmentId}`);
+
+          // Update the local state to reflect that RFS BL has been generated
+          setBlGenerationStatus(prev => ({
+            ...prev,
+            [blFormData.shipmentId]: {
+              ...prev[blFormData.shipmentId],
+              hasRfsBlGenerated: true
+            }
+          }));
+        } catch (error) {
+          console.error('Error marking RFS BL as generated:', error);
           // Don't block the download process if this fails
         }
       }
@@ -1467,6 +1504,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
 
@@ -1477,6 +1515,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         date: formDate,
         containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
         grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
         netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
@@ -1583,6 +1622,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
 
@@ -1593,6 +1633,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         date: formDate,
         containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
         grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
         netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
@@ -1699,6 +1740,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
 
@@ -1709,6 +1751,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         date: formDate,
         containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
+        marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
         grossWt: existingBl.grossWt || existingBl.grossWeight || '', // Map gross weight field
         netWt: existingBl.netWt || existingBl.netWeight || '', // Map net weight field
@@ -1734,6 +1777,15 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           [shipmentId]: {
             ...prev[shipmentId],
             hasOriginalBLGenerated: true,
+            firstGenerationDate: existingBl.firstGenerationDate || new Date().toISOString()
+          }
+        }));
+      } else if (blType === 'rfs') {
+        setBlGenerationStatus(prev => ({
+          ...prev,
+          [shipmentId]: {
+            ...prev[shipmentId],
+            hasRfsBlGenerated: true,
             firstGenerationDate: existingBl.firstGenerationDate || new Date().toISOString()
           }
         }));
@@ -2142,6 +2194,26 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         handleDirectBlDownload(shipment.id, 'non-negotiable');
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </DropdownMenuItem>
+
+                              {/* RFS BL Options */}
+                              <DropdownMenuItem
+                                className="cursor-pointer flex items-center justify-between py-2"
+                                onClick={() => handleOpenBlModal(shipment, 'rfs')}
+                              >
+                                <span className="flex-1 hover:text-blue-600">Generate RFS BL</span>
+                                {blGenerationStatus[shipment.id]?.hasRfsBlGenerated && (
+                                  <div className="ml-4 border-l border-gray-200 pl-3">
+                                    <Download
+                                      size={16}
+                                      className="text-green-600 hover:text-green-700 cursor-pointer"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDirectBlDownload(shipment.id, 'rfs');
                                       }}
                                     />
                                   </div>
@@ -2932,6 +3004,23 @@ onChange={(e) => {
                     className="bg-white dark:bg-black"
                   />
                 </div> */}
+              </div>
+
+              {/* Marks and Numbers Section */}
+              <hr className="dark:border-black mt-4" />
+              <div className="mt-4">
+                <h3 className="text-lg font-semibold">Marks and Numbers Section</h3>
+                <div className="space-y-2 mt-4">
+                  <Label htmlFor="marksAndNumbers">Marks and Numbers</Label>
+                  <Textarea
+                    id="marksAndNumbers"
+                    value={blFormData.marksAndNumbers}
+                    onChange={(e) => setBlFormData({ ...blFormData, marksAndNumbers: e.target.value })}
+                    placeholder="Enter marks and numbers information here. You can copy and paste from existing sources."
+                    className="bg-white dark:bg-black min-h-32"
+                    rows={8}
+                  />
+                </div>
               </div>
 
               {/* Charges Section */}

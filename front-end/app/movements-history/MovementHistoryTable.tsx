@@ -12,17 +12,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiFetch } from "../../lib/api";
 
-<<<<<<< HEAD
 // These components are no longer needed as we now use bulk caching approach
-=======
-
-
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
 interface MovementRow {
   id: number;
   date: string;
   status: string;
-  maintenanceStatus: string;
+  maintenanceStatus:string;
   remarks: string;
   jobNumber?: string;
   vesselName?: string;
@@ -77,22 +72,15 @@ const MovementHistoryTable = () => {
   const [selectedCarrierId, setSelectedCarrierId] = useState<number | null>(null);
   const [carriers, setCarriers] = useState<any[]>([]);
   const [movementPermissions, setMovementPermissions] = useState<any>(null);
-<<<<<<< HEAD
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
-=======
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
 
   const [maintenanceStatus, setMaintenanceStatus] = useState<string | null>(null);
 
   // Cache for container location data to avoid multiple API calls
   const [containerLocationCache, setContainerLocationCache] = useState<{ [key: number]: { depotName: string, portName: string } }>({});
-<<<<<<< HEAD
-=======
-
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
 
 
   const statusTransitions: Record<string, string[]> = {
@@ -125,35 +113,35 @@ const MovementHistoryTable = () => {
   };
 
 
-  const getAvailableStatusOptions = (currentStatus: string, currentNewStatus: string, currentMaintenance?: string) => {
-    // EMPTY RETURNED -> UNAVAILABLE -> Maintenance
-    if (currentStatus === "EMPTY RETURNED" && currentNewStatus === "UNAVAILABLE") {
-      return ["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"];
-    }
+ const getAvailableStatusOptions = (currentStatus: string, currentNewStatus: string, currentMaintenance?: string) => {
+  // EMPTY RETURNED -> UNAVAILABLE -> Maintenance
+  if (currentStatus === "EMPTY RETURNED" && currentNewStatus === "UNAVAILABLE") {
+    return ["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"];
+  }
 
-    // If UNAVAILABLE with a maintenance status attached
-    if (currentStatus === "UNAVAILABLE" && currentMaintenance) {
-      return [
-        "AVAILABLE", // Complete maintenance
-        ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
-          (s) => s !== currentMaintenance // Don't show current maintenance status
-        ),
-      ];
-    }
+  // If UNAVAILABLE with a maintenance status attached
+  if (currentStatus === "UNAVAILABLE" && currentMaintenance) {
+    return [
+      "AVAILABLE", // Complete maintenance
+      ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
+        (s) => s !== currentMaintenance // Don't show current maintenance status
+      ),
+    ];
+  }
 
-    // If directly in a maintenance status (UNDER CLEANING, UNDER SURVEY, etc.)
-    if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus)) {
-      return [
-        "AVAILABLE", // Complete maintenance
-        ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
-          (s) => s !== currentStatus // Don't show current maintenance status
-        ),
-      ];
-    }
+  // If directly in a maintenance status (UNDER CLEANING, UNDER SURVEY, etc.)
+  if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus)) {
+    return [
+      "AVAILABLE", // Complete maintenance
+      ...["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].filter(
+        (s) => s !== currentStatus // Don't show current maintenance status
+      ),
+    ];
+  }
 
-    // Default transitions
-    return statusTransitions[currentStatus] || [];
-  };
+  // Default transitions
+  return statusTransitions[currentStatus] || [];
+};
 
 
   useEffect(() => {
@@ -308,11 +296,8 @@ const MovementHistoryTable = () => {
           const dateB = new Date(b.date || b.createdAt || 0);
           return dateB.getTime() - dateA.getTime();
         });
-<<<<<<< HEAD
 
         // Set data and ports immediately to show the table
-=======
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
         setData(sortedData);
         setPorts(portsRes.data);
         
@@ -326,17 +311,11 @@ const MovementHistoryTable = () => {
           // Fetch location data in background without blocking the table display
           fetchContainerLocationData(uniqueInventoryIds);
         }
-<<<<<<< HEAD
         
       } catch (error) {
         console.error("Error fetching movement history data:", error);
         // Even if location fetch fails, show the table with fallback data
         setData([]);
-=======
-
-      } catch (error) {
-        console.error("Error fetching movement history data:", error);
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
 
       }
     };
@@ -443,54 +422,54 @@ const MovementHistoryTable = () => {
     );
   };
 
-  const handleUpdateStatusClick = () => {
-    const selectedRows = data.filter((row) => selectedIds.includes(row.id));
-    const currentStatuses = [...new Set(selectedRows.map((r) => r.status))];
+ const handleUpdateStatusClick = () => {
+  const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+  const currentStatuses = [...new Set(selectedRows.map((r) => r.status))];
 
-    if (currentStatuses.length !== 1) {
-      alert("Selected containers must all have the same current status.");
-      return;
-    }
+  if (currentStatuses.length !== 1) {
+    alert("Selected containers must all have the same current status.");
+    return;
+  }
 
-    const currentStatus = currentStatuses[0]?.toUpperCase();
-    const currentMaintenance = selectedRows[0]?.maintenanceStatus;
-    const jobNumber =
-      selectedRows[0].shipment?.jobNumber ||
-      selectedRows[0].emptyRepoJob?.jobNumber ||
-      selectedRows[0].jobNumber ||
-      "";
+  const currentStatus = currentStatuses[0]?.toUpperCase();
+  const currentMaintenance = selectedRows[0]?.maintenanceStatus;
+  const jobNumber =
+    selectedRows[0].shipment?.jobNumber ||
+    selectedRows[0].emptyRepoJob?.jobNumber ||
+    selectedRows[0].jobNumber ||
+    "";
 
-    // ✅ Special case: EMPTY PICKED UP
-    if (currentStatus === "EMPTY PICKED UP") {
-      if (selectedRows[0].shipment) {
-        setAvailableStatusOptions(["LADEN GATE-IN", "DAMAGED", "CANCELLED"]);
-      } else if (selectedRows[0].emptyRepoJob) {
-        setAvailableStatusOptions(["EMPTY GATE-IN", "DAMAGED", "CANCELLED"]);
-      } else {
-        setAvailableStatusOptions(["DAMAGED", "CANCELLED"]);
-      }
+  // ✅ Special case: EMPTY PICKED UP
+  if (currentStatus === "EMPTY PICKED UP") {
+    if (selectedRows[0].shipment) {
+      setAvailableStatusOptions(["LADEN GATE-IN", "DAMAGED", "CANCELLED"]);
+    } else if (selectedRows[0].emptyRepoJob) {
+      setAvailableStatusOptions(["EMPTY GATE-IN", "DAMAGED", "CANCELLED"]);
+    } else {
+      setAvailableStatusOptions(["DAMAGED", "CANCELLED"]);
     }
-    // ✅ Special case: SOB
-    else if (currentStatus === "SOB") {
-      if (selectedRows[0].shipment) {
-        setAvailableStatusOptions(["LADEN DISCHARGE(ATA)", "DAMAGED"]);
-      } else if (selectedRows[0].emptyRepoJob) {
-        setAvailableStatusOptions(["EMPTY DISCHARGE", "DAMAGED"]);
-      } else {
-        setAvailableStatusOptions(["DAMAGED"]);
-      }
+  }
+  // ✅ Special case: SOB
+  else if (currentStatus === "SOB") {
+    if (selectedRows[0].shipment) {
+      setAvailableStatusOptions(["LADEN DISCHARGE(ATA)", "DAMAGED"]);
+    } else if (selectedRows[0].emptyRepoJob) {
+      setAvailableStatusOptions(["EMPTY DISCHARGE", "DAMAGED"]);
+    } else {
+      setAvailableStatusOptions(["DAMAGED"]);
     }
-    // ✅ Use dynamic function for all other cases including maintenance
-    else {
-      const availableOptions = getAvailableStatusOptions(currentStatus, newStatus, currentMaintenance);
-      setAvailableStatusOptions(availableOptions);
-    }
+  }
+  // ✅ Use dynamic function for all other cases including maintenance
+  else {
+    const availableOptions = getAvailableStatusOptions(currentStatus, newStatus, currentMaintenance);
+    setAvailableStatusOptions(availableOptions);
+  }
 
-    setNewStatus("");
-    setJobNumberForUpdate(jobNumber);
-    setRemarks("");
-    setModalOpen(true);
-  };
+  setNewStatus("");
+  setJobNumberForUpdate(jobNumber);
+  setRemarks("");
+  setModalOpen(true);
+};
 
   // Fetch locations by port
   const fetchLocationsByPort = async (portId: number) => {
@@ -523,17 +502,17 @@ const MovementHistoryTable = () => {
       return;
     }
 
-    // Validate maintenance status when moving from EMPTY RETURNED to UNAVAILABLE
-    if (newStatus === "UNAVAILABLE") {
-      const selectedRows = data.filter((row) => selectedIds.includes(row.id));
-      const currentStatus = selectedRows[0]?.status;
-
-      // If moving from EMPTY RETURNED to UNAVAILABLE, maintenance status is required
-      if (currentStatus === "EMPTY RETURNED" && !maintenanceStatus) {
-        alert("Please select a maintenance type when setting status to UNAVAILABLE.");
-        return;
-      }
+      // Validate maintenance status when moving from EMPTY RETURNED to UNAVAILABLE
+  if (newStatus === "UNAVAILABLE") {
+    const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+    const currentStatus = selectedRows[0]?.status;
+    
+    // If moving from EMPTY RETURNED to UNAVAILABLE, maintenance status is required
+    if (currentStatus === "EMPTY RETURNED" && !maintenanceStatus) {
+      alert("Please select a maintenance type when setting status to UNAVAILABLE.");
+      return;
     }
+  }
 
     if ((newStatus === "DAMAGED" || newStatus === "CANCELLED") && remarks.trim() === "") {
       alert("Remarks are required when status is DAMAGED or CANCELLED.");
@@ -638,17 +617,17 @@ const MovementHistoryTable = () => {
         vesselName: newStatus === "SOB" ? vesselName : null,
       };
 
-      // Handle maintenance status logic
-      if (newStatus === "UNAVAILABLE" && maintenanceStatus) {
-        // When setting UNAVAILABLE with maintenance
-        payload.maintenanceStatus = maintenanceStatus;
-      } else if (newStatus === "AVAILABLE") {
-        // When completing maintenance, clear maintenance status
-        payload.maintenanceStatus = null;
-      } else if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(newStatus)) {
-        // When switching between maintenance types
-        payload.maintenanceStatus = newStatus;
-      }
+       // Handle maintenance status logic
+    if (newStatus === "UNAVAILABLE" && maintenanceStatus) {
+      // When setting UNAVAILABLE with maintenance
+      payload.maintenanceStatus = maintenanceStatus;
+    } else if (newStatus === "AVAILABLE") {
+      // When completing maintenance, clear maintenance status
+      payload.maintenanceStatus = null;
+    } else if (["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(newStatus)) {
+      // When switching between maintenance types
+      payload.maintenanceStatus = newStatus;
+    }
 
       // add maintenanceStatus if set
       if (maintenanceStatus) {
@@ -941,17 +920,12 @@ const MovementHistoryTable = () => {
                           }`}
                       >
                         {row.status === "UNAVAILABLE" && row.maintenanceStatus
-                          ? `${row.status} (${row.maintenanceStatus})`
-                          : row.status}
+      ? `${row.status} (${row.maintenanceStatus})`
+      : row.status}
                       </span>
                     </TableCell>
                     <TableCell>
-<<<<<<< HEAD
                       {containerLocationCache[row.inventory?.id || 0]?.portName || "-"}
-=======
-                      {containerLocationCache[row.inventory?.id || 0]?.portName || row.port?.portName || "-"}
-
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
                     </TableCell>
                     <TableCell>
                       {row.status?.toUpperCase() === "SOB" ? (
@@ -971,12 +945,7 @@ const MovementHistoryTable = () => {
                             `${row.addressBook.companyName} - ${row.port.portName}` :
                             row.addressBook?.companyName || row.port?.portName || "-"
                           )
-<<<<<<< HEAD
                         )}
-=======
-
-                      )}
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
                     </TableCell>
                     <TableCell className="max-w-xs truncate">{row.remarks}</TableCell>
                     <TableCell className="text-center">
@@ -1094,81 +1063,81 @@ const MovementHistoryTable = () => {
             <CardContent className="space-y-4">
               {/* New Status Dropdown */}
               {/* New Status Dropdown */}
-              {/* New Status Dropdown */}
-              {(() => {
-                const selectedRows = data.filter((row) => selectedIds.includes(row.id));
-                const currentStatus = selectedRows.length > 0 ? selectedRows[0].status : "";
-                const currentMaintenance = selectedRows[0]?.maintenanceStatus;
+           {/* New Status Dropdown */}
+{(() => {
+  const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+  const currentStatus = selectedRows.length > 0 ? selectedRows[0].status : "";
+  const currentMaintenance = selectedRows[0]?.maintenanceStatus;
 
-                return (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      New Status
-                    </label>
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        New Status
+      </label>
 
-                    {/* Main Status Dropdown */}
-                    <select
-                      value={newStatus}
-                      onChange={(e) => {
-                        setNewStatus(e.target.value);
-                        if (e.target.value !== "UNAVAILABLE") {
-                          setMaintenanceStatus(null); // reset maintenance if not unavailable
-                        }
-                      }}
-                      className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                    >
-                      <option value="">Select New Status</option>
+      {/* Main Status Dropdown */}
+      <select
+        value={newStatus}
+        onChange={(e) => {
+          setNewStatus(e.target.value);
+          if (e.target.value !== "UNAVAILABLE") {
+            setMaintenanceStatus(null); // reset maintenance if not unavailable
+          }
+        }}
+        className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+      >
+        <option value="">Select New Status</option>
+        
+        {/* Show available status options */}
+        {availableStatusOptions.map((status) => (
+          <option key={status} value={status}>
+            {status}
+          </option>
+        ))}
+      </select>
 
-                      {/* Show available status options */}
-                      {availableStatusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
+      {/* Second dropdown: Maintenance Status (only if UNAVAILABLE chosen from EMPTY RETURNED) */}
+      {newStatus === "UNAVAILABLE" && currentStatus === "EMPTY RETURNED" && (
+        <div className="space-y-2 mt-3">
+          <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            Maintenance Status
+          </label>
+          <select
+            value={maintenanceStatus || ""}
+            onChange={(e) => setMaintenanceStatus(e.target.value)}
+            className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+          >
+            <option value="">Select Maintenance Type</option>
+            {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
-                    {/* Second dropdown: Maintenance Status (only if UNAVAILABLE chosen from EMPTY RETURNED) */}
-                    {newStatus === "UNAVAILABLE" && currentStatus === "EMPTY RETURNED" && (
-                      <div className="space-y-2 mt-3">
-                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Maintenance Status
-                        </label>
-                        <select
-                          value={maintenanceStatus || ""}
-                          onChange={(e) => setMaintenanceStatus(e.target.value)}
-                          className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                        >
-                          <option value="">Select Maintenance Type</option>
-                          {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    )}
+      {/* Helper text */}
+      {currentStatus === "EMPTY RETURNED" && !newStatus && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Choose AVAILABLE if container is ready, or UNAVAILABLE for maintenance
+        </p>
+      )}
 
-                    {/* Helper text */}
-                    {currentStatus === "EMPTY RETURNED" && !newStatus && (
-                      <p className="text-xs text-blue-600 dark:text-blue-400">
-                        Choose AVAILABLE if container is ready, or UNAVAILABLE for maintenance
-                      </p>
-                    )}
+      {currentStatus === "EMPTY RETURNED" && newStatus === "UNAVAILABLE" && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Select the specific maintenance type for this container
+        </p>
+      )}
 
-                    {currentStatus === "EMPTY RETURNED" && newStatus === "UNAVAILABLE" && (
-                      <p className="text-xs text-blue-600 dark:text-blue-400">
-                        Select the specific maintenance type for this container
-                      </p>
-                    )}
-
-                    {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus) && (
-                      <p className="text-xs text-blue-600 dark:text-blue-400">
-                        Choose AVAILABLE to complete maintenance, or switch to another maintenance type
-                      </p>
-                    )}
-                  </div>
-                );
-              })()}
+      {["UNDER CLEANING", "UNDER SURVEY", "UNDER REPAIR/UNDER TESTING"].includes(currentStatus) && (
+        <p className="text-xs text-blue-600 dark:text-blue-400">
+          Choose AVAILABLE to complete maintenance, or switch to another maintenance type
+        </p>
+      )}
+    </div>
+  );
+})()}
 
               {/* Show if EMPTY RETURNED or RETURNED TO DEPOT */}
               {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (

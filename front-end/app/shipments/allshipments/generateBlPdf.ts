@@ -6,7 +6,7 @@ const ristarLogoBase64 =
   "/9j/4AAQSkZJRgABAQAAAQABAAD/4gHYSUNDX1BST0ZJTEUAAQEAAAHIAAAAAAQwAABtbnRyUkdCIFhZWiAH4AABAAEAAAAAAABhY3NwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAA9tYAAQAAAADTLQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAlkZXNjAAAA8AAAACRyWFlaAAABFAAAABRnWFlaAAABKAAAABRiWFlaAAABPAAAABR3dHB0AAABUAAAABRyVFJDAAABZAAAAChnVFJDAAABZAAAAChiVFJDAAABZAAAAChjcHJ0AAABj 'lines tariff.',AAADxtbHVjAAAAAAAAAAEAAAAMZW5VUwAAAAgAAAAcAHMAUgBHAEJYWVogAAAAAAAAb6IAADj1AAADkFhZWiAAAAAAAABimQAAt4UAABjaWFlaIAAAAAAAACSgAAAPhAAAts9YWVogAAAAAAAA9tYAAQAAAADTLXBhcmEAAAAAAAQAAAACZmYAAPKnAAANWQAAE9AAAApbAAAAAAAAAABtbHVjAAAAAAAAAAEAAAAMZW5VUwAAACAAAAAcAEcAbwBvAGcAbABlACAASQBuAGMALgAgADIAMAAxADb/2wBDAAMCAgICAgMCAgIDAwMDBAYEBAQEBAgGBgUGCQgKCgkICQkKDA8MCgsOCwkJDRENDg8QEBEQCgwSExIQEw8QEBD/2wBDAQMDAwQDBAgEBAgQCwkLEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBD/wAARCAEPA5kDASIAAhEBAxEB/8QAHgABAAICAgMBAAAAAAAAAAAAAAgJBgcBBQIDBAr/xABvEAABAgUCAwUDBQgHDRMJCQEBAgMABAUGEQcIEiExCRNBUWEUInEVIzKBkRVCUmJyobGyCR";
 
 // Define BL types
-export type BLType = "original" | "draft" | "seaway" | "non-negotiable";
+export type BLType = "original" | "draft" | "seaway" | "non-negotiable" | "rfs";
 
 export interface BLFormData {
   shipmentId: number;
@@ -36,6 +36,7 @@ export interface BLFormData {
   numberOfOriginals: string;
   placeOfIssue: string;
   dateOfIssue: string;
+  marksAndNumbers: string;
   containers: any[];
 }
 
@@ -214,8 +215,8 @@ export async function generateBlPdf(
     const product = products.find((p: any) => p.id === shipment.productId);
 
     // Format dates - Use the consistent date from formData instead of current date
-    const blDate = dayjs(formData.date).format("DD.MM.YYYY");
-    const shippedOnboardDate = dayjs(shipment.gsDate).format("DD.MM.YYYY");
+    const blDate = dayjs(formData.date).format("DD/MM/YYYY");
+    const shippedOnboardDate = dayjs(shipment.gsDate).format("DD/MM/YYYY");
 
     // Derive ports and labels
     const polName = shipment.polPort?.portName || "";
@@ -336,7 +337,6 @@ const contentHeight = pageHeight - marginY * 2;
     // Use combined shipper info if available, otherwise fall back to individual fields
     if (shipper?.combinedInfo && shipper.combinedInfo.trim()) {
       // Use combined field like charges and fees
-      doc.setFont("arial", "normal");
       doc.setFontSize(10);
       const combinedLines = doc.splitTextToSize(
         shipper.combinedInfo,
@@ -346,6 +346,12 @@ const contentHeight = pageHeight - marginY * 2;
       // Display as many lines as fit in the available space
       combinedLines.forEach((line: string, index: number) => {
         if (currentFieldY + index * 4 < shipperStartY + shipperMaxHeight - 2) {
+          // Make first line (company name) bold, others normal
+          if (index === 0) {
+            doc.setFont("arial", "bold");
+          } else {
+            doc.setFont("arial", "normal");
+          }
           doc.text(line, leftX, currentFieldY + index * 4);
         }
       });
@@ -427,7 +433,6 @@ const contentHeight = pageHeight - marginY * 2;
     // Use combined consignee info if available, otherwise fall back to individual fields
     if (consignee?.combinedInfo && consignee.combinedInfo.trim()) {
       // Use combined field like charges and fees
-      doc.setFont("arial", "normal");
       doc.setFontSize(10);
       const combinedLines = doc.splitTextToSize(
         consignee.combinedInfo,
@@ -440,6 +445,12 @@ const contentHeight = pageHeight - marginY * 2;
           currentFieldY + index * 4 <
           consigneeStartY + consigneeMaxHeight - 2
         ) {
+          // Make first line (company name) bold, others normal
+          if (index === 0) {
+            doc.setFont("arial", "bold");
+          } else {
+            doc.setFont("arial", "normal");
+          }
           doc.text(line, leftX, currentFieldY + index * 4);
         }
       });
@@ -529,7 +540,6 @@ const contentHeight = pageHeight - marginY * 2;
     // Use combined notify party info if available, otherwise fall back to individual fields
     if (notifyParty?.combinedInfo && notifyParty.combinedInfo.trim()) {
       // Use combined field like charges and fees
-      doc.setFont("arial", "normal");
       doc.setFontSize(10);
       const combinedLines = doc.splitTextToSize(
         notifyParty.combinedInfo,
@@ -539,6 +549,12 @@ const contentHeight = pageHeight - marginY * 2;
       // Display as many lines as fit in the available space
       combinedLines.forEach((line: string, index: number) => {
         if (currentFieldY + index * 4 < notifyStartY + notifyMaxHeight - 2) {
+          // Make first line (company name) bold, others normal
+          if (index === 0) {
+            doc.setFont("arial", "bold");
+          } else {
+            doc.setFont("arial", "normal");
+          }
           doc.text(line, leftX, currentFieldY + index * 4);
         }
       });
@@ -818,6 +834,8 @@ const contentHeight = pageHeight - marginY * 2;
       } else if (copyNumber === 2) {
         blTypeText = "3rd COPY NON NEGOTIABLE B/L";
       }
+    } else if (blType === "rfs") {
+      blTypeText = "RFS BL";
     }
     // Move title to the right section centered within the right panel
     const rightPanelCenterX = headerSplitX + (headerRightX - headerSplitX) / 2;
@@ -875,14 +893,28 @@ const contentHeight = pageHeight - marginY * 2;
     const shouldMoveAllContainersToNextPage = containersToShow.length > 3;
 
     if (shouldMoveAllContainersToNextPage) {
-      // Add message in container section indicating containers are on next page
+      // Add message in container section indicating containers are on next page - moved further down
       doc.setFont("arial", "bold");
       doc.setFontSize(10);
+      const messageY = firstRowTextY + 35; // Moved further down from 25 to 35
       doc.text(
         "Find the containers details list below the page annexure.",
         marginX + 5,
-        containerY + 30
+        messageY
       );
+
+      // Display marks and numbers in the marks column for more than 3 containers
+      if (blFormData?.marksAndNumbers && blFormData.marksAndNumbers.trim()) {
+        doc.setFont("arial", "normal");
+        doc.setFontSize(9);
+        const marksAndNumbersLines = doc.splitTextToSize(blFormData.marksAndNumbers, 45);
+        let marksY = firstRowTextY + 12;
+        marksAndNumbersLines.forEach((line: string, lineIndex: number) => {
+          if (marksY < firstRowTextY + 40) { // Limit to container section height
+            doc.text(line, marginX + 60, marksY + (lineIndex * 4));
+          }
+        });
+      }
 
       // Update rowEndY to account for the message space
       rowEndY = Math.max(rowEndY, containerY + 20);
@@ -972,6 +1004,16 @@ const contentHeight = pageHeight - marginY * 2;
 
         let currentContainerY = containerStartY;
 
+        // Display marks and numbers ONCE outside the container loop
+        if (blFormData?.marksAndNumbers && blFormData.marksAndNumbers.trim()) {
+          doc.setFontSize(9);
+          doc.setFont("arial", "normal");
+          const marksAndNumbersLines = doc.splitTextToSize(blFormData.marksAndNumbers, 45);
+          let marksY = containerStartY;
+          marksAndNumbersLines.forEach((line: string, lineIndex: number) => {
+            doc.text(line, marginX + 60, marksY + (lineIndex * 4));
+          });
+        }
 
         doc.setFont("arial", "bold");
         doc.setFontSize(10);
@@ -1098,13 +1140,30 @@ const contentHeight = pageHeight - marginY * 2;
     const tableWidth = 280; // Reduced table width to add proper margins
     const tableX = (pageWidth - tableWidth) / 2;
     
+    // Check if any container has CBM values
+    const hasCbmValues = containersToShow.some((container: any) => 
+      container.cbmWt && container.cbmWt !== "N/A" && container.cbmWt.trim() !== ""
+    );
+    
+    // Check if any container has TARE WT values
+    const hasTareValues = containersToShow.some((container: any) => 
+      container.tareWt && container.tareWt !== "N/A" && container.tareWt.trim() !== ""
+    );
+    
     // Define column widths - optimized for better space distribution with proper margins
+    // Reordered: Container No, Shipper Seal, Gross WT, Net WT, Tare WT, CBM, Carrier Seal
     const col1Width = 60; // CONTAINER NO - adjusted for reduced table width
-    const col2Width = 40; // GROSS WT - adjusted for reduced table width
-    const col3Width = 40; // NET WT - adjusted for reduced table width
-    const col4Width = 40; // TARE WT - adjusted for reduced table width
-    const col5Width = 30; // CBM - adjusted for reduced table width
-    const col6Width = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width); // SEAL NO - gets remaining space (70mm)
+    const col2Width = 50; // SHIPPER SEAL NO - moved to second position
+    const col3Width = 40; // GROSS WT - adjusted for reduced table width
+    const col4Width = 40; // NET WT - adjusted for reduced table width
+    const col5Width = hasTareValues ? 40 : 0; // TARE WT - only if values exist
+    const col6Width = hasCbmValues ? 30 : 0; // CBM - only if values exist
+    const col7Width = 50; // CARRIER SEAL NO - moved to last position
+    const remainingWidth = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width + col6Width + col7Width);
+    
+    // Adjust seal columns if there's remaining space
+    const finalCol2Width = col2Width + Math.floor(remainingWidth / 2); // Shipper Seal
+    const finalCol7Width = col7Width + Math.floor(remainingWidth / 2); // Carrier Seal
 
     // Table header with borders
     doc.setFont("arial", "bold");
@@ -1113,27 +1172,38 @@ const contentHeight = pageHeight - marginY * 2;
     // Draw header background and borders
     doc.rect(tableX, tableStartY - 2, tableWidth, 12);
 
-    // Header text (centered within each column)
+    // Header text (centered within each column) - reordered
     const cell1CenterX = tableX + col1Width / 2;
-    const cell2CenterX = tableX + col1Width + col2Width / 2;
-    const cell3CenterX = tableX + col1Width + col2Width + col3Width / 2;
-    const cell4CenterX = tableX + col1Width + col2Width + col3Width + col4Width / 2;
-    const cell5CenterX = tableX + col1Width + col2Width + col3Width + col4Width + col5Width / 2;
-    const cell6CenterX = tableX + col1Width + col2Width + col3Width + col4Width + col5Width + col6Width / 2;
+    const cell2CenterX = tableX + col1Width + finalCol2Width / 2; // Shipper Seal
+    const cell3CenterX = tableX + col1Width + finalCol2Width + col3Width / 2; // Gross WT
+    const cell4CenterX = tableX + col1Width + finalCol2Width + col3Width + col4Width / 2; // Net WT
+    const cell5CenterX = hasTareValues ? tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width / 2 : 0; // Tare WT
+    const cell6CenterX = hasCbmValues ? tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width / 2 : 0; // CBM
+    const cell7CenterX = tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width + finalCol7Width / 2; // Carrier Seal
 
     doc.text("CONTAINER NO.", cell1CenterX, tableStartY + 6, { align: "center" });
-    doc.text("GROSS WT", cell2CenterX, tableStartY + 6, { align: "center" });
-    doc.text("NET WT", cell3CenterX, tableStartY + 6, { align: "center" });
-    doc.text("TARE WT", cell4CenterX, tableStartY + 6, { align: "center" });
-    doc.text("CBM", cell5CenterX, tableStartY + 6, { align: "center" });
-    doc.text("SEAL NO.", cell6CenterX, tableStartY + 6, { align: "center" });
+    doc.text("SHIPPER SEAL", cell2CenterX, tableStartY + 6, { align: "center" }); // Moved to second position
+    doc.text("GROSS WT", cell3CenterX, tableStartY + 6, { align: "center" });
+    doc.text("NET WT", cell4CenterX, tableStartY + 6, { align: "center" });
+    if (hasTareValues) {
+      doc.text("TARE WT", cell5CenterX, tableStartY + 6, { align: "center" });
+    }
+    if (hasCbmValues) {
+      doc.text("CBM", cell6CenterX, tableStartY + 6, { align: "center" });
+    }
+    doc.text("CARRIER SEAL", cell7CenterX, tableStartY + 6, { align: "center" }); // Moved to last position
 
-    // Draw vertical lines for header
+    // Draw vertical lines for header - updated for new column order
     doc.line(tableX + col1Width, tableStartY - 2, tableX + col1Width, tableStartY + 10);
-    doc.line(tableX + col1Width + col2Width, tableStartY - 2, tableX + col1Width + col2Width, tableStartY + 10);
-    doc.line(tableX + col1Width + col2Width + col3Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width, tableStartY + 10);
-    doc.line(tableX + col1Width + col2Width + col3Width + col4Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width + col4Width, tableStartY + 10);
-    doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, tableStartY - 2, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, tableStartY + 10);
+    doc.line(tableX + col1Width + finalCol2Width, tableStartY - 2, tableX + col1Width + finalCol2Width, tableStartY + 10);
+    doc.line(tableX + col1Width + finalCol2Width + col3Width, tableStartY - 2, tableX + col1Width + finalCol2Width + col3Width, tableStartY + 10);
+    doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width, tableStartY - 2, tableX + col1Width + finalCol2Width + col3Width + col4Width, tableStartY + 10);
+    if (hasTareValues) {
+      doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, tableStartY - 2, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, tableStartY + 10);
+    }
+    if (hasCbmValues) {
+      doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, tableStartY - 2, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, tableStartY + 10);
+    }
 
     containerY = tableStartY + 12;
 
@@ -1152,45 +1222,39 @@ const contentHeight = pageHeight - marginY * 2;
 
       const rowY = containerY;
       
-      // Calculate dynamic row height based on SEAL NO text length
+      // Calculate dynamic row height based on seal text length
       let rowHeight = 12; // Default row height
       const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A") 
         ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
-        : "";
+        : "-";
       const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A") 
         ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
-        : "";
+        : "-";
       
-      let allSeals = "";
-      if (carrierSeals && shipperSeals) {
-        allSeals = `C:${carrierSeals} S:${shipperSeals}`;
-      } else if (carrierSeals) {
-        allSeals = carrierSeals;
-      } else if (shipperSeals) {
-        allSeals = shipperSeals;
-      } else {
-        allSeals = "-";
-      }
+      // Check if seal text needs wrapping for both columns - updated for new order
+      const maxShipperSealWidth = finalCol2Width - 4; // Shipper Seal now in second position
+      const maxCarrierSealWidth = finalCol7Width - 4; // Carrier Seal now in last position
+      const carrierTextWidth = doc.getTextWidth(carrierSeals);
+      const shipperTextWidth = doc.getTextWidth(shipperSeals);
       
-      // Check if SEAL NO text needs wrapping
-      const maxSealWidth = col6Width - 4;
-      const textWidth = doc.getTextWidth(allSeals);
-      if (textWidth > maxSealWidth) {
-        const wrappedSealText = doc.splitTextToSize(allSeals, maxSealWidth);
-        if (wrappedSealText.length > 1) {
-          rowHeight = 16; // Increase row height for wrapped text
-        }
+      if (carrierTextWidth > maxCarrierSealWidth || shipperTextWidth > maxShipperSealWidth) {
+        rowHeight = 16; // Increase row height for wrapped text
       }
 
       // Draw row borders with dynamic height
       doc.rect(tableX, rowY, tableWidth, rowHeight);
 
-      // Draw vertical lines for data rows with dynamic height
+      // Draw vertical lines for data rows with dynamic height - updated for new column order
       doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + col2Width, rowY, tableX + col1Width + col2Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + col2Width + col3Width, rowY, tableX + col1Width + col2Width + col3Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + col2Width + col3Width + col4Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + finalCol2Width, rowY, tableX + col1Width + finalCol2Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + finalCol2Width + col3Width, rowY, tableX + col1Width + finalCol2Width + col3Width, rowY + rowHeight);
+      doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width, rowY, tableX + col1Width + finalCol2Width + col3Width + col4Width, rowY + rowHeight);
+      if (hasTareValues) {
+        doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, rowY, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, rowY + rowHeight);
+      }
+      if (hasCbmValues) {
+        doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, rowY, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, rowY + rowHeight);
+      }
 
 
           // Container data (centered in each column)
@@ -1214,33 +1278,45 @@ const contentHeight = pageHeight - marginY * 2;
       const tareWt = (container.tareWt && container.tareWt !== "N/A") ? container.tareWt : "-";
       const cbmWt = (container.cbmWt && container.cbmWt !== "N/A") ? container.cbmWt : "-";
 
-      doc.text(grossWt, cell2CenterX, rowY + 8, { align: "center" });
-      doc.text(netWt, cell3CenterX, rowY + 8, { align: "center" });
-      doc.text(tareWt, cell4CenterX, rowY + 8, { align: "center" });
-      doc.text(cbmWt, cell5CenterX, rowY + 8, { align: "center" });
-
-
-      // Handle SEAL NO text wrapping to prevent overflow
-      const sealText = allSeals || "-";
-      
-      // Check if text fits in the column (reuse variables from earlier calculation)
-      if (textWidth > maxSealWidth) {
-        // Text is too long, wrap it
-        const wrappedSealText = doc.splitTextToSize(sealText, maxSealWidth);
-        if (wrappedSealText.length === 1) {
-          // Single line, center it
-          doc.text(wrappedSealText[0], cell6CenterX, rowY + 8, { align: "center" });
+      // Handle SHIPPER SEAL text wrapping - now in second position
+      if (shipperTextWidth > maxShipperSealWidth) {
+        const wrappedShipperText = doc.splitTextToSize(shipperSeals, maxShipperSealWidth);
+        if (wrappedShipperText.length === 1) {
+          doc.text(wrappedShipperText[0], cell2CenterX, rowY + 8, { align: "center" });
         } else {
-          // Multiple lines, center the first line
-          doc.text(wrappedSealText[0], cell6CenterX, rowY + 6, { align: "center" });
-          // If there's a second line, show it below
-          if (wrappedSealText[1]) {
-            doc.text(wrappedSealText[1], cell6CenterX, rowY + 10, { align: "center" });
+          doc.text(wrappedShipperText[0], cell2CenterX, rowY + 6, { align: "center" });
+          if (wrappedShipperText[1]) {
+            doc.text(wrappedShipperText[1], cell2CenterX, rowY + 10, { align: "center" });
           }
         }
       } else {
-        // Text fits, display normally
-        doc.text(sealText, cell6CenterX, rowY + 8, { align: "center" });
+        doc.text(shipperSeals, cell2CenterX, rowY + 8, { align: "center" });
+      }
+
+      // Weight and CBM data - shifted positions
+      doc.text(grossWt, cell3CenterX, rowY + 8, { align: "center" });
+      doc.text(netWt, cell4CenterX, rowY + 8, { align: "center" });
+      if (hasTareValues) {
+        doc.text(tareWt, cell5CenterX, rowY + 8, { align: "center" });
+      }
+      if (hasCbmValues) {
+        doc.text(cbmWt, cell6CenterX, rowY + 8, { align: "center" });
+      }
+
+
+      // Handle CARRIER SEAL text wrapping - now in last position
+      if (carrierTextWidth > maxCarrierSealWidth) {
+        const wrappedCarrierText = doc.splitTextToSize(carrierSeals, maxCarrierSealWidth);
+        if (wrappedCarrierText.length === 1) {
+          doc.text(wrappedCarrierText[0], cell7CenterX, rowY + 8, { align: "center" });
+        } else {
+          doc.text(wrappedCarrierText[0], cell7CenterX, rowY + 6, { align: "center" });
+          if (wrappedCarrierText[1]) {
+            doc.text(wrappedCarrierText[1], cell7CenterX, rowY + 10, { align: "center" });
+          }
+        }
+      } else {
+        doc.text(carrierSeals, cell7CenterX, rowY + 8, { align: "center" });
       }
 
       containerY += rowHeight; // Use dynamic row height
@@ -1251,26 +1327,41 @@ const contentHeight = pageHeight - marginY * 2;
     doc.rect(tableX, totalRowY, tableWidth, 12);
 
 
-         // Draw vertical lines for total row
+         // Draw vertical lines for total row - updated for new column order
     doc.line(tableX + col1Width, totalRowY, tableX + col1Width, totalRowY + 12);
-    doc.line(tableX + col1Width + col2Width, totalRowY, tableX + col1Width + col2Width, totalRowY + 12);
-    doc.line(tableX + col1Width + col2Width + col3Width, totalRowY, tableX + col1Width + col2Width + col3Width, totalRowY + 12);
-    doc.line(tableX + col1Width + col2Width + col3Width + col4Width, totalRowY, tableX + col1Width + col2Width + col3Width + col4Width, totalRowY + 12);
-    doc.line(tableX + col1Width + col2Width + col3Width + col4Width + col5Width, totalRowY, tableX + col1Width + col2Width + col3Width + col4Width + col5Width, totalRowY + 12);
+    doc.line(tableX + col1Width + finalCol2Width, totalRowY, tableX + col1Width + finalCol2Width, totalRowY + 12);
+    doc.line(tableX + col1Width + finalCol2Width + col3Width, totalRowY, tableX + col1Width + finalCol2Width + col3Width, totalRowY + 12);
+    doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width, totalRowY, tableX + col1Width + finalCol2Width + col3Width + col4Width, totalRowY + 12);
+    if (hasTareValues) {
+      doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, totalRowY, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width, totalRowY + 12);
+    }
+    if (hasCbmValues) {
+      doc.line(tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, totalRowY, tableX + col1Width + finalCol2Width + col3Width + col4Width + col5Width + col6Width, totalRowY + 12);
+    }
 
     doc.setFont("arial", "bold");
     doc.text(`TOTAL: ${containersToShow.length} CONTAINERS`, cell1CenterX, totalRowY + 8, { align: "center" });
-       // Only show totals for fields that have data
+       // Only show totals for fields that have data - updated for new column order
     const showGrossTotal = totalGrossWt > 0;
     const showNetTotal = totalNetWt > 0;
     const showTareTotal = totalTareWt > 0;
     const showCbmTotal = totalCbmWt > 0;
 
-     doc.text(showGrossTotal ? totalGrossWt.toFixed(2) : "-", cell2CenterX, totalRowY + 8, { align: "center" });
-    doc.text(showNetTotal ? totalNetWt.toFixed(2) : "-", cell3CenterX, totalRowY + 8, { align: "center" });
-    doc.text(showTareTotal ? totalTareWt.toFixed(2) : "-", cell4CenterX, totalRowY + 8, { align: "center" });
-    doc.text(showCbmTotal ? totalCbmWt.toFixed(3) : "-", cell5CenterX, totalRowY + 8, { align: "center" });
-    doc.text("", cell6CenterX, totalRowY + 8, { align: "center" });
+    // Shipper Seal column should be blank in total row
+    doc.text("", cell2CenterX, totalRowY + 8, { align: "center" });
+    
+    // Weight and CBM totals in correct positions
+    doc.text(showGrossTotal ? totalGrossWt.toFixed(2) : "-", cell3CenterX, totalRowY + 8, { align: "center" });
+    doc.text(showNetTotal ? totalNetWt.toFixed(2) : "-", cell4CenterX, totalRowY + 8, { align: "center" });
+    if (hasTareValues) {
+      doc.text(showTareTotal ? totalTareWt.toFixed(2) : "-", cell5CenterX, totalRowY + 8, { align: "center" });
+    }
+    if (hasCbmValues) {
+      doc.text(showCbmTotal ? totalCbmWt.toFixed(3) : "-", cell6CenterX, totalRowY + 8, { align: "center" });
+    }
+    
+    // Carrier Seal column should be blank in total row
+    doc.text("", cell7CenterX, totalRowY + 8, { align: "center" });
 
     containerY += 12;
       }
@@ -1369,10 +1460,64 @@ const contentHeight = pageHeight - marginY * 2;
     // Additional block under description - improved spacing and alignment
 let addY = firstRowTextY + 50;
 
+// Calculate container totals for display in the right area
+let totalGrossWt = 0;
+let totalNetWt = 0;
+let totalTareWt = 0;
+let totalCbm = 0;
+let hasValidValues = false;
+
+// Calculate totals from all containers
+containersToShow.forEach((container: any) => {
+  const grossWt = parseFloat(container.grossWt) || 0;
+  const netWt = parseFloat(container.netWt) || 0;
+  const tareWt = parseFloat(container.tareWt) || 0;
+  const cbm = parseFloat(container.cbmWt) || 0;
+  
+  if (grossWt > 0 || netWt > 0 || tareWt > 0 || cbm > 0) {
+    hasValidValues = true;
+  }
+  
+  totalGrossWt += grossWt;
+  totalNetWt += netWt;
+  totalTareWt += tareWt;
+  totalCbm += cbm;
+});
+
+// Display container weight and CBM information in the right area (marked with red oval in image)
+if (hasValidValues) {
+  const rightAreaX = marginX + 220; // Moved further to the right as requested
+  let rightAreaY = firstRowTextY + 20; // Moved down a bit as requested
+  
+  doc.setFont("arial", "bold");
+  doc.setFontSize(10);
+  
+  // Display container weights and CBM information
+  if (totalGrossWt > 0) {
+    doc.text(`GROSS WT: ${totalGrossWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+    rightAreaY += 4;
+  }
+
+  if (totalNetWt > 0) {
+    doc.text(`NET WT: ${totalNetWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+    rightAreaY += 4;
+  }
+  
+  if (totalTareWt > 0) {
+    doc.text(`TARE WT: ${totalTareWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+    rightAreaY += 4;
+  }
+  
+  if (totalCbm > 0) {
+    doc.text(`CBM: ${totalCbm.toFixed(3)} CBM`, rightAreaX, rightAreaY);
+    rightAreaY += 4;
+  }
+}
+
 // Add "Shipped on Board" section just above freight text
 doc.setFont("arial", "bold");
 doc.setFontSize(9);
-doc.text("Shipped on Board", marginX + 110, addY);
+doc.text("SHIPPED ONBOARD :", marginX + 110, addY);
 doc.text(blDate, marginX + 110 + 40, addY); // Date aligned to the right of "Shipped on Board"
 addY += 8;
 
@@ -1563,7 +1708,6 @@ if (detentionText) {
     // Use combined delivery agent info if available, otherwise fall back to individual fields
     if (deliveryAgent?.combinedInfo && deliveryAgent.combinedInfo.trim()) {
       // Use combined field like charges and fees
-      doc.setFont("arial", "normal");
       doc.setFontSize(10);
       const combinedLines = doc.splitTextToSize(
         deliveryAgent.combinedInfo,
@@ -1576,6 +1720,12 @@ if (detentionText) {
           deliveryAgentY + index * compactLineSpacing <
           deliveryAgentMaxY - 2
         ) {
+          // Make first line (company name) bold, others normal
+          if (index === 0) {
+            doc.setFont("arial", "bold");
+          } else {
+            doc.setFont("arial", "normal");
+          }
           doc.text(
             line,
             marginX + 5,
@@ -1808,6 +1958,12 @@ if (detentionText) {
         break;
       case "seaway":
         fileName = `RST_${portCode}_25_00001_Seaway_BL${copySuffix}.pdf`;
+        break;
+      case "non-negotiable":
+        fileName = `RST_${portCode}_25_00001_Non_Negotiable_BL${copySuffix}.pdf`;
+        break;
+      case "rfs":
+        fileName = `RST_${portCode}_25_00001_RFS_BL${copySuffix}.pdf`;
         break;
     }
 

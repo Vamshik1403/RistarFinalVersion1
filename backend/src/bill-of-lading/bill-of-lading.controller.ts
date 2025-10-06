@@ -62,6 +62,11 @@ export class BillOfLadingController {
     return this.billOfLadingService.markNonNegotiableBLGenerated(shipmentId);
   }
 
+  @Post('mark-rfs-generated/:shipmentId')
+  markRfsBLGenerated(@Param('shipmentId', ParseIntPipe) shipmentId: number) {
+    return this.billOfLadingService.markRfsBLGenerated(shipmentId);
+  }
+
   @Delete(':id')
   remove(@Param('id', ParseIntPipe) id: number) {
     return this.billOfLadingService.remove(id);

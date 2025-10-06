@@ -88,10 +88,7 @@ const ProductsInventoryPage = () => {
     }
   };
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
   const checkContainerEditStatus = async (id: number) => {
     try {
       const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
@@ -227,10 +224,7 @@ const ProductsInventoryPage = () => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
-<<<<<<< HEAD
 
-=======
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
       const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
 
       if (!deletionCheck.data.canDelete) {
@@ -239,11 +233,7 @@ const ProductsInventoryPage = () => {
       }
 
       await axios.delete(`http://localhost:8000/inventory/${id}`);
-<<<<<<< HEAD
       // If deletion is allowed, proceed with deletion;
-=======
-
->>>>>>> 747294c6ee5244a5950ce377b117cad90e77e5cc
       setInventoryData(inventoryData.filter((item) => item.id !== id));
       alert('Inventory deleted successfully');
     } catch (error: any) {

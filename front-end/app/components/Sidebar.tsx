@@ -196,18 +196,18 @@ const navItems = [
     icon: <Settings size={16} className="mr-2" />,
     module: "Settings",
     children: [
-      {
-        label: "Users",
-        href: "/settings/users",
-        icon: <User size={14} className="mr-2" />,
-        module: "Users",
-      },
-      {
-        label: "Permissions",
-        href: "/settings/permissions",
-        icon: <Shield size={14} className="mr-2" />,
-        module: "Permissions",
-      },
+      // {
+      //   label: "Users",
+      //   href: "/settings/users",
+      //   icon: <User size={14} className="mr-2" />,
+      //   module: "Users",
+      // },
+      // {
+      //   label: "Permissions",
+      //   href: "/settings/permissions",
+      //   icon: <Shield size={14} className="mr-2" />,
+      //   module: "Permissions",
+      // },
       {
         label: "Data Import",
         href: "/settings/dataimport",

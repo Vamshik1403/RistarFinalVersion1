@@ -620,6 +620,7 @@ model BillofLading {
   portOfDischarge        String?
   vesselNo               String?
   chargesAndFees         String?
+  marksAndNumbers        String?
   date                   String? 
   createdAt              DateTime  @default(now())
   shipmentId             Int?
@@ -628,6 +629,7 @@ model BillofLading {
   hasDraftBlGenerated        Boolean   @default(false)
   hasOriginalBLGenerated     Boolean   @default(false)
   hasNonNegotiableBlGenerated Boolean  @default(false)
+  hasRfsBlGenerated          Boolean   @default(false)
   shipment                   Shipment? @relation(fields: [shipmentId], references: [id])
 }
 
