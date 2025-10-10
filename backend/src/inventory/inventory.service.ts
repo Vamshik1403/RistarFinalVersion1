@@ -145,6 +145,56 @@ export class InventoryService {
       });
   }
 
+  async getCompaniesByOwnershipType(ownershipType: string) {
+    try {
+      if (ownershipType.toLowerCase() === 'own') {
+        // For "Own" containers, return RISTAR as the company
+        return [{ id: 'ristar', companyName: 'RISTAR' }];
+      } else if (ownershipType.toLowerCase() === 'lease' || ownershipType.toLowerCase() === 'leased') {
+        // For "Lease" containers, get all unique companies from leasingInfo
+        const inventories = await this.prisma.inventory.findMany({
+          where: {
+            leasingInfo: {
+              some: {}
+            }
+          },
+          include: {
+            leasingInfo: {
+              include: {
+                addressBook: {
+                  select: {
+                    id: true,
+                    companyName: true
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        // Extract unique companies from leasingInfo
+        const companies = new Map();
+        inventories.forEach(inventory => {
+          inventory.leasingInfo.forEach(lease => {
+            if (lease.addressBook) {
+              companies.set(lease.addressBook.id, {
+                id: lease.addressBook.id,
+                companyName: lease.addressBook.companyName
+              });
+            }
+          });
+        });
+
+        return Array.from(companies.values());
+      } else {
+        return [];
+      }
+    } catch (error) {
+      console.error('Error fetching companies by ownership type:', error);
+      return [];
+    }
+  }
+
   findOne(id: number) {
     return this.prisma.inventory
       .findUnique({

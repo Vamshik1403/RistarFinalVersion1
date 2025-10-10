@@ -17,6 +17,11 @@ create(@Body() data: CreateInventoryDto) {
     return this.inventoryService.findAll();
   }
 
+  @Get('companies/:ownershipType')
+  getCompaniesByOwnershipType(@Param('ownershipType') ownershipType: string) {
+    return this.inventoryService.getCompaniesByOwnershipType(ownershipType);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.inventoryService.findOne(+id);

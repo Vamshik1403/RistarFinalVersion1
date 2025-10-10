@@ -53,15 +53,19 @@ const ProductsInventoryPage = () => {
   const [filters, setFilters] = useState({
     ownership: "",
     status: "",
-    initialSurveyDate: ""
+    initialSurveyDate: "",
+    company: ""
   });
   const [tempFilters, setTempFilters] = useState({
     ownership: "",
     status: "",
-    initialSurveyDate: ""
+    initialSurveyDate: "",
+    company: ""
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
   const [containerEditStatus, setContainerEditStatus] = useState<{ [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } }>({});
+  const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
+  const [loadingCompanies, setLoadingCompanies] = useState(false);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -254,6 +258,24 @@ const ProductsInventoryPage = () => {
     return entry ? entry.companyName : "Unknown";
   };
 
+  const fetchCompaniesByOwnershipType = async (ownershipType: string) => {
+    if (!ownershipType || ownershipType === "") {
+      setAvailableCompanies([]);
+      return;
+    }
+
+    setLoadingCompanies(true);
+    try {
+      const response = await axios.get(`http://localhost:8000/inventory/companies/${ownershipType}`);
+      setAvailableCompanies(response.data);
+    } catch (error) {
+      console.error('Error fetching companies:', error);
+      setAvailableCompanies([]);
+    } finally {
+      setLoadingCompanies(false);
+    }
+  };
+
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedInventoryId(null);
@@ -274,7 +296,17 @@ const ProductsInventoryPage = () => {
     const matchesInitialSurveyDate = !filters.initialSurveyDate ||
       (item.InitialSurveyDate && item.InitialSurveyDate.startsWith(filters.initialSurveyDate));
 
-    return matchesSearch && matchesOwnership && matchesStatus && matchesInitialSurveyDate;
+    const matchesCompany = !filters.company || (() => {
+      if (filters.ownership.toLowerCase() === 'own') {
+        return filters.company.toLowerCase() === 'ristar';
+      } else if (filters.ownership.toLowerCase() === 'lease' || filters.ownership.toLowerCase() === 'leased') {
+        const companyName = item.leasingInfo?.[0] ? getCompanyName(item.leasingInfo[0].leasoraddressbookId) : '';
+        return companyName.toLowerCase() === filters.company.toLowerCase();
+      }
+      return true;
+    })();
+
+    return matchesSearch && matchesOwnership && matchesStatus && matchesInitialSurveyDate && matchesCompany;
   });
 
   const handleApplyFilters = () => {
@@ -286,11 +318,13 @@ const ProductsInventoryPage = () => {
     setTempFilters({
       ownership: "",
       status: "",
-      initialSurveyDate: ""
+      initialSurveyDate: "",
+      company: ""
     });
+    setAvailableCompanies([]);
   };
 
-  const hasActiveFilters = filters.ownership || filters.status || filters.initialSurveyDate;
+  const hasActiveFilters = filters.ownership || filters.status || filters.initialSurveyDate || filters.company;
 
   // Pagination logic
   const totalItems = filteredData.length;
@@ -303,6 +337,14 @@ const ProductsInventoryPage = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, filters]);
+
+  // Fetch companies when filter modal opens with existing ownership filter
+  useEffect(() => {
+    if (showFilterModal && filters.ownership) {
+      setTempFilters(prev => ({ ...prev, ownership: filters.ownership }));
+      fetchCompaniesByOwnershipType(filters.ownership);
+    }
+  }, [showFilterModal]);
 
   // counts
   const totalCount = inventoryData.length;
@@ -379,6 +421,17 @@ const ProductsInventoryPage = () => {
               Survey Date: {filters.initialSurveyDate}
               <button
                 onClick={() => setFilters(prev => ({ ...prev, initialSurveyDate: "" }))}
+                className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {filters.company && (
+            <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
+              Company: {filters.company}
+              <button
+                onClick={() => setFilters(prev => ({ ...prev, company: "" }))}
                 className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -609,7 +662,10 @@ const ProductsInventoryPage = () => {
                 </label>
                 <select
                   value={tempFilters.ownership}
-                  onChange={(e) => setTempFilters(prev => ({ ...prev, ownership: e.target.value }))}
+                  onChange={(e) => {
+                    setTempFilters(prev => ({ ...prev, ownership: e.target.value, company: "" }));
+                    fetchCompaniesByOwnershipType(e.target.value);
+                  }}
                   className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">All Ownership Types</option>
@@ -617,6 +673,31 @@ const ProductsInventoryPage = () => {
                   <option value="Leased">Lease</option>
                 </select>
               </div>
+
+              {/* Company Filter - Only show when ownership type is selected */}
+              {(tempFilters.ownership === "Own" || tempFilters.ownership === "Leased") && (
+                <div>
+                  <label className="block text-sm font-medium text-black-300 mb-2">
+                    Company
+                  </label>
+                  <select
+                    value={tempFilters.company}
+                    onChange={(e) => setTempFilters(prev => ({ ...prev, company: e.target.value }))}
+                    disabled={loadingCompanies}
+                    className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
+                  >
+                    <option value="">All Companies</option>
+                    {availableCompanies.map((company) => (
+                      <option key={company.id} value={company.companyName}>
+                        {company.companyName}
+                      </option>
+                    ))}
+                  </select>
+                  {loadingCompanies && (
+                    <p className="text-xs text-gray-400 mt-1">Loading companies...</p>
+                  )}
+                </div>
+              )}
 
               {/* Status Filter */}
               <div>
