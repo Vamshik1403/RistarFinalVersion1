@@ -1300,7 +1300,7 @@ const contentHeight = pageHeight - marginY * 2;
         const wrappedCarrierText = doc.splitTextToSize(carrierSeals, maxCarrierSealWidth);
         if (wrappedCarrierText.length === 1) {
           doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 8, { align: "center" });
-        } else {
+      } else {
           doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 6, { align: "center" });
           if (wrappedCarrierText[1]) {
             doc.text(wrappedCarrierText[1], cell3CenterX, rowY + 10, { align: "center" });

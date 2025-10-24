@@ -1,9 +1,17 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { Pencil, Search, Trash2, Filter, X, Plus } from "lucide-react";
-import AddContainerForm from '../inventory/CreateInventoryForm';
-import axios from 'axios';
+import React, { useEffect, useState } from "react";
+import {
+  Pencil,
+  Search,
+  Trash2,
+  Filter,
+  X,
+  Plus,
+  Download,
+} from "lucide-react";
+import AddContainerForm from "../inventory/CreateInventoryForm";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,6 +23,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import * as XLSX from "xlsx";
 
 const StatusBadge = ({ status }: { status: string }) => (
   <span
@@ -38,7 +47,11 @@ const StatusBadge = ({ status }: { status: string }) => (
 const ProductsInventoryPage = () => {
   const [showModal, setShowModal] = useState(false);
   const [showTable, setShowTable] = useState(false);
-  type AddressBookEntry = { id: number; companyName: string;[key: string]: any };
+  type AddressBookEntry = {
+    id: number;
+    companyName: string;
+    [key: string]: any;
+  };
   const [addressBook, setAddressBook] = useState<AddressBookEntry[]>([]);
 
   // Pagination state
@@ -47,25 +60,39 @@ const ProductsInventoryPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [inventoryData, setInventoryData] = useState<any[]>([]);
-  const [selectedInventoryId, setSelectedInventoryId] = useState<number | null>(null);
+  const [selectedInventoryId, setSelectedInventoryId] = useState<number | null>(
+    null
+  );
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState({
     ownership: "",
     status: "",
+    movementStatus: "",
     initialSurveyDate: "",
-    company: ""
+    company: "",
   });
   const [tempFilters, setTempFilters] = useState({
     ownership: "",
     status: "",
+    movementStatus: "",
     initialSurveyDate: "",
-    company: ""
+    company: "",
   });
   const [inventoryPermissions, setInventoryPermissions] = useState<any>(null);
-  const [containerEditStatus, setContainerEditStatus] = useState<{ [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } }>({});
+  const [containerEditStatus, setContainerEditStatus] = useState<{
+    [key: number]: {
+      canEdit: boolean;
+      reason: string | null;
+      action: string | null;
+      canDelete: boolean;
+      deleteReason: string | null;
+    };
+  }>({});
   const [availableCompanies, setAvailableCompanies] = useState<any[]>([]);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
+  const [statusFilteredData, setStatusFilteredData] = useState<any[]>([]);
+  const [loadingStatusData, setLoadingStatusData] = useState(false);
 
   useEffect(() => {
     const userId = localStorage.getItem("userId");
@@ -82,7 +109,6 @@ const ProductsInventoryPage = () => {
     }
   }, []);
 
-
   const handleAddInventoryWithPermission = () => {
     if (inventoryPermissions?.canCreate) {
       setSelectedInventoryId(null);
@@ -92,24 +118,27 @@ const ProductsInventoryPage = () => {
     }
   };
 
-
   const checkContainerEditStatus = async (id: number) => {
     try {
-      const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
-      const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+      const editResponse = await axios.get(
+        `http://localhost:8000/inventory/${id}/can-edit`
+      );
+      const deleteResponse = await axios.get(
+        `http://localhost:8000/inventory/${id}/can-delete`
+      );
 
-      setContainerEditStatus(prev => ({
+      setContainerEditStatus((prev) => ({
         ...prev,
         [id]: {
           canEdit: editResponse.data.canEdit,
           reason: editResponse.data.reason,
           action: editResponse.data.action,
           canDelete: deleteResponse.data.canDelete,
-          deleteReason: deleteResponse.data.reason
-        }
+          deleteReason: deleteResponse.data.reason,
+        },
       }));
     } catch (error) {
-      console.error('Error checking container edit status:', error);
+      console.error("Error checking container edit status:", error);
     }
   };
 
@@ -121,14 +150,16 @@ const ProductsInventoryPage = () => {
 
     // Check edit status on-demand when button is clicked
     try {
-      const editResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-edit`);
+      const editResponse = await axios.get(
+        `http://localhost:8000/inventory/${id}/can-edit`
+      );
       if (!editResponse.data.canEdit) {
         alert(editResponse.data.reason || "Cannot edit this container.");
         return;
       }
       handleEditClick(id);
     } catch (error) {
-      console.error('Error checking edit status:', error);
+      console.error("Error checking edit status:", error);
       alert("Error checking container status. Please try again.");
     }
   };
@@ -141,18 +172,19 @@ const ProductsInventoryPage = () => {
 
     // Check delete status on-demand when button is clicked
     try {
-      const deleteResponse = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+      const deleteResponse = await axios.get(
+        `http://localhost:8000/inventory/${id}/can-delete`
+      );
       if (!deleteResponse.data.canDelete) {
         alert(deleteResponse.data.reason || "Cannot delete this container.");
         return;
       }
       handleDelete(id);
     } catch (error) {
-      console.error('Error checking delete status:', error);
+      console.error("Error checking delete status:", error);
       alert("Error checking container status. Please try again.");
     }
   };
-
 
   const handleAddContainerClick = () => {
     setSelectedInventoryId(null);
@@ -166,15 +198,21 @@ const ProductsInventoryPage = () => {
 
   const fetchInventoryData = async () => {
     try {
-      const response = await axios.get('http://localhost:8000/inventory');
-      setInventoryData(response.data);
+      const response = await axios.get("http://localhost:8000/inventory");
+      // Sort by updatedAt descending (most recently updated first)
+      const sortedData = response.data.sort((a: any, b: any) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return dateB - dateA; // Descending order
+      });
+      setInventoryData(sortedData);
 
       // Check edit/delete status for visual indication (gray buttons) but don't block loading
-      const editStatusPromises = response.data.map(async (item: any) => {
+      const editStatusPromises = sortedData.map(async (item: any) => {
         try {
           const [editResponse, deleteResponse] = await Promise.all([
             axios.get(`http://localhost:8000/inventory/${item.id}/can-edit`),
-            axios.get(`http://localhost:8000/inventory/${item.id}/can-delete`)
+            axios.get(`http://localhost:8000/inventory/${item.id}/can-delete`),
           ]);
 
           return {
@@ -184,11 +222,14 @@ const ProductsInventoryPage = () => {
               reason: editResponse.data.reason,
               action: editResponse.data.action,
               canDelete: deleteResponse.data.canDelete,
-              deleteReason: deleteResponse.data.reason
-            }
+              deleteReason: deleteResponse.data.reason,
+            },
           };
         } catch (error) {
-          console.error(`Error checking status for container ${item.id}:`, error);
+          console.error(
+            `Error checking status for container ${item.id}:`,
+            error
+          );
           return {
             id: item.id,
             editStatus: {
@@ -196,8 +237,8 @@ const ProductsInventoryPage = () => {
               reason: null,
               action: null,
               canDelete: true,
-              deleteReason: null
-            }
+              deleteReason: null,
+            },
           };
         }
       });
@@ -206,17 +247,16 @@ const ProductsInventoryPage = () => {
       setLoading(false);
 
       // Update button states in background (non-blocking)
-      Promise.all(editStatusPromises).then(editResults => {
+      Promise.all(editStatusPromises).then((editResults) => {
         const editStatusMap = editResults.reduce((acc, item) => {
           acc[item.id] = item.editStatus;
           return acc;
-        }, {} as { [key: number]: { canEdit: boolean, reason: string | null, action: string | null, canDelete: boolean, deleteReason: string | null } });
+        }, {} as { [key: number]: { canEdit: boolean; reason: string | null; action: string | null; canDelete: boolean; deleteReason: string | null } });
 
         setContainerEditStatus(editStatusMap);
       });
-
     } catch (error) {
-      console.error('Error fetching inventory data:', error);
+      console.error("Error fetching inventory data:", error);
       setLoading(false);
     }
   };
@@ -228,8 +268,9 @@ const ProductsInventoryPage = () => {
 
   const handleDelete = async (id: number): Promise<void> => {
     try {
-
-      const deletionCheck = await axios.get(`http://localhost:8000/inventory/${id}/can-delete`);
+      const deletionCheck = await axios.get(
+        `http://localhost:8000/inventory/${id}/can-delete`
+      );
 
       if (!deletionCheck.data.canDelete) {
         alert(deletionCheck.data.reason);
@@ -239,10 +280,13 @@ const ProductsInventoryPage = () => {
       await axios.delete(`http://localhost:8000/inventory/${id}`);
       // If deletion is allowed, proceed with deletion;
       setInventoryData(inventoryData.filter((item) => item.id !== id));
-      alert('Inventory deleted successfully');
+      alert("Inventory deleted successfully");
     } catch (error: any) {
-      console.error('Error deleting inventory:', error.response?.data || error);
-      alert('Failed to delete inventory: ' + (error.response?.data?.message || error.message));
+      console.error("Error deleting inventory:", error.response?.data || error);
+      alert(
+        "Failed to delete inventory: " +
+          (error.response?.data?.message || error.message)
+      );
     }
   };
 
@@ -266,13 +310,37 @@ const ProductsInventoryPage = () => {
 
     setLoadingCompanies(true);
     try {
-      const response = await axios.get(`http://localhost:8000/inventory/companies/${ownershipType}`);
+      const response = await axios.get(
+        `http://localhost:8000/inventory/companies/${ownershipType}`
+      );
       setAvailableCompanies(response.data);
     } catch (error) {
-      console.error('Error fetching companies:', error);
+      console.error("Error fetching companies:", error);
       setAvailableCompanies([]);
     } finally {
       setLoadingCompanies(false);
+    }
+  };
+
+  const fetchContainersByStatus = async (movementStatus: string) => {
+    if (!movementStatus || movementStatus === "") {
+      setStatusFilteredData([]);
+      return;
+    }
+
+    setLoadingStatusData(true);
+    try {
+      const response = await axios.get(
+        `http://localhost:8000/inventory/by-status/${encodeURIComponent(
+          movementStatus
+        )}`
+      );
+      setStatusFilteredData(response.data);
+    } catch (error) {
+      console.error("Error fetching containers by status:", error);
+      setStatusFilteredData([]);
+    } finally {
+      setLoadingStatusData(false);
     }
   };
 
@@ -282,49 +350,236 @@ const ProductsInventoryPage = () => {
     fetchInventoryData();
   };
 
-  const filteredData = inventoryData.filter((item) => {
-    const matchesSearch = item.containerNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.containerType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.containerClass.toLowerCase().includes(searchTerm.toLowerCase());
+  // Excel download function
+  const handleDownloadExcel = () => {
+    try {
+      // Prepare data for Excel export
+      const excelData = filteredData.map((item) => {
+        // Get ownership type
+        const ownershipType =
+          item.leasingInfo?.length > 0 && item.leasingInfo[0].ownershipType
+            ? item.leasingInfo[0].ownershipType === "Leased"
+              ? "Lease"
+              : item.leasingInfo[0].ownershipType
+            : item.ownershipType === "Leased"
+            ? "Lease"
+            : item.ownershipType ||
+              (item.leasingInfo?.length > 0 ? "Lease" : "Own");
 
-    const matchesOwnership = !filters.ownership ||
-      (item.leasingInfo?.[0]?.ownershipType || item.ownershipType || "Own").toLowerCase() === filters.ownership.toLowerCase();
+        // Get company name
+        const companyName =
+          item.leasingInfo?.[0]?.ownershipType === "Own"
+            ? "RISTAR"
+            : item.leasingInfo?.[0]
+            ? getCompanyName(item.leasingInfo[0].leasoraddressbookId)
+            : "N/A";
 
-    const matchesStatus = !filters.status ||
-      item.status.toLowerCase() === filters.status.toLowerCase();
+        // Format dates
+        const formatDate = (dateString: string) => {
+          if (!dateString) return "";
+          try {
+            return new Date(dateString).toLocaleDateString("en-GB"); // DD/MM/YYYY format
+          } catch {
+            return dateString;
+          }
+        };
 
-    const matchesInitialSurveyDate = !filters.initialSurveyDate ||
-      (item.InitialSurveyDate && item.InitialSurveyDate.startsWith(filters.initialSurveyDate));
+        // Get on hire location and depot from leasing info
+        const onHireLocation = item.leasingInfo?.[0]?.port?.portName || "";
+        const onHireDepot =
+          item.leasingInfo?.[0]?.onHireDepotAddressBook?.companyName || "";
 
-    const matchesCompany = !filters.company || (() => {
-      if (filters.ownership.toLowerCase() === 'own') {
-        return filters.company.toLowerCase() === 'ristar';
-      } else if (filters.ownership.toLowerCase() === 'lease' || filters.ownership.toLowerCase() === 'leased') {
-        const companyName = item.leasingInfo?.[0] ? getCompanyName(item.leasingInfo[0].leasoraddressbookId) : '';
-        return companyName.toLowerCase() === filters.company.toLowerCase();
-      }
-      return true;
-    })();
+        // Get periodic tank certificate data
+        const certificate = item.periodicTankCertificates?.[0];
+        const inspectionDate = certificate?.inspectionDate
+          ? formatDate(certificate.inspectionDate)
+          : "";
+        const inspectionType = certificate?.inspectionType || "";
+        const nextDueDate = certificate?.nextDueDate
+          ? formatDate(certificate.nextDueDate)
+          : "";
+        const certificateFile = certificate?.certificate || "";
 
-    return matchesSearch && matchesOwnership && matchesStatus && matchesInitialSurveyDate && matchesCompany;
-  });
+        // Get on hire report data
+        const report = item.onHireReport?.[0];
+        const reportDate = report?.reportDate
+          ? formatDate(report.reportDate)
+          : "";
+        const reportDocument = report?.reportDocument || "";
+
+        return {
+          Ownership: ownershipType,
+          "Owner/Leaser": companyName,
+          "Container No": item.containerNumber || "",
+          Category: item.containerCategory || "",
+          Type: item.containerType || "",
+          "Container Size": item.containerSize || "",
+          Class: item.containerClass || "",
+          Capacity: item.containerCapacity || "",
+          "Container Unit": item.capacityUnit || "",
+          Status: item.status || "",
+          Manufacturer: item.manufacturer || "",
+          "Build Year": item.buildYear || "",
+          "Gross Weight": item.grossWeight || "",
+          "Tare Weight": item.tareWeight || "",
+          "Initial Survey Date": formatDate(item.InitialSurveyDate),
+          "On Hire Location": onHireLocation,
+          "On Hire Depot": onHireDepot,
+          "Off Hire Date": formatDate(item.leasingInfo?.[0]?.offHireDate),
+          "On Hire Date": formatDate(item.leasingInfo?.[0]?.onHireDate),
+          "Leasing Ref No": item.leasingInfo?.[0]?.leasingRefNo || "",
+          "Lease Rent Per Day": item.leasingInfo?.[0]?.leaseRentPerDay || "",
+          Remarks: item.leasingInfo?.[0]?.remarks || "",
+          // Periodic Tank Certificates columns
+          "Inspection Date": inspectionDate,
+          "Inspection Type": inspectionType,
+          "Next Due Date": nextDueDate,
+          "Certificate File": certificateFile,
+          // On Hire Reports columns
+          "Report Date": reportDate,
+          "Report Document": reportDocument,
+        };
+      });
+
+      // Create workbook and worksheet
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(excelData);
+
+      // Set column widths
+      const colWidths = [
+        { wch: 12 }, // Ownership
+        { wch: 20 }, // Owner/Leaser
+        { wch: 15 }, // Container No
+        { wch: 12 }, // Category
+        { wch: 15 }, // Type
+        { wch: 12 }, // Container Size
+        { wch: 10 }, // Class
+        { wch: 12 }, // Capacity
+        { wch: 12 }, // Container Unit
+        { wch: 10 }, // Status
+        { wch: 15 }, // Manufacturer
+        { wch: 10 }, // Build Year
+        { wch: 12 }, // Gross Weight
+        { wch: 12 }, // Tare Weight
+        { wch: 18 }, // Initial Survey Date
+        { wch: 20 }, // On Hire Location
+        { wch: 20 }, // On Hire Depot
+        { wch: 15 }, // Off Hire Date
+        { wch: 15 }, // On Hire Date
+        { wch: 15 }, // Leasing Ref No
+        { wch: 15 }, // Lease Rent Per Day
+        { wch: 30 }, // Remarks
+        // Periodic Tank Certificates columns
+        { wch: 15 }, // Inspection Date
+        { wch: 15 }, // Inspection Type
+        { wch: 15 }, // Next Due Date
+        { wch: 20 }, // Certificate File
+        // On Hire Reports columns
+        { wch: 15 }, // Report Date
+        { wch: 20 }, // Report Document
+      ];
+      ws["!cols"] = colWidths;
+
+      // Add worksheet to workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Inventory Data");
+
+      // Generate filename with current date
+      const currentDate = new Date().toISOString().split("T")[0];
+      const filename = `Inventory_Data_${currentDate}.xlsx`;
+
+      // Download the file
+      XLSX.writeFile(wb, filename);
+    } catch (error) {
+      console.error("Error downloading Excel file:", error);
+      alert("Failed to download Excel file. Please try again.");
+    }
+  };
+
+  const filteredData = (() => {
+    // Choose dataset based on movement status filter
+    const baseData = filters.movementStatus
+      ? statusFilteredData
+      : inventoryData;
+
+    return baseData.filter((item) => {
+      const matchesSearch =
+        item.containerNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.containerType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        item.containerClass.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchesOwnership =
+        !filters.ownership ||
+        (
+          item.leasingInfo?.[0]?.ownershipType ||
+          item.ownershipType ||
+          "Own"
+        ).toLowerCase() === filters.ownership.toLowerCase();
+
+      const matchesStatus =
+        !filters.status ||
+        item.status.toLowerCase() === filters.status.toLowerCase();
+
+      const matchesInitialSurveyDate =
+        !filters.initialSurveyDate ||
+        (item.InitialSurveyDate &&
+          item.InitialSurveyDate.startsWith(filters.initialSurveyDate));
+
+      const matchesCompany =
+        !filters.company ||
+        (() => {
+          if (filters.ownership.toLowerCase() === "own") {
+            return filters.company.toLowerCase() === "ristar";
+          } else if (
+            filters.ownership.toLowerCase() === "lease" ||
+            filters.ownership.toLowerCase() === "leased"
+          ) {
+            const companyName = item.leasingInfo?.[0]
+              ? getCompanyName(item.leasingInfo[0].leasoraddressbookId)
+              : "";
+            return companyName.toLowerCase() === filters.company.toLowerCase();
+          }
+          return true;
+        })();
+
+      return (
+        matchesSearch &&
+        matchesOwnership &&
+        matchesStatus &&
+        matchesInitialSurveyDate &&
+        matchesCompany
+      );
+    });
+  })();
 
   const handleApplyFilters = () => {
     setFilters(tempFilters);
     setShowFilterModal(false);
+    // Fetch movement status dataset when movement status filter is selected
+    if (tempFilters.movementStatus) {
+      fetchContainersByStatus(tempFilters.movementStatus);
+    } else {
+      setStatusFilteredData([]);
+    }
   };
 
   const handleResetTempFilters = () => {
     setTempFilters({
       ownership: "",
       status: "",
+      movementStatus: "",
       initialSurveyDate: "",
-      company: ""
+      company: "",
     });
     setAvailableCompanies([]);
+    setStatusFilteredData([]);
   };
 
-  const hasActiveFilters = filters.ownership || filters.status || filters.initialSurveyDate || filters.company;
+  const hasActiveFilters =
+    filters.ownership ||
+    filters.status ||
+    filters.movementStatus ||
+    filters.initialSurveyDate ||
+    filters.company;
 
   // Pagination logic
   const totalItems = filteredData.length;
@@ -341,7 +596,7 @@ const ProductsInventoryPage = () => {
   // Fetch companies when filter modal opens with existing ownership filter
   useEffect(() => {
     if (showFilterModal && filters.ownership) {
-      setTempFilters(prev => ({ ...prev, ownership: filters.ownership }));
+      setTempFilters((prev) => ({ ...prev, ownership: filters.ownership }));
       fetchCompaniesByOwnershipType(filters.ownership);
     }
   }, [showFilterModal]);
@@ -367,27 +622,42 @@ const ProductsInventoryPage = () => {
           {/* Filter Button with Count */}
           <Button
             onClick={() => setShowFilterModal(true)}
-            className={`flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none ${hasActiveFilters
-                ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                : 'bg-white dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-black dark:text-white'
-              }`}
+            className={`flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none ${
+              hasActiveFilters
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
+                : "bg-white dark:bg-neutral-700 hover:bg-gray-200 dark:hover:bg-neutral-600 text-black dark:text-white"
+            }`}
           >
             <Filter className="h-4 w-4" />
             Filter
-
           </Button>
           <span className="flex items-center gap-2 px-4 py-2 cursor-pointer rounded-lg transition-colors border border-neutral-600 focus:border-blue-500 focus:outline-none">
             {hasActiveFilters ? filteredCount : totalCount}
           </span>
         </div>
 
-        <Button
-          className={`bg-blue-600 hover:bg-blue-700 text-white ${!inventoryPermissions?.canCreate ? "opacity-50 cursor-not-allowed" : ""}`}
-          onClick={handleAddInventoryWithPermission}
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Container
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleDownloadExcel}
+            className="bg-green-600 hover:bg-green-700 text-white cursor-pointer flex items-center gap-2 px-4 py-2 rounded-lg"
+            disabled={filteredData.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Excel
+          </Button>
+
+          <Button
+            className={`bg-blue-600 hover:bg-blue-700 text-white cursor-pointer${
+              !inventoryPermissions?.canCreate
+                ? "opacity-50 cursor-not-allowed"
+                : ""
+            }`}
+            onClick={handleAddInventoryWithPermission}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Container
+          </Button>
+        </div>
       </div>
 
       {/* Active Filters Display */}
@@ -398,7 +668,9 @@ const ProductsInventoryPage = () => {
             <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
               Ownership: {filters.ownership}
               <button
-                onClick={() => setFilters(prev => ({ ...prev, ownership: "" }))}
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, ownership: "" }))
+                }
                 className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -409,8 +681,21 @@ const ProductsInventoryPage = () => {
             <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
               Status: {filters.status}
               <button
-                onClick={() => setFilters(prev => ({ ...prev, status: "" }))}
+                onClick={() => setFilters((prev) => ({ ...prev, status: "" }))}
                 className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </span>
+          )}
+          {filters.movementStatus && (
+            <span className="bg-green-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
+              Movement Status: {filters.movementStatus}
+              <button
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, movementStatus: "" }))
+                }
+                className="ml-1 hover:bg-green-700 rounded-full p-0.5 cursor-pointer"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -420,7 +705,9 @@ const ProductsInventoryPage = () => {
             <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
               Survey Date: {filters.initialSurveyDate}
               <button
-                onClick={() => setFilters(prev => ({ ...prev, initialSurveyDate: "" }))}
+                onClick={() =>
+                  setFilters((prev) => ({ ...prev, initialSurveyDate: "" }))
+                }
                 className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -431,7 +718,7 @@ const ProductsInventoryPage = () => {
             <span className="bg-blue-600 text-white px-2 py-1 rounded text-sm flex items-center gap-1">
               Company: {filters.company}
               <button
-                onClick={() => setFilters(prev => ({ ...prev, company: "" }))}
+                onClick={() => setFilters((prev) => ({ ...prev, company: "" }))}
                 className="ml-1 hover:bg-blue-700 rounded-full p-0.5 cursor-pointer"
               >
                 <X className="h-3 w-3" />
@@ -445,67 +732,116 @@ const ProductsInventoryPage = () => {
         <Table>
           <TableHeader className="bg-white dark:bg-neutral-900">
             <TableRow>
-              <TableHead className="text-black dark:text-neutral-200">Ownership</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Owner/Leaser</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Container No</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Category</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Type</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Class</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Capacity</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Next Inspection Due Date</TableHead>
-              <TableHead className="text-black dark:text-neutral-200">Off Hire Date</TableHead>
-              <TableHead className="text-black dark:text-neutral-200 text-center">Status</TableHead>
-              <TableHead className="text-black dark:text-neutral-200 text-right text-center">Actions</TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Ownership
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Owner/Leaser
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Container No
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Category
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Type
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Class
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Capacity
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Next Inspection Due Date
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200">
+                Off Hire Date
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200 text-center">
+                Status
+              </TableHead>
+              <TableHead className="text-black dark:text-neutral-200 text-right text-center">
+                Actions
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-4 text-neutral-400">
+                <TableCell
+                  colSpan={11}
+                  className="text-center py-4 text-neutral-400"
+                >
                   Loading...
                 </TableCell>
               </TableRow>
             ) : filteredData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={11} className="text-center py-4 text-neutral-400">
+                <TableCell
+                  colSpan={11}
+                  className="text-center py-4 text-neutral-400"
+                >
                   No inventory data found
                 </TableCell>
               </TableRow>
             ) : (
               paginatedData.map((item) => (
-                <TableRow key={item.id} className="border-b border-border bg-background text-foreground">
+                <TableRow
+                  key={item.id}
+                  className="border-b border-border bg-background text-foreground"
+                >
                   <TableCell className="bg-background text-foreground">
                     {/* First check if there are leasing records with ownershipType */}
-                    {item.leasingInfo?.length > 0 && item.leasingInfo[0].ownershipType
-                      ? (item.leasingInfo[0].ownershipType === "Leased" ? "Lease" : item.leasingInfo[0].ownershipType)
+                    {item.leasingInfo?.length > 0 &&
+                    item.leasingInfo[0].ownershipType
+                      ? item.leasingInfo[0].ownershipType === "Leased"
+                        ? "Lease"
+                        : item.leasingInfo[0].ownershipType
                       : /* If no leasing records or no ownershipType in leasing record, use the top-level ownershipType */
-                      (item.ownershipType === "Leased" ? "Lease" : item.ownershipType ||
+                      item.ownershipType === "Leased"
+                      ? "Lease"
+                      : item.ownershipType ||
                         /* If there are leasing records but no ownershipType, default to "Lease" */
-                        (item.leasingInfo?.length > 0 ? "Lease" : "Own"))}
+                        (item.leasingInfo?.length > 0 ? "Lease" : "Own")}
                   </TableCell>
                   <TableCell className="bg-background text-foreground">
                     {item.leasingInfo?.[0]?.ownershipType === "Own"
                       ? "RISTAR"
                       : item.leasingInfo?.[0]
-                        ? getCompanyName(item.leasingInfo[0].leasoraddressbookId)
-                        : "N/A"}
+                      ? getCompanyName(item.leasingInfo[0].leasoraddressbookId)
+                      : "N/A"}
                   </TableCell>
 
-
-                  <TableCell className="bg-background text-foreground">{item.containerNumber}</TableCell>
-                  <TableCell className="bg-background text-foreground">{item.containerCategory}</TableCell>
-                  <TableCell className="bg-background text-foreground">{item.containerType}</TableCell>
-                  <TableCell className="bg-background text-foreground">{item.containerClass}</TableCell>
-                  <TableCell className="bg-background text-foreground">{item.containerCapacity}</TableCell>
+                  <TableCell className="bg-background text-foreground">
+                    {item.containerNumber}
+                  </TableCell>
+                  <TableCell className="bg-background text-foreground">
+                    {item.containerCategory}
+                  </TableCell>
+                  <TableCell className="bg-background text-foreground">
+                    {item.containerType}
+                  </TableCell>
+                  <TableCell className="bg-background text-foreground">
+                    {item.containerClass}
+                  </TableCell>
+                  <TableCell className="bg-background text-foreground">
+                    {item.containerCapacity}
+                  </TableCell>
                   <TableCell className="bg-background text-foreground">
                     {item.periodicTankCertificates?.[0]?.nextDueDate
-                      ? new Date(item.periodicTankCertificates[0].nextDueDate).toLocaleDateString()
-                      : 'N/A'}
+                      ? new Date(
+                          item.periodicTankCertificates[0].nextDueDate
+                        ).toLocaleDateString()
+                      : "N/A"}
                   </TableCell>
                   <TableCell className="bg-background text-foreground">
                     {item.leasingInfo?.[0]?.offHireDate
-                      ? new Date(item.leasingInfo[0].offHireDate).toLocaleDateString()
-                      : 'N/A'}
+                      ? new Date(
+                          item.leasingInfo[0].offHireDate
+                        ).toLocaleDateString()
+                      : "N/A"}
                   </TableCell>
                   <TableCell className="bg-background text-foreground">
                     <StatusBadge status={item.status} />
@@ -515,11 +851,15 @@ const ProductsInventoryPage = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-8 w-8 ${!inventoryPermissions?.canEdit || !containerEditStatus[item.id]?.canEdit
+                        className={`h-8 w-8 ${
+                          !inventoryPermissions?.canEdit ||
+                          !containerEditStatus[item.id]?.canEdit
                             ? "text-gray-400 opacity-50 cursor-pointer"
                             : "text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 dark:hover:bg-blue-900/40"
-                          }`}
-                        onClick={() => handleEditInventoryWithPermission(item.id)}
+                        }`}
+                        onClick={() =>
+                          handleEditInventoryWithPermission(item.id)
+                        }
                       >
                         <Pencil size={16} />
                       </Button>
@@ -527,15 +867,18 @@ const ProductsInventoryPage = () => {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-8 w-8 ${!inventoryPermissions?.canDelete || !containerEditStatus[item.id]?.canDelete
+                        className={`h-8 w-8 ${
+                          !inventoryPermissions?.canDelete ||
+                          !containerEditStatus[item.id]?.canDelete
                             ? "text-gray-400 opacity-50 cursor-pointer"
                             : "text-red-400 hover:text-red-300 hover:bg-red-900/40 dark:hover:bg-red-900/40"
-                          }`}
-                        onClick={() => handleDeleteInventoryWithPermission(item.id)}
+                        }`}
+                        onClick={() =>
+                          handleDeleteInventoryWithPermission(item.id)
+                        }
                       >
                         <Trash2 size={16} />
                       </Button>
-
                     </div>
                   </TableCell>
                 </TableRow>
@@ -549,13 +892,14 @@ const ProductsInventoryPage = () => {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 px-4">
           <div className="text-sm text-gray-600 dark:text-gray-400">
-            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
+            Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of{" "}
+            {totalItems} results
           </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
               className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
             >
@@ -596,7 +940,9 @@ const ProductsInventoryPage = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              onClick={() =>
+                setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+              }
               disabled={currentPage === totalPages}
               className="bg-white dark:bg-neutral-900 border-neutral-800 text-black dark:text-white cursor-pointer"
             >
@@ -606,10 +952,13 @@ const ProductsInventoryPage = () => {
         </div>
       )}
 
-      <Dialog open={showModal} onOpenChange={(open) => {
-        if (!open) handleCloseModal();
-        setShowModal(open);
-      }}>
+      <Dialog
+        open={showModal}
+        onOpenChange={(open) => {
+          if (!open) handleCloseModal();
+          setShowModal(open);
+        }}
+      >
         <DialogContent
           className="
       bg-neutral-900 border border-neutral-800
@@ -619,31 +968,37 @@ const ProductsInventoryPage = () => {
           style={{
             // Narrower width to prevent horizontal scrolling
             width: "85vw",
-            maxWidth: "950px"
+            maxWidth: "950px",
           }}
         >
           <DialogTitle className="sr-only">
-            {selectedInventoryId ? 'Edit Container' : 'Add Container'}
+            {selectedInventoryId ? "Edit Container" : "Add Container"}
           </DialogTitle>
           {showModal && (
             <AddContainerForm
               onClose={handleCloseModal}
               inventoryId={selectedInventoryId || 0}
-              editData={selectedInventoryId ? inventoryData.find(item => item.id === selectedInventoryId) : null}
+              editData={
+                selectedInventoryId
+                  ? inventoryData.find(
+                      (item) => item.id === selectedInventoryId
+                    )
+                  : null
+              }
               isEditMode={!!selectedInventoryId}
             />
           )}
         </DialogContent>
       </Dialog>
 
-
-
       {/* Filter Modal */}
       {showFilterModal && (
         <div className="fixed inset-0 bg-opacity-50 flex items-center justify-center z-50 backdrop-blur-lg">
           <div className="bg-white dark:bg-neutral-800 rounded-lg p-6 w-96 max-w-md mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Filter Inventory</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                Filter Inventory
+              </h3>
               <Button
                 variant="ghost"
                 size="icon"
@@ -663,7 +1018,11 @@ const ProductsInventoryPage = () => {
                 <select
                   value={tempFilters.ownership}
                   onChange={(e) => {
-                    setTempFilters(prev => ({ ...prev, ownership: e.target.value, company: "" }));
+                    setTempFilters((prev) => ({
+                      ...prev,
+                      ownership: e.target.value,
+                      company: "",
+                    }));
                     fetchCompaniesByOwnershipType(e.target.value);
                   }}
                   className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
@@ -675,14 +1034,20 @@ const ProductsInventoryPage = () => {
               </div>
 
               {/* Company Filter - Only show when ownership type is selected */}
-              {(tempFilters.ownership === "Own" || tempFilters.ownership === "Leased") && (
+              {(tempFilters.ownership === "Own" ||
+                tempFilters.ownership === "Leased") && (
                 <div>
                   <label className="block text-sm font-medium text-black-300 mb-2">
                     Company
                   </label>
                   <select
                     value={tempFilters.company}
-                    onChange={(e) => setTempFilters(prev => ({ ...prev, company: e.target.value }))}
+                    onChange={(e) =>
+                      setTempFilters((prev) => ({
+                        ...prev,
+                        company: e.target.value,
+                      }))
+                    }
                     disabled={loadingCompanies}
                     className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none disabled:opacity-50"
                   >
@@ -694,7 +1059,9 @@ const ProductsInventoryPage = () => {
                     ))}
                   </select>
                   {loadingCompanies && (
-                    <p className="text-xs text-gray-400 mt-1">Loading companies...</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Loading companies...
+                    </p>
                   )}
                 </div>
               )}
@@ -706,12 +1073,39 @@ const ProductsInventoryPage = () => {
                 </label>
                 <select
                   value={tempFilters.status}
-                  onChange={(e) => setTempFilters(prev => ({ ...prev, status: e.target.value }))}
+                  onChange={(e) =>
+                    setTempFilters((prev) => ({
+                      ...prev,
+                      status: e.target.value,
+                    }))
+                  }
                   className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
                 >
                   <option value="">All Status</option>
                   <option value="Active">Active</option>
                   <option value="Inactive">Inactive</option>
+                </select>
+              </div>
+
+              {/* Movement Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-black-300 mb-2">
+                  Movement Status
+                </label>
+                <select
+                  value={tempFilters.movementStatus}
+                  onChange={(e) =>
+                    setTempFilters((prev) => ({
+                      ...prev,
+                      movementStatus: e.target.value,
+                    }))
+                  }
+                  className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
+                >
+                  <option value="">All Movement Status</option>
+                  <option value="Available">Available</option>
+                  <option value="Allotted">Allotted</option>
+                  <option value="Other Status Cycle">Other Status Cycle</option>
                 </select>
               </div>
 
@@ -724,7 +1118,12 @@ const ProductsInventoryPage = () => {
                   type="date"
                   placeholder="Select date"
                   value={tempFilters.initialSurveyDate}
-                  onChange={(e) => setTempFilters(prev => ({ ...prev, initialSurveyDate: e.target.value }))}
+                  onChange={(e) =>
+                    setTempFilters((prev) => ({
+                      ...prev,
+                      initialSurveyDate: e.target.value,
+                    }))
+                  }
                   className="w-full px-3 py-2 bg-white dark:bg-neutral-700 text-black dark:text-white rounded border border-neutral-600 focus:border-blue-500 focus:outline-none"
                 />
                 <p className="text-xs text-black-400 mt-1">

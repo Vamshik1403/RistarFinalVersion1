@@ -155,6 +155,7 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
     tareWeight: "",
     initialSurveyDate: "",
     onHireDepotaddressbookId: "",
+    onHireDepotName: "",
     onHireLocation: "",
     onHireDate: "",
     offHireDate: "",
@@ -190,6 +191,7 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
     leasors: false,
     depots: false
   });
+  const [hasInitializedEdit, setHasInitializedEdit] = useState(false);
 
   useEffect(() => {
     if (editData) {
@@ -198,7 +200,8 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
   }, [editData]);
 
   useEffect(() => {
-    if (tempEditData && dataLoadingComplete.ports && dataLoadingComplete.leasors && dataLoadingComplete.depots) {
+    if (tempEditData && dataLoadingComplete.ports && dataLoadingComplete.leasors && dataLoadingComplete.depots && !hasInitializedEdit) {
+      console.log("🚀 Initializing edit form with data...");
 
       let ownershipType = "";
       if (tempEditData.leasingInfo && tempEditData.leasingInfo.length > 0) {
@@ -276,7 +279,7 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
           setFormData(prev => ({
             ...prev,
-            onHireLocation: portName, // ✅ guaranteed to match dropdown value
+            onHireLocation: portName,
             onHireDepotaddressbookId: depotId,
             onHireDepotName: depotName
           }));
@@ -287,13 +290,10 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
             setSelectedHireDepotId(numericDepotId);
           }
 
-          // If we have a port ID, filter depots based on that port
+          // If we have a port ID, filter depots based on that port - do this IMMEDIATELY, not with setTimeout
           if (portId) {
-            console.log("Filtering depots for port ID:", portId);
-            // Add delay to ensure depots are loaded before filtering
-            setTimeout(() => {
-              filterDepotsByPort(Number(portId));
-            }, 300); // Increased delay
+            console.log(`🔵 [OWN Init] Filtering depots for port: ${portName} (ID: ${portId})`);
+            filterDepotsByPort(Number(portId));
           }
         }
 
@@ -307,7 +307,7 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
           setFormData(prev => ({
             ...prev,
-            onHireLocation: portName, // ✅ guaranteed to match dropdown value
+            onHireLocation: portName,
             onHireDepotaddressbookId: depotId,
             onHireDepotName: record.onHireDepotAddressBook?.companyName || ""
           }));
@@ -318,13 +318,10 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
             setSelectedHireDepotId(numericDepotId);
           }
 
-          // If we have a port ID, filter depots based on that port
+          // If we have a port ID, filter depots based on that port - do this IMMEDIATELY, not with setTimeout
           if (record.portId) {
-            console.log("Filtering depots for port ID:", record.portId);
-            // Add delay to ensure depots are loaded before filtering
-            setTimeout(() => {
-              filterDepotsByPort(record.portId);
-            }, 300); // Increased delay
+            console.log(`🟢 [LEASE Init] Filtering depots for port: ${portName} (ID: ${record.portId})`);
+            filterDepotsByPort(record.portId);
           }
         }
       }
@@ -353,17 +350,8 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
         setLeasingRecords(existingLeasingRecords);
 
-        // Filter depots for each record that has a port
-        existingLeasingRecords.forEach((record: any, index: number) => {
-          if (record.portId) {
-            console.log(`Setting up depot filtering for record ${index} with port ID ${record.portId}`);
-            // Set current index and filter depots for this specific record
-            setTimeout(() => {
-              setCurrentLeasingRecordIndex(index);
-              filterDepotsByPort(record.portId);
-            }, 1000 + (index * 300)); // Increased delay and stagger
-          }
-        });
+        // DON'T filter depots here - it interferes with the main form's depot filtering
+        // The depot filtering for leasing records happens when user interacts with the leasing table
       } else {
         // Handle "Own" containers without leasing records (e.g., CSV imports)
         if (displayOwnership === "Own") {
@@ -416,10 +404,8 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
           // If we have a port ID, filter depots based on that port
           if (portId) {
-            console.log("Filtering depots for port ID (no leasing):", portId);
-            setTimeout(() => {
-              filterDepotsByPort(Number(portId));
-            }, 300);
+            console.log(`🟡 [OWN No Leasing] Filtering depots for port: ${portName} (ID: ${portId})`);
+            filterDepotsByPort(Number(portId));
           }
         }
       }
@@ -454,8 +440,10 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
       }
 
       setTempEditData(null);
+      setHasInitializedEdit(true);
+      console.log("✅ Edit form initialization complete!");
     }
-  }, [tempEditData, dataLoadingComplete]);
+  }, [tempEditData, dataLoadingComplete, hasInitializedEdit]);
 
   useEffect(() => {
     const fetchPorts = async () => {
@@ -540,18 +528,30 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
   // Function to filter depots by port ID
   const filterDepotsByPort = (portId: number) => {
+    console.log(`🔍 Filtering depots for port ID: ${portId}`);
+    console.log(`📦 Total depot terminals available:`, allDepotTerminals.length);
 
     // Filter depot terminals that are associated with this port
     const filteredDepots = allDepotTerminals.filter(depot => {
       // Check if depot has businessPorts and if any of them match the selected portId
       if (!depot.businessPorts || !Array.isArray(depot.businessPorts)) {
+        console.log(`❌ ${depot.companyName} - No businessPorts data`);
         return false;
       }
 
       const hasMatchingPort = depot.businessPorts.some(bp => {
         const bpPortId = bp.portId || (bp.port && bp.port.id);
-        return Number(bpPortId) === Number(portId);
+        const matches = Number(bpPortId) === Number(portId);
+        if (matches) {
+          console.log(`✅ ${depot.companyName} - MATCHES port ${portId} (businessPort ID: ${bpPortId})`);
+        }
+        return matches;
       });
+
+      if (!hasMatchingPort && depot.businessPorts.length > 0) {
+        const portIds = depot.businessPorts.map(bp => bp.portId || (bp.port && bp.port.id));
+        console.log(`❌ ${depot.companyName} - Has ports ${portIds.join(', ')} but not ${portId}`);
+      }
 
       return hasMatchingPort;
     });
@@ -563,6 +563,7 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
       companyName: depot.companyName, // Store company name for easy lookup
     }));
 
+    console.log(`📋 Filtered depot options for port ${portId}:`, options.map(o => o.label));
     setHireDepotOptions(options);
 
     setFilteredDepotsByPort(filteredDepots.map(depot => ({
@@ -595,6 +596,8 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    
+    // Always update formData immediately for all fields
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -677,25 +680,33 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
 
     // When port changes in "On Hire Location", filter depots based on selected port
     if (name === "onHireLocation" && value) {
-      // Find the port object based on the port name
+      // Find the port object and filter depots
       const selectedPort = allPorts.find((port) => port.portName === value);
+      console.log(`🔄 Port changed to: ${value}`);
+      console.log(`🔍 Found port object:`, selectedPort);
 
+      // FIRST: Clear depot fields immediately
+      setSelectedHireDepotId("");
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        onHireDepotaddressbookId: "",
+        onHireDepotName: ""
+      }));
 
+      // SECOND: Filter depots for the new port
       if (selectedPort) {
-        console.log(`Selected port: ${selectedPort.portName} (ID: ${selectedPort.id})`);
-        // Filter depots associated with this port
+        console.log(`✅ Selected port: ${selectedPort.portName} (ID: ${selectedPort.id})`);
         filterDepotsByPort(selectedPort.id);
       } else {
-        // If no port selected or invalid port, reset depot options
+        console.log(`❌ Port not found in allPorts array!`);
+        // If no port selected or invalid port, reset depot options to show all
         const allDepots = allDepotTerminals.map((entry) => ({
           label: `${entry.companyName} - ${entry.address || 'No address'}`,
           value: entry.id,
         }));
         setHireDepotOptions(allDepots);
       }
-
-      // Reset the selectedHireDepotId when port changes
-      setSelectedHireDepotId("");
     }
   };
 
@@ -1467,18 +1478,21 @@ const AddInventoryForm: React.FC<InventoryFormProps> = ({
                   <div className="flex-1 min-w-[200px]">
                     <Label className="mb-1 font-medium text-gray-700 dark:text-white">On Hire Depot</Label>
                     <select
-                      value={selectedHireDepotId}
+                      key={`depot-${formData.onHireLocation || 'none'}`}
+                      value={formData.onHireDepotaddressbookId || selectedHireDepotId || ""}
                       onChange={e => {
                         const selectedId = Number(e.target.value);
-                        setSelectedHireDepotId(selectedId);
-
-                        // Also update the formData with the selected depot ID and name
+                        
+                        // Update formData immediately (this will be the source of truth)
                         const selectedDepot = hireDepotOptions.find(opt => opt.value === selectedId);
                         setFormData(prev => ({
                           ...prev,
                           onHireDepotaddressbookId: selectedId.toString(),
                           onHireDepotName: selectedDepot?.companyName || ""
                         }));
+                        
+                        // Also update selectedHireDepotId for consistency
+                        setSelectedHireDepotId(selectedId);
                       }}
                       className="w-full px-3 py-2 text-sm bg-white dark:bg-neutral-800 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700 focus:border-blue-500 cursor-pointer"
                       disabled={!formData.onHireLocation}

@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -11,8 +11,247 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { AlertTriangle, X } from "lucide-react";
+import { AlertTriangle, X, Calendar } from "lucide-react";
 import { apiFetch } from "../../lib/api";
+import dayjs from "dayjs";
+
+// Date formatting functions to ensure consistent DD/MM/YY format
+const formatDateForDisplay = (dateValue: string): string => {
+  if (!dateValue) return "";
+  
+  // If it's already in YYYY-MM-DD format (from API), convert to DD/MM/YY
+  if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateValue.split('-');
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+  
+  // If it's already in DD/MM/YY format, return as is
+  if (dateValue.match(/^\d{2}\/\d{2}\/\d{2}$/)) {
+    return dateValue;
+  }
+  
+  return dateValue;
+};
+
+const formatDateInput = (inputValue: string): string | null => {
+  if (!inputValue) return null;
+  
+  // Handle YYYY-MM-DD format (from calendar selection)
+  if (inputValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = inputValue.split('-');
+    const date = new Date(`${year}-${month}-${day}`);
+    if (date.getFullYear() == parseInt(year) && date.getMonth() == parseInt(month) - 1 && date.getDate() == parseInt(day)) {
+      return inputValue; // Return as-is since it's already in correct format
+    }
+  }
+  
+  // Remove any non-digit characters except slashes for DD/MM/YY format
+  const cleaned = inputValue.replace(/[^\d/]/g, '');
+  
+  // Handle DD/MM/YY input patterns
+  if (cleaned.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+    const parts = cleaned.split('/');
+    let day = parts[0].padStart(2, '0');
+    let month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    
+    // Convert 2-digit year to 4-digit (assuming 20xx for years 00-30, 19xx for 31-99)
+    if (year.length === 2) {
+      const yearNum = parseInt(year);
+      year = yearNum <= 30 ? `20${year}` : `19${year}`;
+    }
+    
+    // Validate date
+    const date = new Date(`${year}-${month}-${day}`);
+    if (date.getFullYear() == parseInt(year) && date.getMonth() == parseInt(month) - 1 && date.getDate() == parseInt(day)) {
+      return `${year}-${month}-${day}`; // Return in YYYY-MM-DD format for API
+    }
+  }
+  
+  return null; // Invalid date
+};
+
+// Custom Date Picker Component
+const CustomDatePicker = ({ 
+  id, 
+  value, 
+  onChange, 
+  onBlur, 
+  placeholder, 
+  className, 
+  validationError 
+}: {
+  id: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  className: string;
+  validationError?: string;
+}) => {
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(dayjs());
+  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(
+    value ? dayjs(value, 'YYYY-MM-DD') : null
+  );
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Sync selectedDate with value prop changes
+  useEffect(() => {
+    if (value) {
+      setSelectedDate(dayjs(value, 'YYYY-MM-DD'));
+    } else {
+      setSelectedDate(null);
+    }
+  }, [value]);
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setShowCalendar(false);
+      }
+    };
+
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
+
+  const handleDateSelect = (date: dayjs.Dayjs) => {
+    const formattedDate = date.format('YYYY-MM-DD');
+    setSelectedDate(date);
+    setShowCalendar(false);
+    
+    // Create a synthetic event with the YYYY-MM-DD format for direct form update
+    const syntheticEvent = {
+      target: { value: formattedDate }
+    } as React.ChangeEvent<HTMLInputElement>;
+    
+    // Call onChange directly with the formatted date
+    onChange(syntheticEvent);
+  };
+
+  const generateCalendarDays = () => {
+    const startOfMonth = currentMonth.startOf('month');
+    const endOfMonth = currentMonth.endOf('month');
+    const startDate = startOfMonth.startOf('week');
+    const endDate = endOfMonth.endOf('week');
+    
+    const days = [];
+    let currentDate = startDate;
+    
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      days.push(currentDate);
+      currentDate = currentDate.add(1, 'day');
+    }
+    
+    return days;
+  };
+
+  const isToday = (date: dayjs.Dayjs) => date.isSame(dayjs(), 'day');
+  const isSelected = (date: dayjs.Dayjs) => selectedDate && date.isSame(selectedDate, 'day');
+  const isCurrentMonth = (date: dayjs.Dayjs) => date.isSame(currentMonth, 'month');
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Input
+          id={id}
+          type="text"
+          value={value ? formatDateForDisplay(value) : ""}
+          onChange={onChange}
+          onBlur={onBlur}
+          autoComplete="off"
+          placeholder={placeholder}
+          className={className}
+        />
+        <button
+          type="button"
+          onClick={() => setShowCalendar(!showCalendar)}
+          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+        >
+          <Calendar size={16} />
+        </button>
+      </div>
+      
+      {showCalendar && (
+        <div ref={calendarRef} className="absolute z-50 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 w-80">
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(currentMonth.subtract(1, 'month'))}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+              {currentMonth.format('MMMM YYYY')}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(currentMonth.add(1, 'month'))}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-xs font-medium text-gray-500 dark:text-gray-400 text-center py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1">
+            {generateCalendarDays().map((date, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => handleDateSelect(date)}
+                className={`
+                  text-xs p-2 rounded hover:bg-gray-100 dark:hover:bg-neutral-700
+                  ${!isCurrentMonth(date) ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-white'}
+                  ${isToday(date) ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' : ''}
+                  ${isSelected(date) ? 'bg-blue-500 text-white' : ''}
+                `}
+              >
+                {date.format('D')}
+              </button>
+            ))}
+          </div>
+          
+          {/* Today Button */}
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <button
+              type="button"
+              onClick={() => handleDateSelect(dayjs())}
+              className="w-full text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 py-2 rounded"
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {validationError && (
+        <p className="text-red-500 text-xs mt-1">{validationError}</p>
+      )}
+    </div>
+  );
+};
 
 const AddQuotationModal = ({
   onClose,
@@ -92,6 +331,7 @@ const AddQuotationModal = ({
     let effectiveDate, validTillDate;
 
     if (form.isEditing && form.effectiveDate && form.validTillDate) {
+      // form.effectiveDate and form.validTillDate are already in YYYY-MM-DD format from formatDateInput
       effectiveDate = new Date(form.effectiveDate).toISOString();
       validTillDate = new Date(form.validTillDate).toISOString();
     } else {
@@ -195,6 +435,7 @@ const AddQuotationModal = ({
     if (!form.id) {
       setForm((prev: any) => ({
         ...prev,
+        // formatDate returns YYYY-MM-DD format which is correct for our internal storage
         effectiveDate: prev.effectiveDate || formatDate(today),
         validTillDate: prev.validTillDate || formatDate(sevenDaysLater),
       }));
@@ -919,15 +1160,24 @@ const AddQuotationModal = ({
             {/* Effective Date */}
             <div>
               <Label htmlFor="effectiveDate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Effective Date
+                Effective Date (DD/MM/YY)
               </Label>
-              <Input
-                type="date"
-                value={form.effectiveDate || ""}
-                onChange={(e) =>
-                  setForm({ ...form, effectiveDate: e.target.value })
-                }
+              <CustomDatePicker
                 id="effectiveDate"
+                value={form.effectiveDate || ""}
+                onChange={(e) => {
+                  const formattedValue = formatDateInput(e.target.value);
+                  if (formattedValue !== null) {
+                    setForm({ ...form, effectiveDate: formattedValue });
+                  }
+                }}
+                onBlur={(e) => {
+                  const formattedValue = formatDateInput(e.target.value);
+                  if (formattedValue !== null) {
+                    setForm({ ...form, effectiveDate: formattedValue });
+                  }
+                }}
+                placeholder="DD/MM/YY"
                 className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
               />
             </div>
@@ -935,15 +1185,24 @@ const AddQuotationModal = ({
             {/* Valid Till */}
             <div>
               <Label htmlFor="validTillDate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Valid Till
+                Valid Till (DD/MM/YY)
               </Label>
-              <Input
-                type="date"
-                value={form.validTillDate || ""}
-                onChange={(e) =>
-                  setForm({ ...form, validTillDate: e.target.value })
-                }
+              <CustomDatePicker
                 id="validTillDate"
+                value={form.validTillDate || ""}
+                onChange={(e) => {
+                  const formattedValue = formatDateInput(e.target.value);
+                  if (formattedValue !== null) {
+                    setForm({ ...form, validTillDate: formattedValue });
+                  }
+                }}
+                onBlur={(e) => {
+                  const formattedValue = formatDateInput(e.target.value);
+                  if (formattedValue !== null) {
+                    setForm({ ...form, validTillDate: formattedValue });
+                  }
+                }}
+                placeholder="DD/MM/YY"
                 className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
               />
             </div>

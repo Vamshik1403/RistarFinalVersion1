@@ -125,7 +125,12 @@ export class InventoryService {
     return this.prisma.inventory
       .findMany({
         include: {
-          leasingInfo: true,
+          leasingInfo: {
+            include: {
+              port: true,
+              onHireDepotAddressBook: true,
+            }
+          },
           periodicTankCertificates: true,
           onHireReport: true,
         },
@@ -143,6 +148,67 @@ export class InventoryService {
           };
         });
       });
+  }
+
+  async findByStatus(status: string) {
+    // Normalize to uppercase to match movement history statuses
+    const target = (status || '').toUpperCase();
+
+    // Map friendly labels to groups of statuses
+    const groups: Record<string, string[]> = {
+      AVAILABLE: ['AVAILABLE'],
+      ALLOTTED: ['ALLOTTED'],
+      'OTHER STATUS CYCLE': [
+        'EMPTY PICKED UP',
+        'CARGO LOADED',
+        'SHIPPED-ON BOARD',
+        'ARRIVED DESTINATION',
+        'EMPTY RETURNED'
+      ],
+    };
+
+    const statuses = groups[target] || [target];
+
+    // Get latest movement status for each inventory
+    const movements = await this.prisma.movementHistory.findMany({
+      orderBy: { date: 'asc' },
+      select: { inventoryId: true, status: true, date: true },
+    });
+
+    // Reduce to latest status per inventoryId
+    const latestByInventory = new Map<number, string>();
+    for (const m of movements) {
+      latestByInventory.set(m.inventoryId, m.status);
+    }
+
+    // Find inventory ids matching requested statuses
+    const matchingIds: number[] = [];
+    latestByInventory.forEach((s, invId) => {
+      if (statuses.includes(s.toUpperCase())) matchingIds.push(invId);
+    });
+
+    if (matchingIds.length === 0) return [];
+
+    // Return full inventory records with includes used elsewhere
+    const inventories = await this.prisma.inventory.findMany({
+      where: { id: { in: matchingIds } },
+      include: {
+        leasingInfo: {
+          include: {
+            port: true,
+            onHireDepotAddressBook: true,
+          }
+        },
+        periodicTankCertificates: true,
+        onHireReport: true,
+      },
+    });
+
+    return inventories.map((inventory) => ({
+      ...inventory,
+      ownershipType:
+        inventory.leasingInfo && inventory.leasingInfo.length > 0 ? 'Lease' : 'Own',
+    }));
   }
 
   async getCompaniesByOwnershipType(ownershipType: string) {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,247 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Plus, AlertTriangle, X } from "lucide-react";
+import { Plus, AlertTriangle, X, Calendar } from "lucide-react";
 import { apiFetch } from "../../../lib/api";
+import dayjs from "dayjs";
+
+// Date formatting functions to ensure consistent DD/MM/YY format
+const formatDateForDisplay = (dateValue: string): string => {
+  if (!dateValue) return "";
+  
+  // If it's already in YYYY-MM-DD format (from API), convert to DD/MM/YY
+  if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = dateValue.split('-');
+    return `${day}/${month}/${year.slice(-2)}`;
+  }
+  
+  // If it's already in DD/MM/YY format, return as is
+  if (dateValue.match(/^\d{2}\/\d{2}\/\d{2}$/)) {
+    return dateValue;
+  }
+  
+  return dateValue;
+};
+
+const formatDateInput = (inputValue: string): string | null => {
+  if (!inputValue) return null;
+  
+  // Handle YYYY-MM-DD format (from calendar selection)
+  if (inputValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
+    const [year, month, day] = inputValue.split('-');
+    const date = new Date(`${year}-${month}-${day}`);
+    if (date.getFullYear() == parseInt(year) && date.getMonth() == parseInt(month) - 1 && date.getDate() == parseInt(day)) {
+      return inputValue; // Return as-is since it's already in correct format
+    }
+  }
+  
+  // Remove any non-digit characters except slashes for DD/MM/YY format
+  const cleaned = inputValue.replace(/[^\d/]/g, '');
+  
+  // Handle DD/MM/YY input patterns
+  if (cleaned.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
+    const parts = cleaned.split('/');
+    let day = parts[0].padStart(2, '0');
+    let month = parts[1].padStart(2, '0');
+    let year = parts[2];
+    
+    // Convert 2-digit year to 4-digit (assuming 20xx for years 00-30, 19xx for 31-99)
+    if (year.length === 2) {
+      const yearNum = parseInt(year);
+      year = yearNum <= 30 ? `20${year}` : `19${year}`;
+    }
+    
+    // Validate date
+    const date = new Date(`${year}-${month}-${day}`);
+    if (date.getFullYear() == parseInt(year) && date.getMonth() == parseInt(month) - 1 && date.getDate() == parseInt(day)) {
+      return `${year}-${month}-${day}`; // Return in YYYY-MM-DD format for API
+    }
+  }
+  
+  return null; // Invalid date
+};
+
+// Custom Date Picker Component
+const CustomDatePicker = ({ 
+  id, 
+  value, 
+  onChange, 
+  onBlur, 
+  placeholder, 
+  className, 
+  validationError 
+}: {
+  id: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onBlur: (e: React.FocusEvent<HTMLInputElement>) => void;
+  placeholder: string;
+  className: string;
+  validationError?: string;
+}) => {
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [currentMonth, setCurrentMonth] = useState(dayjs());
+  const [selectedDate, setSelectedDate] = useState<dayjs.Dayjs | null>(
+    value ? dayjs(value, 'YYYY-MM-DD') : null
+  );
+  const calendarRef = useRef<HTMLDivElement>(null);
+
+  // Sync selectedDate with value prop changes
+  useEffect(() => {
+    if (value) {
+      setSelectedDate(dayjs(value, 'YYYY-MM-DD'));
+    } else {
+      setSelectedDate(null);
+    }
+  }, [value]);
+
+  // Close calendar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarRef.current && !calendarRef.current.contains(event.target as Node)) {
+        setShowCalendar(false);
+      }
+    };
+
+    if (showCalendar) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCalendar]);
+
+  const handleDateSelect = (date: dayjs.Dayjs) => {
+    const formattedDate = date.format('YYYY-MM-DD');
+    setSelectedDate(date);
+    setShowCalendar(false);
+    
+    // Create a synthetic event with the YYYY-MM-DD format for direct form update
+    const syntheticEvent = {
+      target: { value: formattedDate }
+    } as React.ChangeEvent<HTMLInputElement>;
+    
+    // Call onChange directly with the formatted date
+    onChange(syntheticEvent);
+  };
+
+  const generateCalendarDays = () => {
+    const startOfMonth = currentMonth.startOf('month');
+    const endOfMonth = currentMonth.endOf('month');
+    const startDate = startOfMonth.startOf('week');
+    const endDate = endOfMonth.endOf('week');
+    
+    const days = [];
+    let currentDate = startDate;
+    
+    while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
+      days.push(currentDate);
+      currentDate = currentDate.add(1, 'day');
+    }
+    
+    return days;
+  };
+
+  const isToday = (date: dayjs.Dayjs) => date.isSame(dayjs(), 'day');
+  const isSelected = (date: dayjs.Dayjs) => selectedDate && date.isSame(selectedDate, 'day');
+  const isCurrentMonth = (date: dayjs.Dayjs) => date.isSame(currentMonth, 'month');
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Input
+          id={id}
+          type="text"
+          value={value ? formatDateForDisplay(value) : ""}
+          onChange={onChange}
+          onBlur={onBlur}
+          autoComplete="off"
+          placeholder={placeholder}
+          className={className}
+        />
+        <button
+          type="button"
+          onClick={() => setShowCalendar(!showCalendar)}
+          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+        >
+          <Calendar size={16} />
+        </button>
+      </div>
+      
+      {showCalendar && (
+        <div ref={calendarRef} className="absolute z-50 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 w-80">
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-4">
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(currentMonth.subtract(1, 'month'))}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h3 className="text-sm font-medium text-gray-900 dark:text-white">
+              {currentMonth.format('MMMM YYYY')}
+            </h3>
+            <button
+              type="button"
+              onClick={() => setCurrentMonth(currentMonth.add(1, 'month'))}
+              className="p-1 hover:bg-gray-100 dark:hover:bg-neutral-700 rounded"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+              <div key={day} className="text-xs font-medium text-gray-500 dark:text-gray-400 text-center py-2">
+                {day}
+              </div>
+            ))}
+          </div>
+          
+          <div className="grid grid-cols-7 gap-1">
+            {generateCalendarDays().map((date, index) => (
+              <button
+                key={index}
+                type="button"
+                onClick={() => handleDateSelect(date)}
+                className={`
+                  text-xs p-2 rounded hover:bg-gray-100 dark:hover:bg-neutral-700
+                  ${!isCurrentMonth(date) ? 'text-gray-300 dark:text-gray-600' : 'text-gray-900 dark:text-white'}
+                  ${isToday(date) ? 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300' : ''}
+                  ${isSelected(date) ? 'bg-blue-500 text-white' : ''}
+                `}
+              >
+                {date.format('D')}
+              </button>
+            ))}
+          </div>
+          
+          {/* Today Button */}
+          <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+            <button
+              type="button"
+              onClick={() => handleDateSelect(dayjs())}
+              className="w-full text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 py-2 rounded"
+            >
+              Today
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {validationError && (
+        <p className="text-red-500 text-xs mt-1">{validationError}</p>
+      )}
+    </div>
+  );
+};
 
 type Option = { id: string | number; name: string };
 type ProductOption = {
@@ -52,11 +291,13 @@ type SelectOptions = {
 const ContainerLocationDisplay = ({ 
   inventoryId, 
   fallbackDepotName, 
-  fallbackPortName 
+  fallbackPortName,
+  refreshTrigger 
 }: { 
   inventoryId: number | null; 
   fallbackDepotName?: string; 
-  fallbackPortName?: string; 
+  fallbackPortName?: string;
+  refreshTrigger?: number; // Add trigger to force refresh
 }) => {
   const [locationData, setLocationData] = useState<{
     depotName: string;
@@ -123,7 +364,7 @@ const ContainerLocationDisplay = ({
     };
 
     fetchLatestLocation();
-  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+  }, [inventoryId, fallbackDepotName, fallbackPortName, refreshTrigger]);
 
   if (loading) {
     return <span className="text-gray-400">Loading...</span>;
@@ -155,6 +396,7 @@ const ContainerSearchModal = ({
   setSelectedContainers, // <-- Add this prop for container selection
   form, // <-- Add form prop
   selectedContainers, // <-- Add selectedContainers prop
+  locationRefreshTrigger, // <-- Add refresh trigger prop
 }: any) => {
   const [containerSearchText, setContainerSearchText] = useState("");
   const [filteredContainers, setFilteredContainers] = useState(containers);
@@ -422,8 +664,12 @@ const ContainerSearchModal = ({
                   </div>
                 </div>
                 <div className="text-gray-700 dark:text-neutral-300 text-xs">
-                  {container.port?.portName || "N/A"} -{" "}
-                  {container.depotName || container.addressBook?.companyName || "N/A"}
+                  <ContainerLocationDisplay 
+                    inventoryId={container.inventory?.id} 
+                    fallbackDepotName={container.depotName || container.addressBook?.companyName}
+                    fallbackPortName={container.port?.portName}
+                    refreshTrigger={locationRefreshTrigger}
+                  />
                   <div className="mt-1">
                     Capacity: {container.inventory?.containerCapacity || "N/A"} | 
                     Unit: {container.inventory?.capacityUnit || "N/A"}
@@ -538,6 +784,7 @@ const AddShipmentModal = ({
   const [modalSelectedContainers, setModalSelectedContainers] = useState<any[]>(
     []
   );
+  const [locationRefreshTrigger, setLocationRefreshTrigger] = useState(0);
   const [selectedCountry, setSelectedCountry] = useState<string>("");
   const [selectedPort, setSelectedPort] = useState<string>("");
   const [countries, setCountries] = useState<any[]>([]);
@@ -1393,7 +1640,10 @@ const AddShipmentModal = ({
         payload.quotationRefNumber = form.quotationRefNo;
       }
 
-      if (form.date) payload.date = new Date(form.date).toISOString();
+      if (form.date) {
+        // form.date is already in YYYY-MM-DD format from formatDateInput
+        payload.date = new Date(form.date).toISOString();
+      }
       if (form.jobNumber) payload.jobNumber = form.jobNumber;
       payload.refNumber = form.referenceNumber || ""; // Always include refNumber, even if empty
       payload.masterBL = form.masterBL || ""; // Always include masterBL, even if empty
@@ -1450,15 +1700,22 @@ const AddShipmentModal = ({
       }
 
       // Date fields - only set if provided by user
-      if (form.gateClosingDate)
+      if (form.gateClosingDate) {
+        // form.gateClosingDate is already in YYYY-MM-DD format from formatDateInput
         payload.gsDate = new Date(form.gateClosingDate).toISOString();
-      if (form.sobDate) payload.sob = new Date(form.sobDate).toISOString();
-      if (form.etaToPod)
+      }
+      if (form.sobDate) {
+        // form.sobDate is already in YYYY-MM-DD format from formatDateInput
+        payload.sob = new Date(form.sobDate).toISOString();
+      }
+      if (form.etaToPod) {
+        // form.etaToPod is already in YYYY-MM-DD format from formatDateInput
         payload.etaTopod = new Date(form.etaToPod).toISOString();
-      if (form.estimatedEmptyReturnDate)
-        payload.estimateDate = new Date(
-          form.estimatedEmptyReturnDate
-        ).toISOString();
+      }
+      if (form.estimatedEmptyReturnDate) {
+        // form.estimatedEmptyReturnDate is already in YYYY-MM-DD format from formatDateInput
+        payload.estimateDate = new Date(form.estimatedEmptyReturnDate).toISOString();
+      }
 
       // Always include containers
       if (selectedContainers.length > 0) {
@@ -1777,18 +2034,22 @@ const AddShipmentModal = ({
 
   useEffect(() => {
     if (form.etaToPod && form.freeDays2) {
-      const etaDate = new Date(form.etaToPod);
-      const freeDays = parseInt(form.freeDays2, 10);
+      // Convert DD/MM/YY format to YYYY-MM-DD for date calculation
+      const etaDateStr = formatDateInput(form.etaToPod);
+      if (etaDateStr) {
+        const etaDate = new Date(etaDateStr);
+        const freeDays = parseInt(form.freeDays2, 10);
 
-      if (!isNaN(freeDays)) {
-        const returnDate = new Date(etaDate);
-        returnDate.setDate(etaDate.getDate() + freeDays);
+        if (!isNaN(freeDays)) {
+          const returnDate = new Date(etaDate);
+          returnDate.setDate(etaDate.getDate() + freeDays);
 
-        const formatted = returnDate.toISOString().split("T")[0];
-        setForm((prev: any) => ({
-          ...prev,
-          estimatedEmptyReturnDate: formatted,
-        }));
+          const formatted = returnDate.toISOString().split("T")[0];
+          setForm((prev: any) => ({
+            ...prev,
+            estimatedEmptyReturnDate: formatted,
+          }));
+        }
       }
     }
   }, [form.etaToPod, form.freeDays2]);
@@ -1798,7 +2059,13 @@ const AddShipmentModal = ({
       try {
         const res = await fetch("http://localhost:8000/inventory");
         const data = await res.json();
-        setAllInventories(data);
+        // Sort by updatedAt descending (most recently updated first)
+        const sortedData = data.sort((a: any, b: any) => {
+          const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          return dateB - dateA; // Descending order
+        });
+        setAllInventories(sortedData);
       } catch (error) {
         console.error("Error fetching inventories:", error);
       }
@@ -1979,23 +2246,28 @@ const AddShipmentModal = ({
                     >
                       Date (DD/MM/YY) <span className="text-red-500">*</span>
                     </Label>
-                    <Input
+                    <CustomDatePicker
                       id="date"
-                      type="date"
                       value={form.date || ""}
                       onChange={(e) => {
-                        setForm({ ...form, date: e.target.value });
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, date: formattedValue });
+                        }
                         if (validationErrors.date) {
                           setValidationErrors(prev => ({...prev, date: ""}));
                         }
                       }}
-                      autoComplete="off"
-                      placeholder=""
+                      onBlur={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, date: formattedValue });
+                        }
+                      }}
+                      placeholder="DD/MM/YY"
                       className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
+                      validationError={validationErrors.date}
                     />
-                    {validationErrors.date && (
-                      <p className="text-red-500 text-xs mt-1">{validationErrors.date}</p>
-                    )}
                   </div>
                   <div>
                     <Label
@@ -2961,7 +3233,25 @@ const AddShipmentModal = ({
                         bg-white hover:bg-blue-100 border border-neutral-200
                         dark:bg-neutral-800 dark:hover:bg-blue-900 dark:border-neutral-700
                         transition-colors disabled:bg-gray-100 dark:disabled:bg-neutral-700 disabled:cursor-not-allowed cursor-pointer"
-                      onClick={() => setShowContainerModal(true)}
+                      onClick={async () => {
+                        // Re-fetch fresh inventory data when modal opens
+                        try {
+                          const res = await fetch("http://localhost:8000/inventory");
+                          const data = await res.json();
+                          // Sort by updatedAt descending (most recently updated first)
+                          const sortedData = data.sort((a: any, b: any) => {
+                            const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+                            const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+                            return dateB - dateA; // Descending order
+                          });
+                          setAllInventories(sortedData);
+                          // Trigger location refresh for all ContainerLocationDisplay components
+                          setLocationRefreshTrigger(prev => prev + 1);
+                        } catch (error) {
+                          console.error("Error fetching inventories:", error);
+                        }
+                        setShowContainerModal(true);
+                      }}
                       disabled={!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0}
                     >
                       <Plus className={`w-10 h-10 ${!form.portOfLoading || !form.quantity || isNaN(parseInt(form.quantity)) || parseInt(form.quantity) <= 0 ? 'text-gray-400 dark:text-neutral-500' : 'text-blue-600 dark:text-blue-400'} cursor-pointer`}/>
@@ -2986,8 +3276,12 @@ const AddShipmentModal = ({
                              </span>
                            </div>
                            <div className="text-xs text-black-400 mt-1">
-                             Location: {sug.addressBook?.companyName} -{" "}
-                             {sug.port?.portName}
+                             Location: <ContainerLocationDisplay 
+                               inventoryId={sug.inventoryId} 
+                               fallbackDepotName={sug.addressBook?.companyName}
+                               fallbackPortName={sug.port?.portName}
+                               refreshTrigger={locationRefreshTrigger}
+                             />
                            </div>
                          </li>
                        ))}
@@ -3046,6 +3340,7 @@ const AddShipmentModal = ({
                                 inventoryId={item.inventoryId} 
                                 fallbackDepotName={item.depotName}
                                 fallbackPortName={item.port?.portName}
+                                refreshTrigger={locationRefreshTrigger}
                               />
                             </TableCell>
                             <TableCell className="text-gray-900 dark:text-white">
@@ -3174,17 +3469,24 @@ const AddShipmentModal = ({
                       htmlFor="gateClosingDate"
                       className="text-gray-900 dark:text-neutral-200 text-sm mb-1"
                     >
-                      Gate Closing Date
+                      Gate Closing Date (DD/MM/YY)
                     </Label>
-                    <Input
+                    <CustomDatePicker
                       id="gateClosingDate"
-                      type="date"
                       value={form.gateClosingDate || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, gateClosingDate: e.target.value })
-                      }
-                      autoComplete="off"
-                      placeholder=""
+                      onChange={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, gateClosingDate: formattedValue });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, gateClosingDate: formattedValue });
+                        }
+                      }}
+                      placeholder="DD/MM/YY"
                       className="w-full p-2.5 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
                     />
                     
@@ -3194,16 +3496,24 @@ const AddShipmentModal = ({
                       htmlFor="sobDate"
                       className="text-gray-900 dark:text-neutral-200 text-sm mb-1"
                     >
-                      SOB Date
+                      SOB Date (DD/MM/YY)
                     </Label>
-                    <Input
+                    <CustomDatePicker
                       id="sobDate"
-                      type="date"
                       value={form.sobDate || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, sobDate: e.target.value })
-                      }
-                      autoComplete="off"
+                      onChange={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, sobDate: formattedValue });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, sobDate: formattedValue });
+                        }
+                      }}
+                      placeholder="DD/MM/YY"
                       className="w-full p-2.5 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
                     />
                   </div>
@@ -3212,17 +3522,24 @@ const AddShipmentModal = ({
                       htmlFor="etaToPod"
                       className="text-gray-900 dark:text-neutral-200 text-sm mb-1"
                     >
-                      ETA to PoD
+                      ETA to PoD (DD/MM/YY)
                     </Label>
-                    <Input
+                    <CustomDatePicker
                       id="etaToPod"
-                      type="date"
                       value={form.etaToPod || ""}
-                      onChange={(e) =>
-                        setForm({ ...form, etaToPod: e.target.value })
-                      }
-                      autoComplete="off"
-                      placeholder=""
+                      onChange={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, etaToPod: formattedValue });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, etaToPod: formattedValue });
+                        }
+                      }}
+                      placeholder="DD/MM/YY"
                       className="w-full p-2.5 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
                     />
                   </div>
@@ -3296,19 +3613,24 @@ const AddShipmentModal = ({
                       htmlFor="estimatedEmptyReturnDate"
                       className="text-gray-900 dark:text-neutral-200 text-sm mb-1"
                     >
-                      Estimated Empty Return Date
+                      Estimated Empty Return Date (DD/MM/YY)
                     </Label>
-                    <Input
+                    <CustomDatePicker
                       id="estimatedEmptyReturnDate"
-                      type="date"
                       value={form.estimatedEmptyReturnDate || ""}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          estimatedEmptyReturnDate: e.target.value,
-                        })
-                      }
-                      autoComplete="off"
+                      onChange={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, estimatedEmptyReturnDate: formattedValue });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const formattedValue = formatDateInput(e.target.value);
+                        if (formattedValue !== null) {
+                          setForm({ ...form, estimatedEmptyReturnDate: formattedValue });
+                        }
+                      }}
+                      placeholder="DD/MM/YY"
                       className="w-full p-2.5 bg-white dark:bg-neutral-800 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
                     />
                   </div>
@@ -3354,6 +3676,7 @@ const AddShipmentModal = ({
             setSelectedContainers={setSelectedContainers}
             form={form}
             selectedContainers={selectedContainers}
+            locationRefreshTrigger={locationRefreshTrigger}
           />
         </DialogContent>
       </Dialog>
