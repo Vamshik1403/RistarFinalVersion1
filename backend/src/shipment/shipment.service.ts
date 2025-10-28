@@ -264,6 +264,57 @@ async create(data: CreateShipmentDto) {
     });
   }
 
+  
+
+  async canEditInventory(id: number) {
+  // Get latest movement entry
+  const inventory = await this.prisma.inventory.findUnique({
+    where: { id },
+    include: {
+      movementHistory: {
+        orderBy: { date: 'desc' },
+        take: 1,
+        select: {
+          status: true,
+          shipmentId: true,
+          emptyRepoJobId: true,
+        },
+      },
+    },
+  });
+
+  if (!inventory) {
+    return { canEdit: false, reason: "Container not found." };
+  }
+
+  const latestMove = inventory.movementHistory[0];
+
+  // ❌ No movement yet
+  if (!latestMove) {
+    return {
+      canEdit: false,
+      reason: "Container not yet available in movement history.",
+    };
+  }
+
+  // ✅ Main rule — if AVAILABLE, allow edit (ignore IDs)
+  if (latestMove.status === "AVAILABLE") {
+    return {
+      canEdit: true,
+      reason: null,
+      action: null,
+    };
+  }
+
+  // ❌ Not AVAILABLE (like ALLOTTED, LOADED, etc.)
+  return {
+    canEdit: false,
+    reason: `Container is currently ${latestMove.status}.`,
+    action: null,
+  };
+}
+
+
   findOne(id: number) {
     return this.prisma.shipment.findUnique({
       where: { id },

@@ -30,6 +30,12 @@ export class ShipmentController {
     const jobNumber = await this.shipmentService.getNextJobNumber();
     return { jobNumber };
   }
+
+  @Get(':id/can-edit')
+async canEdit(@Param('id') id: string) {
+  return this.shipmentService.canEditInventory(Number(id));
+}
+
   
   @Get()
   findAll() {

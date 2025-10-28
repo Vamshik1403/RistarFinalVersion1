@@ -142,27 +142,38 @@ const ProductsInventoryPage = () => {
     }
   };
 
-  const handleEditInventoryWithPermission = async (id: number) => {
-    if (!inventoryPermissions?.canEdit) {
-      alert("You don't have access to edit inventory.");
+ const handleEditInventoryWithPermission = async (id: number) => {
+  // 🧩 Check frontend-level permission first
+  if (!inventoryPermissions?.canEdit) {
+    alert("You don't have access to edit inventory.");
+    return;
+  }
+
+  try {
+    // 🧠 Ask backend if this container can be edited
+    const editResponse = await axios.get(
+      `http://localhost:8000/inventory/${id}/can-edit`
+    );
+
+    const { canEdit, reason } = editResponse.data;
+
+    if (!canEdit) {
+      console.warn(`❌ Edit blocked for container ID ${id}:`, reason);
+      alert(reason || "Cannot edit this container.");
       return;
     }
 
-    // Check edit status on-demand when button is clicked
-    try {
-      const editResponse = await axios.get(
-        `http://localhost:8000/inventory/${id}/can-edit`
-      );
-      if (!editResponse.data.canEdit) {
-        alert(editResponse.data.reason || "Cannot edit this container.");
-        return;
-      }
-      handleEditClick(id);
-    } catch (error) {
-      console.error("Error checking edit status:", error);
-      alert("Error checking container status. Please try again.");
-    }
-  };
+    // ✅ Allowed: open edit modal
+    console.log(`✅ Edit allowed for container ID ${id}`);
+    handleEditClick(id);
+  } catch (error: any) {
+    console.error("⚠️ Error checking edit status:", error.response?.data || error);
+    alert(
+      error.response?.data?.message ||
+        "Error checking container status. Please try again."
+    );
+  }
+};
 
   const handleDeleteInventoryWithPermission = async (id: number) => {
     if (!inventoryPermissions?.canDelete) {

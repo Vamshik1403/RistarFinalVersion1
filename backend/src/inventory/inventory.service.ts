@@ -525,58 +525,41 @@ export class InventoryService {
     return { canDelete: true, reason: null };
   }
 
-  async canEditContainer(id: string) {
-    const numId = +id;
+async canEditContainer(id: string) {
+  const numId = +id;
 
-    // Get all movement history records for this container
-    const movementHistory = await this.prisma.movementHistory.findMany({
-      where: { inventoryId: numId },
-      orderBy: { date: 'asc' },
-    });
-    const statuses = movementHistory.map(m => m.status);
-    
-    // Check only the current/latest status
-    const currentStatus = statuses.length > 0 ? statuses[statuses.length - 1] : null;
-    
-    // If current status is beyond ALLOTTED, block editing
-    if (currentStatus && currentStatus !== 'AVAILABLE' && currentStatus !== 'ALLOTTED') {
-      return { 
-        canEdit: false, 
-        reason: 'Cannot change inventory details as the container has progressed in movement status.',
-        action: 'movement_status'
-      };
-    }
+  // 1️⃣ Get latest movement record
+  const latestMove = await this.prisma.movementHistory.findFirst({
+    where: { inventoryId: numId },
+    orderBy: { date: 'desc' },
+    select: {
+      status: true,
+      shipmentId: true,
+      emptyRepoJobId: true,
+    },
+  });
 
-    // Check if container is currently allocated (has a shipment or empty repo job)
-    const activeShipment = await this.prisma.shipmentContainer.findFirst({
-      where: { inventoryId: numId },
-      select: { id: true },
-    });
-    
-    const activeEmptyRepoJob = await this.prisma.repoShipmentContainer.findFirst({
-      where: { inventoryId: numId },
-      select: { id: true },
-    });
+  // 2️⃣ No movement yet
+  if (!latestMove) {
+    return {
+      canEdit: false,
+      reason: "Container not yet available in movement history.",
+      action: "no_history",
+    };
+  }
 
-    if (activeShipment) {
-      return { 
-        canEdit: false, 
-        reason: 'Remove the container or Delete the shipment first, then you can change the inventory data.',
-        action: 'delete_shipment'
-      };
-    }
-
-    if (activeEmptyRepoJob) {
-      return { 
-        canEdit: false, 
-        reason: 'Remove the container or Delete the empty repo job first, then you can change the inventory data.',
-        action: 'delete_empty_repo'
-      };
-    }
-
-    // If no blocks, container can be edited
+  // 3️⃣ Main rule — allow edit if AVAILABLE (ignore job IDs)
+  if (latestMove.status === "AVAILABLE") {
     return { canEdit: true, reason: null, action: null };
   }
+
+  // 4️⃣ Otherwise block edit
+  return {
+    canEdit: false,
+    reason: `Container is currently ${latestMove.status}.`,
+    action: "movement_status",
+  };
+}
 
   async getBulkEditStatus(containerIds: number[]) {
     // Get all movement history records for all containers in one query
@@ -626,15 +609,17 @@ export class InventoryService {
         canEdit = false;
         editReason = 'Cannot change inventory details as the container has progressed in movement status.';
         editAction = 'movement_status';
-      } else if (shipmentMap.has(id)) {
-        canEdit = false;
-        editReason = 'Remove the container or Delete the shipment first, then you can change the inventory data.';
-        editAction = 'delete_shipment';
-      } else if (emptyRepoMap.has(id)) {
-        canEdit = false;
-        editReason = 'Remove the container or Delete the empty repo job first, then you can change the inventory data.';
-        editAction = 'delete_empty_repo';
-      }
+      }// ✅ Determine edit permission based only on latest movement status
+else if (currentStatus === "AVAILABLE") {
+  canEdit = true;
+  editReason = null;
+  editAction = null;
+} else {
+  canEdit = false;
+  editReason = `Container is currently ${currentStatus || "unknown"}.`;
+  editAction = "movement_status";
+}
+
 
       // Check delete status
       let canDelete = true;
