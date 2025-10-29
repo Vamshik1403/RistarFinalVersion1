@@ -70,6 +70,15 @@ async canEdit(@Param('id') id: string) {
     return this.shipmentService.markCroGenerated(id);
   }
 
+ @Patch(':id/cancel')
+@UseGuards(AuthGuard('jwt'))
+async cancelShipment(
+  @Param('id', ParseIntPipe) id: number,
+  @Body() cancelDto: { cancellationReason: string }
+) {
+  return this.shipmentService.cancelShipment(id, cancelDto.cancellationReason);
+}
+
  // --- assignments endpoints (optionally guarded) ---
   @UseGuards(AuthGuard('jwt')) // optional for GET, recommended for PUT
   @Get('assignments/:shipmentId/:blType')

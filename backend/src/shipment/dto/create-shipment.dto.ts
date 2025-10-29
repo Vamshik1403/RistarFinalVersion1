@@ -42,6 +42,9 @@ export class CreateShipmentDto {
   @IsString()
   shippingTerm: string;
 
+  @IsString()
+  remark?: string;
+
   @IsInt()
   custAddressBookId: number;
 

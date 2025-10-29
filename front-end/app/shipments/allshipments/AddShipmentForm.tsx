@@ -287,7 +287,6 @@ type SelectOptions = {
   shippingTerm: Option[];
 };
 
-// Component to display latest container location data
 const ContainerLocationDisplay = ({ 
   inventoryId, 
   fallbackDepotName, 
@@ -297,7 +296,7 @@ const ContainerLocationDisplay = ({
   inventoryId: number | null; 
   fallbackDepotName?: string; 
   fallbackPortName?: string;
-  refreshTrigger?: number; // Add trigger to force refresh
+  refreshTrigger?: number;
 }) => {
   const [locationData, setLocationData] = useState<{
     depotName: string;
@@ -313,47 +312,73 @@ const ContainerLocationDisplay = ({
       }
 
       try {
-        // Fetch latest container data
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
-
-        // Get the latest leasing info
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
+        // First try to get latest movement history
+        const movementResponse = await axios.get(`http://localhost:8000/movement-history/latest`);
+        const latestMovements = movementResponse.data;
         
-        if (latestLeasingInfo) {
-          // Fetch port name
-          let portName = fallbackPortName || "N/A";
-          if (latestLeasingInfo.portId) {
+        // Find the latest movement for this inventory
+        const latestMovement = latestMovements.find((movement: any) => 
+          movement.inventoryId === inventoryId
+        );
+
+        let portName = "N/A";
+        let depotName = "N/A";
+
+        // Priority 1: Use latest movement data if available and container is AVAILABLE
+        if (latestMovement && latestMovement.status === "AVAILABLE") {
+          if (latestMovement.portId) {
             try {
-              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+              const portResponse = await axios.get(`http://localhost:8000/ports/${latestMovement.portId}`);
               portName = portResponse.data.portName;
             } catch (portError) {
-              console.warn("Failed to fetch port name:", portError);
+              console.warn("Failed to fetch port name from movement:", portError);
             }
           }
 
-          // Fetch depot name
-          let depotName = fallbackDepotName || "N/A";
-          if (latestLeasingInfo.onHireDepotaddressbookId) {
+          if (latestMovement.addressBookId) {
             try {
-              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestMovement.addressBookId}`);
               depotName = depotResponse.data.companyName;
             } catch (depotError) {
-              console.warn("Failed to fetch depot name:", depotError);
+              console.warn("Failed to fetch depot name from movement:", depotError);
             }
           }
+        } 
+        // Priority 2: Fall back to leasing info (for fresh containers or no movement history)
+        else {
+          const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+          const inventory = inventoryResponse.data;
 
-          setLocationData({ depotName, portName });
-        } else {
-          // Fallback to stored values if no leasing info
-          setLocationData({
-            depotName: fallbackDepotName || "N/A",
-            portName: fallbackPortName || "N/A"
-          });
+          const latestLeasingInfo = inventory.leasingInfo?.[0];
+          
+          portName = fallbackPortName || "N/A";
+          depotName = fallbackDepotName || "N/A";
+
+          if (latestLeasingInfo) {
+            if (latestLeasingInfo.portId) {
+              try {
+                const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
+                portName = portResponse.data.portName;
+              } catch (portError) {
+                console.warn("Failed to fetch port name from leasing:", portError);
+              }
+            }
+
+            if (latestLeasingInfo.onHireDepotaddressbookId) {
+              try {
+                const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
+                depotName = depotResponse.data.companyName;
+              } catch (depotError) {
+                console.warn("Failed to fetch depot name from leasing:", depotError);
+              }
+            }
+          }
         }
+
+        setLocationData({ depotName, portName });
       } catch (error) {
         console.error("Failed to fetch latest container location:", error);
-        // Fallback to stored values
+        // Final fallback to stored values
         setLocationData({
           depotName: fallbackDepotName || "N/A",
           portName: fallbackPortName || "N/A"
@@ -1025,90 +1050,113 @@ const AddShipmentModal = ({
   }, [selectedCountry]);
 
   // Fetch containers when port or onhire depot changes
-  useEffect(() => {
-    if (selectedPort) {
-      fetch("http://localhost:8000/inventory")
-        .then((res) => res.json())
-        .then((inventoryData) => {
-          // Filter inventory by port using leasingInfo
-          let filteredInventory = inventoryData.filter((inv: any) => {
-            if (!inv.leasingInfo || inv.leasingInfo.length === 0) return false;
-            
-            // Check if any leasing info has the selected port
-            return inv.leasingInfo.some((lease: any) => 
-              lease.portId?.toString() === selectedPort
-            );
-          });
+useEffect(() => {
+  if (selectedPort) {
+    // Fetch latest movement history first
+    fetch("http://localhost:8000/movement-history/latest")
+      .then((res) => res.json())
+      .then((latestMovements) => {
+        // Create a map of latest movement by inventory ID
+        const latestMovementMap = latestMovements.reduce((acc: any, movement: any) => {
+          if (movement.inventoryId) {
+            acc[movement.inventoryId] = movement;
+          }
+          return acc;
+        }, {});
 
-          // If onhire depot is selected, further filter by depot using leasingInfo
-          if (selectedOnHireDepot) {
-            filteredInventory = filteredInventory.filter((inv: any) => {
+        // Now fetch inventory
+        return fetch("http://localhost:8000/inventory")
+          .then((res) => res.json())
+          .then((inventoryData) => {
+            // Filter inventory - check both latest movement AND leasing info
+            let filteredInventory = inventoryData.filter((inv: any) => {
+              const latestMovement = latestMovementMap[inv.id];
+              
+              // If container has movement history, check if it's AVAILABLE at selected port
+              if (latestMovement) {
+                return latestMovement.status === "AVAILABLE" && 
+                       latestMovement.portId?.toString() === selectedPort;
+              }
+              
+              // If no movement history, check leasing info (for fresh containers)
+              if (!inv.leasingInfo || inv.leasingInfo.length === 0) return false;
+              
               return inv.leasingInfo.some((lease: any) => 
-                lease.portId?.toString() === selectedPort &&
-                lease.onHireDepotaddressbookId?.toString() === selectedOnHireDepot
+                lease.portId?.toString() === selectedPort
               );
             });
-          }
 
-          // Fetch ports and address book to get proper port names and depot names
-          return Promise.all([
-            fetch("http://localhost:8000/movement-history/latest").then(res => res.json()),
-            fetch("http://localhost:8000/ports").then(res => res.json()),
-            fetch("http://localhost:8000/addressbook").then(res => res.json())
-          ]).then(([movementData, portsData, addressBookData]) => {
-            // Create a map of latest movement status by inventory ID
-            const latestMovements = movementData.reduce((acc: any, movement: any) => {
-              if (movement.inventoryId) {
-                acc[movement.inventoryId] = movement;
-              }
-              return acc;
-            }, {});
+            // If onhire depot is selected, further filter by depot
+            if (selectedOnHireDepot) {
+              filteredInventory = filteredInventory.filter((inv: any) => {
+                const latestMovement = latestMovementMap[inv.id];
+                
+                // If container has movement history, check addressBookId
+                if (latestMovement) {
+                  return latestMovement.addressBookId?.toString() === selectedOnHireDepot;
+                }
+                
+                // If no movement history, check leasing info depot
+                return inv.leasingInfo?.some((lease: any) => 
+                  lease.onHireDepotaddressbookId?.toString() === selectedOnHireDepot
+                );
+              });
+            }
 
-            // Create a map of ports by ID
-            const portsMap = portsData.reduce((acc: any, port: any) => {
-              acc[port.id] = port;
-              return acc;
-            }, {});
+            // Fetch ports and address book to get proper port names and depot names
+            return Promise.all([
+              fetch("http://localhost:8000/ports").then(res => res.json()),
+              fetch("http://localhost:8000/addressbook").then(res => res.json())
+            ]).then(([portsData, addressBookData]) => {
+              // Create maps for ports and address book
+              const portsMap = portsData.reduce((acc: any, port: any) => {
+                acc[port.id] = port;
+                return acc;
+              }, {});
 
-            // Create a map of address book (depots) by ID
-            const addressBookMap = addressBookData.reduce((acc: any, entry: any) => {
-              acc[entry.id] = entry;
-              return acc;
-            }, {});
+              const addressBookMap = addressBookData.reduce((acc: any, entry: any) => {
+                acc[entry.id] = entry;
+                return acc;
+              }, {});
 
-              // Filter to only show available containers
-              const availableContainers = filteredInventory
-                .filter((inv: any) => {
-                  const latestMovement = latestMovements[inv.id];
-                  return latestMovement && latestMovement.status === "AVAILABLE";
-                })
-                .map((inv: any) => {
-                  // Get the relevant leasing info for the selected port
-                  const relevantLease = inv.leasingInfo.find((lease: any) => {
-                    if (selectedOnHireDepot) {
-                      return lease.portId?.toString() === selectedPort &&
-                             lease.onHireDepotaddressbookId?.toString() === selectedOnHireDepot;
-                    }
-                    return lease.portId?.toString() === selectedPort;
-                  });
+              const availableContainers = filteredInventory.map((inv: any) => {
+                const latestMovement = latestMovementMap[inv.id];
+                
+                let portInfo: any = {};
+                let depotInfo: any = {};
 
-                  const latestMovement = latestMovements[inv.id];
-                  const portInfo = portsMap[relevantLease?.portId] || {};
-                  const depotInfo = addressBookMap[relevantLease?.onHireDepotaddressbookId] || {};
+                // Priority 1: Use latest movement data
+                if (latestMovement) {
+                  portInfo = portsMap[latestMovement.portId] || {};
+                  depotInfo = addressBookMap[latestMovement.addressBookId] || {};
+                } 
+                // Priority 2: Use leasing info (for fresh containers)
+                else if (inv.leasingInfo && inv.leasingInfo.length > 0) {
+                  const relevantLease = inv.leasingInfo.find((lease: any) => 
+                    lease.portId?.toString() === selectedPort
+                  );
+                  
+                  if (relevantLease) {
+                    portInfo = portsMap[relevantLease.portId] || {};
+                    depotInfo = addressBookMap[relevantLease.onHireDepotaddressbookId] || {};
+                  }
+                }
 
-                  return {
-                    id: inv.id,
-                    inventory: inv,
-                    inventoryId: inv.id,
-                    depotName: depotInfo.companyName || relevantLease?.onHireDepotAddressBook?.companyName || "",
-                    port: { id: relevantLease?.portId, portName: portInfo.portName || "Unknown Port" },
-                    addressBook: depotInfo || relevantLease?.onHireDepotAddressBook || null,
-                    status: latestMovement?.status || "UNKNOWN",
-                  };
-                });
+                return {
+                  id: inv.id,
+                  inventory: inv,
+                  inventoryId: inv.id,
+                  depotName: (depotInfo as { companyName?: string })?.companyName || "Unknown Depot",
+                  port: { 
+                    id: (portInfo as any).id || null, 
+                    portName: (portInfo as any).portName || "Unknown Port" 
+                  },
+                  addressBook: depotInfo,
+                  status: latestMovement?.status || "UNKNOWN",
+                };
+              });
 
               // Combine available containers with previously selected containers
-              // to ensure selected containers remain visible even when filters change
               const availableContainerIds = new Set(availableContainers.map((container: any) => container.id));
               const previouslySelectedNotInAvailable = modalSelectedContainers.filter(
                 (container: any) => !availableContainerIds.has(container.id)
@@ -1118,17 +1166,17 @@ const AddShipmentModal = ({
               
               setContainers(combinedContainers);
             });
-        })
-        .catch((err) => {
-          console.error("Failed to fetch containers:", err);
-          setContainers([]);
-        });
-    } else {
-      setContainers([]);
-    }
-    // Remove this line to preserve selected containers when filters change
-    // setModalSelectedContainers([]);
-  }, [selectedPort, selectedOnHireDepot, modalSelectedContainers]);
+          });
+      })
+      .catch((err) => {
+        console.error("Failed to fetch containers:", err);
+        setContainers([]);
+      });
+  } else {
+    setContainers([]);
+  }
+}, [selectedPort, selectedOnHireDepot, modalSelectedContainers]);
+
 
   useEffect(() => {
     const fetchAgents = async () => {

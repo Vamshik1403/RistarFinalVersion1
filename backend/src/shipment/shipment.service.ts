@@ -8,209 +8,208 @@ import { PrismaService } from 'src/prisma/prisma.service';
 export class ShipmentService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly billManagementService: BillManagementService
+    private readonly billManagementService: BillManagementService,
   ) {}
 
-async create(data: CreateShipmentDto) {
-  if (!data.polPortId || !data.podPortId) {
-    throw new Error('POL and POD port IDs are required');
-  }
-
-  const currentYear = new Date().getFullYear().toString().slice(-2); // e.g. "25"
-
-  // ✅ Fetch port codes
-  const [polPort, podPort] = await Promise.all([
-    this.prisma.ports.findUnique({
-      where: { id: data.polPortId },
-      select: { portCode: true },
-    }),
-    this.prisma.ports.findUnique({
-      where: { id: data.podPortId },
-      select: { portCode: true },
-    }),
-  ]);
-
-  const polCode = polPort?.portCode || 'XXX';
-  const podCode = podPort?.portCode || 'XXX';
-
-  const prefix = `RST/${polCode}${podCode}/${currentYear}/`;
-
-  // ✅ Find latest shipment for sequence
-  const latestShipment = await this.prisma.shipment.findFirst({
-    where: {
-      houseBL: { startsWith: prefix },
-    },
-    orderBy: { houseBL: 'desc' },
-  });
-
-  let nextSequence = 1;
-  if (latestShipment?.houseBL) {
-    const parts = latestShipment.houseBL.split('/');
-    const lastNumber = parseInt(parts[3]);
-    if (!isNaN(lastNumber)) {
-      nextSequence = lastNumber + 1;
-    }
-  }
-
-  const paddedSequence = String(nextSequence).padStart(5, '0');
-  const generatedHouseBL = `${prefix}${paddedSequence}`;
-
-  const { containers, ...rest } = data;
-
-
-  // ✅ Parse dates
-  const parseDate = (d: string | Date | null | undefined) =>
-    d && d !== '' ? new Date(d) : null;
-
-  // ✅ Generate jobNumber before transaction
-  const generatedJobNumber = await this.getNextJobNumber();
-
-  return this.prisma.$transaction(async (tx) => {
-    // Build base shipment data
-    const shipmentData: any = {
-      quotationRefNumber: rest.quotationRefNumber ?? null,
-      date: parseDate(rest.date),
-      jobNumber: generatedJobNumber,
-
-      refNumber: rest.refNumber ?? '',
-      masterBL: rest.masterBL ?? '',
-      houseBL: generatedHouseBL,
-      shippingTerm: rest.shippingTerm ?? '',
-      polFreeDays: rest.polFreeDays ?? '0',
-      podFreeDays: rest.podFreeDays ?? '0',
-      polDetentionRate: rest.polDetentionRate ?? '0',
-      podDetentionRate: rest.podDetentionRate ?? '0',
-      quantity: rest.quantity ?? '0',
-      vesselName: rest.vesselName ?? '',
-      gsDate: parseDate(rest.gsDate),
-      etaTopod: parseDate(rest.etaTopod),
-      estimateDate: parseDate(rest.estimateDate),
-      sob: parseDate(rest.sob),
-    };
-
-    // ✅ Map FK IDs into Prisma relations
-    if (rest.custAddressBookId) {
-      shipmentData.customerAddressBook = {
-        connect: { id: rest.custAddressBookId },
-      };
-    }
-    if (rest.consigneeAddressBookId) {
-      shipmentData.consigneeAddressBook = {
-        connect: { id: rest.consigneeAddressBookId },
-      };
-    }
-    if (rest.shipperAddressBookId) {
-      shipmentData.shipperAddressBook = {
-        connect: { id: rest.shipperAddressBookId },
-      };
-    }
-    if (rest.expHandlingAgentAddressBookId) {
-      shipmentData.expHandlingAgentAddressBook = {
-        connect: { id: rest.expHandlingAgentAddressBookId },
-      };
-    }
-    if (rest.impHandlingAgentAddressBookId) {
-      shipmentData.impHandlingAgentAddressBook = {
-        connect: { id: rest.impHandlingAgentAddressBookId },
-      };
-    }
-    if (rest.emptyReturnDepotAddressBookId) {
-      shipmentData.emptyReturnDepotAddressBook = {
-        connect: { id: rest.emptyReturnDepotAddressBookId },
-      };
-    }
-    if (rest.carrierAddressBookId) {
-      shipmentData.carrierAddressBook = {
-        connect: { id: rest.carrierAddressBookId },
-      };
-    }
-    if (rest.productId) {
-      shipmentData.product = {
-        connect: { id: rest.productId },
-      };
-    }
-    if (rest.polPortId) {
-      shipmentData.polPort = {
-        connect: { id: rest.polPortId },
-      };
-    }
-    if (rest.podPortId) {
-      shipmentData.podPort = {
-        connect: { id: rest.podPortId },
-      };
-    }
-    if (rest.transhipmentPortId) {
-      shipmentData.transhipmentPort = {
-        connect: { id: rest.transhipmentPortId },
-      };
+  async create(data: CreateShipmentDto) {
+    if (!data.polPortId || !data.podPortId) {
+      throw new Error('POL and POD port IDs are required');
     }
 
-    // ✅ Create shipment
-    const createdShipment = await tx.shipment.create({
-      data: shipmentData,
+    const currentYear = new Date().getFullYear().toString().slice(-2); // e.g. "25"
+
+    // ✅ Fetch port codes
+    const [polPort, podPort] = await Promise.all([
+      this.prisma.ports.findUnique({
+        where: { id: data.polPortId },
+        select: { portCode: true },
+      }),
+      this.prisma.ports.findUnique({
+        where: { id: data.podPortId },
+        select: { portCode: true },
+      }),
+    ]);
+
+    const polCode = polPort?.portCode || 'XXX';
+    const podCode = podPort?.portCode || 'XXX';
+
+    const prefix = `RST/${polCode}${podCode}/${currentYear}/`;
+
+    // ✅ Find latest shipment for sequence
+    const latestShipment = await this.prisma.shipment.findFirst({
+      where: {
+        houseBL: { startsWith: prefix },
+      },
+      orderBy: { houseBL: 'desc' },
     });
 
-    // ✅ Handle containers if provided
-    if (containers?.length) {
-      await tx.shipmentContainer.createMany({
-        data: containers.map((c) => ({
-          containerNumber: c.containerNumber,
-          capacity: c.capacity,
-          tare: c.tare,
-          portId: c.portId ?? undefined,
-          depotName: c.depotName ?? undefined,
-          inventoryId: c.inventoryId ?? undefined,
-          shipmentId: createdShipment.id,
-        })),
-      });
-
-      // ✅ Update inventory + movement history
-      for (const container of containers) {
-        if (!container.containerNumber) continue;
-
-        const inventory = await tx.inventory.findFirst({
-          where: { containerNumber: container.containerNumber },
-        });
-
-        if (inventory) {
-          const leasingInfo = await tx.leasingInfo.findFirst({
-            where: { inventoryId: inventory.id },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          if (leasingInfo) {
-            await tx.movementHistory.create({
-              data: {
-                inventoryId: inventory.id,
-                portId: leasingInfo.portId,
-                addressBookId: leasingInfo.onHireDepotaddressbookId,
-                shipmentId: createdShipment.id,
-                status: 'ALLOTTED',
-                date: new Date(),
-                jobNumber: createdShipment.jobNumber,
-              },
-            });
-          }
-        }
+    let nextSequence = 1;
+    if (latestShipment?.houseBL) {
+      const parts = latestShipment.houseBL.split('/');
+      const lastNumber = parseInt(parts[3]);
+      if (!isNaN(lastNumber)) {
+        nextSequence = lastNumber + 1;
       }
     }
 
-    // ✅ Create bill management record automatically
-    await tx.billManagement.create({
-      data: {
-        invoiceNo: '', // Null initially, user will fill it manually
-        invoiceAmount: 0, // Start with 0, user will fill in the actual amount
-        paidAmount: 0,
-        dueAmount: 0,
-        shipmentId: createdShipment.id,
-        billingStatus: 'Pending',
-        paymentStatus: 'Unpaid',
-      },
-    });
+    const paddedSequence = String(nextSequence).padStart(5, '0');
+    const generatedHouseBL = `${prefix}${paddedSequence}`;
 
-    return createdShipment;
-  });
-}
+    const { containers, ...rest } = data;
+
+    // ✅ Parse dates
+    const parseDate = (d: string | Date | null | undefined) =>
+      d && d !== '' ? new Date(d) : null;
+
+    // ✅ Generate jobNumber before transaction
+    const generatedJobNumber = await this.getNextJobNumber();
+
+    return this.prisma.$transaction(async (tx) => {
+      // Build base shipment data
+      const shipmentData: any = {
+        quotationRefNumber: rest.quotationRefNumber ?? null,
+        date: parseDate(rest.date),
+        jobNumber: generatedJobNumber,
+
+        refNumber: rest.refNumber ?? '',
+        masterBL: rest.masterBL ?? '',
+        houseBL: generatedHouseBL,
+        shippingTerm: rest.shippingTerm ?? '',
+        polFreeDays: rest.polFreeDays ?? '0',
+        podFreeDays: rest.podFreeDays ?? '0',
+        polDetentionRate: rest.polDetentionRate ?? '0',
+        podDetentionRate: rest.podDetentionRate ?? '0',
+        quantity: rest.quantity ?? '0',
+        vesselName: rest.vesselName ?? '',
+        gsDate: parseDate(rest.gsDate),
+        etaTopod: parseDate(rest.etaTopod),
+        estimateDate: parseDate(rest.estimateDate),
+        sob: parseDate(rest.sob),
+      };
+
+      // ✅ Map FK IDs into Prisma relations
+      if (rest.custAddressBookId) {
+        shipmentData.customerAddressBook = {
+          connect: { id: rest.custAddressBookId },
+        };
+      }
+      if (rest.consigneeAddressBookId) {
+        shipmentData.consigneeAddressBook = {
+          connect: { id: rest.consigneeAddressBookId },
+        };
+      }
+      if (rest.shipperAddressBookId) {
+        shipmentData.shipperAddressBook = {
+          connect: { id: rest.shipperAddressBookId },
+        };
+      }
+      if (rest.expHandlingAgentAddressBookId) {
+        shipmentData.expHandlingAgentAddressBook = {
+          connect: { id: rest.expHandlingAgentAddressBookId },
+        };
+      }
+      if (rest.impHandlingAgentAddressBookId) {
+        shipmentData.impHandlingAgentAddressBook = {
+          connect: { id: rest.impHandlingAgentAddressBookId },
+        };
+      }
+      if (rest.emptyReturnDepotAddressBookId) {
+        shipmentData.emptyReturnDepotAddressBook = {
+          connect: { id: rest.emptyReturnDepotAddressBookId },
+        };
+      }
+      if (rest.carrierAddressBookId) {
+        shipmentData.carrierAddressBook = {
+          connect: { id: rest.carrierAddressBookId },
+        };
+      }
+      if (rest.productId) {
+        shipmentData.product = {
+          connect: { id: rest.productId },
+        };
+      }
+      if (rest.polPortId) {
+        shipmentData.polPort = {
+          connect: { id: rest.polPortId },
+        };
+      }
+      if (rest.podPortId) {
+        shipmentData.podPort = {
+          connect: { id: rest.podPortId },
+        };
+      }
+      if (rest.transhipmentPortId) {
+        shipmentData.transhipmentPort = {
+          connect: { id: rest.transhipmentPortId },
+        };
+      }
+
+      // ✅ Create shipment
+      const createdShipment = await tx.shipment.create({
+        data: shipmentData,
+      });
+
+      // ✅ Handle containers if provided
+      if (containers?.length) {
+        await tx.shipmentContainer.createMany({
+          data: containers.map((c) => ({
+            containerNumber: c.containerNumber,
+            capacity: c.capacity,
+            tare: c.tare,
+            portId: c.portId ?? undefined,
+            depotName: c.depotName ?? undefined,
+            inventoryId: c.inventoryId ?? undefined,
+            shipmentId: createdShipment.id,
+          })),
+        });
+
+        // ✅ Update inventory + movement history
+        for (const container of containers) {
+          if (!container.containerNumber) continue;
+
+          const inventory = await tx.inventory.findFirst({
+            where: { containerNumber: container.containerNumber },
+          });
+
+          if (inventory) {
+            const leasingInfo = await tx.leasingInfo.findFirst({
+              where: { inventoryId: inventory.id },
+              orderBy: { createdAt: 'desc' },
+            });
+
+            if (leasingInfo) {
+              await tx.movementHistory.create({
+                data: {
+                  inventoryId: inventory.id,
+                  portId: leasingInfo.portId,
+                  addressBookId: leasingInfo.onHireDepotaddressbookId,
+                  shipmentId: createdShipment.id,
+                  status: 'ALLOTTED',
+                  date: new Date(),
+                  jobNumber: createdShipment.jobNumber,
+                },
+              });
+            }
+          }
+        }
+      }
+
+      // ✅ Create bill management record automatically
+      await tx.billManagement.create({
+        data: {
+          invoiceNo: '', // Null initially, user will fill it manually
+          invoiceAmount: 0, // Start with 0, user will fill in the actual amount
+          paidAmount: 0,
+          dueAmount: 0,
+          shipmentId: createdShipment.id,
+          billingStatus: 'Pending',
+          paymentStatus: 'Unpaid',
+        },
+      });
+
+      return createdShipment;
+    });
+  }
 
   async getNextJobNumber(): Promise<string> {
     const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
@@ -256,64 +255,124 @@ async create(data: CreateShipmentDto) {
         emptyReturnDepotAddressBook: true,
         containers: true,
       },
-      orderBy: [
-        { date: 'desc' },
-        { jobNumber: 'desc' },
-        { id: 'desc' }
-      ],
+      orderBy: [{ date: 'desc' }, { jobNumber: 'desc' }, { id: 'desc' }],
     });
   }
 
-  
+  async cancelShipment(id: number, cancellationReason: string) {
+  const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+  return this.prisma.$transaction(async (tx) => {
+    // Get shipment details
+    const shipment = await tx.shipment.findUniqueOrThrow({
+      where: { id },
+      select: {
+        id: true,
+        jobNumber: true,
+        containers: {
+          select: {
+            inventoryId: true
+          }
+        }
+      },
+    });
+
+    // Update shipment remark
+    const updatedShipment = await tx.shipment.update({
+      where: { id },
+      data: {
+        remark: `[CANCELLED on ${timestamp}] ${cancellationReason}`,
+      },
+    });
+
+    // Update movement history for all containers in this shipment
+    for (const container of shipment.containers) {
+      const inventoryId = container.inventoryId;
+      if (!inventoryId) continue;
+
+      const leasingInfo = await tx.leasingInfo.findFirst({
+        where: { inventoryId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Skip containers with incomplete leasing info
+      if (
+        !leasingInfo ||
+        !leasingInfo.portId ||
+        !leasingInfo.onHireDepotaddressbookId
+      ) {
+        console.warn(
+          `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+        );
+        continue;
+      }
+
+      // Create movement history entry for cancellation
+      await tx.movementHistory.create({
+        data: {
+          inventoryId,
+          portId: leasingInfo.portId,
+          addressBookId: leasingInfo.onHireDepotaddressbookId,
+          status: 'AVAILABLE',
+          date: new Date(),
+          remarks: `Shipment cancelled - ${shipment.jobNumber}`,
+          shipmentId: shipment.id,
+          emptyRepoJobId: null,
+        },
+      });
+    }
+
+    return updatedShipment;
+  });
+}
 
   async canEditInventory(id: number) {
-  // Get latest movement entry
-  const inventory = await this.prisma.inventory.findUnique({
-    where: { id },
-    include: {
-      movementHistory: {
-        orderBy: { date: 'desc' },
-        take: 1,
-        select: {
-          status: true,
-          shipmentId: true,
-          emptyRepoJobId: true,
+    // Get latest movement entry
+    const inventory = await this.prisma.inventory.findUnique({
+      where: { id },
+      include: {
+        movementHistory: {
+          orderBy: { date: 'desc' },
+          take: 1,
+          select: {
+            status: true,
+            shipmentId: true,
+            emptyRepoJobId: true,
+          },
         },
       },
-    },
-  });
+    });
 
-  if (!inventory) {
-    return { canEdit: false, reason: "Container not found." };
-  }
+    if (!inventory) {
+      return { canEdit: false, reason: 'Container not found.' };
+    }
 
-  const latestMove = inventory.movementHistory[0];
+    const latestMove = inventory.movementHistory[0];
 
-  // ❌ No movement yet
-  if (!latestMove) {
+    // ❌ No movement yet
+    if (!latestMove) {
+      return {
+        canEdit: false,
+        reason: 'Container not yet available in movement history.',
+      };
+    }
+
+    // ✅ Main rule — if AVAILABLE, allow edit (ignore IDs)
+    if (latestMove.status === 'AVAILABLE') {
+      return {
+        canEdit: true,
+        reason: null,
+        action: null,
+      };
+    }
+
+    // ❌ Not AVAILABLE (like ALLOTTED, LOADED, etc.)
     return {
       canEdit: false,
-      reason: "Container not yet available in movement history.",
-    };
-  }
-
-  // ✅ Main rule — if AVAILABLE, allow edit (ignore IDs)
-  if (latestMove.status === "AVAILABLE") {
-    return {
-      canEdit: true,
-      reason: null,
+      reason: `Container is currently ${latestMove.status}.`,
       action: null,
     };
   }
-
-  // ❌ Not AVAILABLE (like ALLOTTED, LOADED, etc.)
-  return {
-    canEdit: false,
-    reason: `Container is currently ${latestMove.status}.`,
-    action: null,
-  };
-}
-
 
   findOne(id: number) {
     return this.prisma.shipment.findUnique({
@@ -377,7 +436,9 @@ async create(data: CreateShipmentDto) {
           leasingInfo.portId == null ||
           leasingInfo.onHireDepotaddressbookId == null
         ) {
-          console.warn(`Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`);
+          console.warn(
+            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+          );
           continue;
         }
 
@@ -401,8 +462,12 @@ async create(data: CreateShipmentDto) {
         data: {
           ...shipmentData,
           date: shipmentData.date ? new Date(shipmentData.date) : undefined,
-          gsDate: shipmentData.gsDate ? new Date(shipmentData.gsDate) : undefined,
-          etaTopod: shipmentData.etaTopod ? new Date(shipmentData.etaTopod) : undefined,
+          gsDate: shipmentData.gsDate
+            ? new Date(shipmentData.gsDate)
+            : undefined,
+          etaTopod: shipmentData.etaTopod
+            ? new Date(shipmentData.etaTopod)
+            : undefined,
           estimateDate: shipmentData.estimateDate
             ? new Date(shipmentData.estimateDate)
             : undefined,
@@ -444,7 +509,9 @@ async create(data: CreateShipmentDto) {
             leasingInfo.portId == null ||
             leasingInfo.onHireDepotaddressbookId == null
           ) {
-            console.warn(`Skipping movement history for inventoryId ${container.inventoryId} - incomplete leasing info`);
+            console.warn(
+              `Skipping movement history for inventoryId ${container.inventoryId} - incomplete leasing info`,
+            );
             continue;
           }
 
@@ -466,7 +533,10 @@ async create(data: CreateShipmentDto) {
     });
   }
 
-  async getBlAssignments(shipmentId: number, blType: 'draft'|'original'|'seaway') {
+  async getBlAssignments(
+    shipmentId: number,
+    blType: 'draft' | 'original' | 'seaway',
+  ) {
     const rows = await this.prisma.blAssignment.findMany({
       where: { shipmentId, blType },
       orderBy: { blIndex: 'asc' },
@@ -474,13 +544,13 @@ async create(data: CreateShipmentDto) {
     });
 
     // build groups as string[][]
-    const groups: string[][] = rows.map(r => (r.containerNumbers as string[]));
+    const groups: string[][] = rows.map((r) => r.containerNumbers as string[]);
     return { shipmentId, blType, groups };
   }
 
   async saveBlAssignments(
     shipmentId: number,
-    blType: 'draft'|'original'|'seaway',
+    blType: 'draft' | 'original' | 'seaway',
     groups: string[][],
   ) {
     return this.prisma.$transaction(async (tx) => {
@@ -524,9 +594,10 @@ async create(data: CreateShipmentDto) {
 
     return this.prisma.$transaction(async (tx) => {
       // ✅ Update bill management record to mark shipment as deleted and store details
-      const portDetails = shipment.polPort?.portName && shipment.podPort?.portName 
-        ? `${shipment.polPort.portName} → ${shipment.podPort.portName}`
-        : null;
+      const portDetails =
+        shipment.polPort?.portName && shipment.podPort?.portName
+          ? `${shipment.polPort.portName} → ${shipment.podPort.portName}`
+          : null;
 
       await tx.billManagement.updateMany({
         where: { shipmentId: id },
@@ -550,8 +621,14 @@ async create(data: CreateShipmentDto) {
         });
 
         // Skip containers with incomplete leasing info instead of throwing error
-        if (!leasingInfo || !leasingInfo.portId || !leasingInfo.onHireDepotaddressbookId) {
-          console.warn(`Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`);
+        if (
+          !leasingInfo ||
+          !leasingInfo.portId ||
+          !leasingInfo.onHireDepotaddressbookId
+        ) {
+          console.warn(
+            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+          );
           continue;
         }
 
@@ -573,9 +650,9 @@ async create(data: CreateShipmentDto) {
         where: { shipmentId: id },
       });
 
-    await tx.blAssignment.deleteMany({
-      where: { shipmentId: id },
-    });
+      await tx.blAssignment.deleteMany({
+        where: { shipmentId: id },
+      });
 
       return tx.shipment.delete({
         where: { id },

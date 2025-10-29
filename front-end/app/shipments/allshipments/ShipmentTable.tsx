@@ -69,6 +69,7 @@ const AllShipmentsPage = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [containerSearch, setContainerSearch] = useState('');
   const [blGroups, setBlGroups] = useState<string[][]>([]);
+  
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -110,6 +111,14 @@ const AllShipmentsPage = () => {
   const [blJustSaved, setBlJustSaved] = useState(false);
   const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, hasRfsBlGenerated: boolean, firstGenerationDate: string | null } }>({});
   const [croGenerationStatus, setCroGenerationStatus] = useState<{ [key: number]: { hasCroGenerated: boolean, firstCroGenerationDate: string | null } }>({});
+const [showCancelModal, setShowCancelModal] = useState(false);
+const [cancelReason, setCancelReason] = useState('');
+const [shipmentToCancel, setShipmentToCancel] = useState<number | null>(null);
+
+// Helper function to check if shipment is cancelled
+const isShipmentCancelled = (shipment: any) => {
+  return shipment.remark?.includes('[CANCELLED');
+};
 
   // Add state to track copy downloads for each shipment and BL type
   const [blCopyDownloadStatus, setBlCopyDownloadStatus] = useState<{
@@ -343,21 +352,7 @@ const AllShipmentsPage = () => {
     }
   };
 
-  /** PUT (create/replace) groups for a shipment + BL type */
-  const saveBlAssignments = async (
-    shipmentId: number,
-    blType: BLType,
-    groups: string[][]
-  ) => {
-    // apiFetch auto-JSONs plain objects, adds auth headers, and throws on non-2xx
-    await apiFetch(
-      `http://localhost:8000/shipment/assignments/${shipmentId}/${blType}`,
-      {
-        method: 'PUT',
-        body: { groups },
-      }
-    );
-  };
+ 
 
 
 
@@ -396,15 +391,6 @@ const AllShipmentsPage = () => {
   };
 
 
-  // toggle container in a group and ensure container exists in only ONE group
-  const toggleContainerInGroup = (groupIdx: number, containerNumber: string) => {
-    setBlGroups(prev => {
-      const next = prev.map(g => g.filter(n => n !== containerNumber)); // remove from all groups
-      const alreadyIn = prev[groupIdx]?.includes(containerNumber);
-      if (!alreadyIn) next[groupIdx] = [...(next[groupIdx] || []), containerNumber];
-      return next;
-    });
-  };
 
 
 
@@ -626,20 +612,43 @@ const sortedData = res.data.sort((a: any, b: any) => {
       .catch(err => console.error('Failed to fetch movements', err));
   }, []);
 
-  const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm('Are you sure you want to delete this shipment?');
-    if (!confirmDelete) return;
+const handleDelete = async (id: number) => {
+  // Instead of deleting, show cancellation modal
+  setShipmentToCancel(id);
+  setCancelReason('');
+  setShowCancelModal(true);
+};
 
-    try {
-      await apiFetch(`http://localhost:8000/shipment/${id}`, {
-        method: 'DELETE',
-      });
-      await fetchShipments();
-    } catch (err) {
-      console.error('Failed to delete shipment', err);
-      alert('Error deleting shipment.');
-    }
-  };
+// Add this new function to handle cancellation confirmation
+const handleConfirmCancel = async () => {
+  if (!shipmentToCancel || !cancelReason.trim()) {
+    alert('Please provide a cancellation reason.');
+    return;
+  }
+
+  try {
+    // Call API to mark shipment as cancelled with reason
+    await apiFetch(`http://localhost:8000/shipment/${shipmentToCancel}/cancel`, {
+      method: 'PATCH',
+      body: {
+        cancellationReason: cancelReason.trim(),
+      },
+    });
+    
+    // Refresh the shipments list
+    await fetchShipments();
+    
+    // Close modal and reset state
+    setShowCancelModal(false);
+    setShipmentToCancel(null);
+    setCancelReason('');
+    
+    alert('Shipment has been cancelled successfully.');
+  } catch (err) {
+    console.error('Failed to cancel shipment', err);
+    alert('Error cancelling shipment. Please try again.');
+  }
+};
 
   const handleEdit = async (shipment: any) => {
     // Pre-fetch required data for proper display names
@@ -2013,63 +2022,153 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
               return (
                 <>
-                  {shipments.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
-                        No shipments found.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedShipments.map((shipment: any) => (
-                  <TableRow
-                    key={shipment.id}
-                    className="text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-                  >
-                    <TableCell className="font-medium">{shipment.jobNumber}</TableCell>
-                    <TableCell>{new Date(shipment.date).toLocaleDateString()}</TableCell>
-                    <TableCell>{shipment.customerAddressBook?.companyName || '-'}</TableCell>
-                    <TableCell>{shipment.shipperAddressBook?.companyName || '-'}</TableCell>
-                    <TableCell>{shipment.product?.productName || '-'}</TableCell>
-                    <TableCell>{shipment.polPort?.portName || '-'} → {shipment.podPort?.portName || '-'}</TableCell>
-                    <TableCell className="space-x-2">
-                      <Button
-                        onClick={() => handleView(shipment)}
-                        title="View Details"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
-                      >
-                        <Eye size={16} />
-                      </Button>
-                      <Button
-                        onClick={() => handleEdit(shipment)}
-                        title="Edit"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
-                      >
-                        <Pencil size={16} />
-                      </Button>
-                      <Button
-                        onClick={() => handleDelete(shipment.id)}
-                        title="Delete"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
-                            title="More options"
-                          >
-                            <MoreVertical size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
+                 {shipments.length === 0 ? (
+  <TableRow>
+    <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
+      No shipments found.
+    </TableCell>
+  </TableRow>
+) : (
+  paginatedShipments.map((shipment: any) => (
+    <TableRow
+      key={shipment.id}
+      className={
+        isShipmentCancelled(shipment) 
+          ? "line-through text-gray-500 bg-gray-100 dark:bg-gray-800 border-l-4 border-l-red-500" 
+          : "text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+      }
+    >
+      <TableCell className={isShipmentCancelled(shipment) ? "font-medium text-gray-500" : "font-medium"}>
+        {shipment.jobNumber}
+        {isShipmentCancelled(shipment) && (
+          <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+            Cancelled
+          </span>
+        )}
+      </TableCell>
+      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+        {new Date(shipment.date).toLocaleDateString()}
+      </TableCell>
+      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+        {shipment.customerAddressBook?.companyName || '-'}
+      </TableCell>
+      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+        {shipment.shipperAddressBook?.companyName || '-'}
+      </TableCell>
+      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+        {shipment.product?.productName || '-'}
+      </TableCell>
+      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+        {shipment.polPort?.portName || '-'} → {shipment.podPort?.portName || '-'}
+      </TableCell>
+      <TableCell className="space-x-2">
+        <Button
+          onClick={() => handleView(shipment)}
+          title="View Details"
+          variant="ghost"
+          size="icon"
+          className={
+            isShipmentCancelled(shipment)
+              ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+              : "h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
+          }
+        >
+          <Eye size={16} />
+        </Button>
+        <Button
+          onClick={() => handleEdit(shipment)}
+          title="Edit"
+          variant="ghost"
+          size="icon"
+          className={
+            isShipmentCancelled(shipment)
+              ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+              : "h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
+          }
+          disabled={isShipmentCancelled(shipment)}
+        >
+          <Pencil size={16} />
+        </Button>
+        <Button
+          onClick={() => handleDelete(shipment.id)}
+          title={isShipmentCancelled(shipment) ? "Already Cancelled" : "Cancel Shipment"}
+          variant="ghost"
+          size="icon"
+          className={
+            isShipmentCancelled(shipment)
+              ? "h-8 w-8 text-gray-400 cursor-not-allowed"
+              : "h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
+          }
+          disabled={isShipmentCancelled(shipment)}
+        >
+          <Trash2 size={16} />
+        </Button>
+        {/* Rest of your dropdown menu code remains the same */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={
+                isShipmentCancelled(shipment)
+                  ? "h-8 w-8 text-gray-400 cursor-not-allowed"
+                  : "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+              }
+              title={isShipmentCancelled(shipment) ? "Options disabled for cancelled shipment" : "More options"}
+              disabled={isShipmentCancelled(shipment)}
+            >
+              <MoreVertical size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+      
+                        <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+  <DialogContent className="max-w-md">
+    <DialogHeader>
+      <DialogTitle>Cancel Shipment</DialogTitle>
+    </DialogHeader>
+    
+    <div className="space-y-4 py-4">
+      <div className="space-y-2">
+        <Label htmlFor="cancelReason">Reason for Cancellation *</Label>
+        <Textarea
+          id="cancelReason"
+          value={cancelReason}
+          onChange={(e) => setCancelReason(e.target.value)}
+          placeholder="Please provide the reason for cancelling this shipment..."
+          className="min-h-[100px] resize-vertical bg-white dark:bg-black"
+          rows={4}
+        />
+      </div>
+      
+      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+        <p className="text-sm text-yellow-800 dark:text-yellow-200">
+          <strong>Note:</strong> This will mark the shipment as cancelled but keep the record in the system. The cancellation reason will be stored in the remarks.
+        </p>
+      </div>
+    </div>
+    
+    <DialogFooter className="space-x-2">
+      <Button 
+        variant="outline" 
+        onClick={() => {
+          setShowCancelModal(false);
+          setShipmentToCancel(null);
+          setCancelReason('');
+        }}
+        className="cursor-pointer"
+      >
+        Cancel
+      </Button>
+      <Button 
+        onClick={handleConfirmCancel}
+        className="cursor-pointer bg-red-600 hover:bg-red-700"
+        disabled={!cancelReason.trim()}
+      >
+        Confirm Cancellation
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
                         <DropdownMenuContent align="end" className="min-w-[240px]">
                           {/* CRO Options */}
                           <DropdownMenuItem className='cursor-pointer flex items-center justify-between py-2'>

@@ -36,6 +36,9 @@ export class CreateEmptyRepoJobDto {
   @IsString()
   shippingTerm: string;
 
+    @IsString()
+  remark?: string;
+
   @IsOptional() @IsInt()
   expHandlingAgentAddressBookId?: number;
 

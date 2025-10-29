@@ -433,6 +433,7 @@ model Shipment {
   podDetentionRate              String
   quantity                      String
   vesselName                    String
+  remark                        String?
   gsDate                        DateTime?
   sob                           DateTime?
   etaTopod                      DateTime?
@@ -506,6 +507,7 @@ model EmptyRepoJob {
   podDetentionRate              String
   quantity                      String
   vesselName                    String
+  remark                        String?
   gsDate                        DateTime?
   sob                           DateTime?
   etaTopod                      DateTime?
