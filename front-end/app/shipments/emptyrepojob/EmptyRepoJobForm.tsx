@@ -237,12 +237,30 @@ const AddShipmentModal = ({
     fetchMovements();
   }, []);
 
-  // 🔍 Live search for containers inside "Select Containers" modal
-const handleModalContainerSearch = async (value: string) => {
+ const handleModalContainerSearch = async (value: string) => {
   setContainerSearchText(value);
 
-  if (!value || value.trim().length < 3) {
-    setContainers([]);
+  if (!value || value.trim().length < 2) {
+    // If no search text, show all available containers for selected port
+    if (!selectedPort) {
+      setContainers([]);
+      return;
+    }
+    
+    // Load all available containers for the selected port
+    try {
+      const movementRes = await axios.get("http://localhost:8000/movement-history/latest");
+      const allLatest = Array.isArray(movementRes.data) ? movementRes.data : [];
+      
+      const portContainers = allLatest.filter(
+        (m) => m.status === "AVAILABLE" && m.port?.id?.toString() === selectedPort
+      );
+      
+      setContainers(portContainers);
+    } catch (err) {
+      console.error("Error loading port containers:", err);
+      setContainers([]);
+    }
     return;
   }
 
@@ -251,12 +269,12 @@ const handleModalContainerSearch = async (value: string) => {
     const res = await axios.get("http://localhost:8000/movement-history/latest");
     const allLatest = Array.isArray(res.data) ? res.data : [];
 
-    // 2️⃣ Filter AVAILABLE containers at the selected port
+    // 2️⃣ Filter AVAILABLE containers that match search AND are at selected port
     const results = allLatest.filter(
       (m) =>
         m.inventory?.containerNumber?.toLowerCase().includes(value.toLowerCase()) &&
         m.status === "AVAILABLE" &&
-        m.port?.id?.toString() === selectedPort?.toString()
+        (!selectedPort || m.port?.id?.toString() === selectedPort) // Only filter by port if one is selected
     );
 
     // 3️⃣ If not found in movement-history, fall back to /inventory
@@ -265,11 +283,12 @@ const handleModalContainerSearch = async (value: string) => {
       const invMatches = (invRes.data || []).filter((inv: any) =>
         inv.containerNumber?.toLowerCase().includes(value.toLowerCase())
       );
+      
       const formatted = invMatches.map((inv: any) => ({
         id: inv.id,
         inventory: inv,
         status: "AVAILABLE",
-        port: { id: selectedPort, portName: "Unknown Port" },
+        port: selectedPort ? { id: parseInt(selectedPort), portName: "Unknown Port" } : null,
         addressBook: { companyName: "New Container (No Movement)" },
       }));
       setContainers(formatted);
@@ -283,7 +302,6 @@ const handleModalContainerSearch = async (value: string) => {
 };
 
 
- // ✅ Replace your existing handleContainerSearch with this one
 const handleContainerSearch = async (value: string) => {
   setForm({ ...form, containerNumber: value });
 
@@ -306,22 +324,27 @@ const handleContainerSearch = async (value: string) => {
       .map((term) => term.trim().toLowerCase())
       .filter(Boolean);
 
-    // STEP 1️⃣ — Fetch latest movement data
+    // STEP 1 — Fetch latest movement data
     const movementRes = await axios.get("http://localhost:8000/movement-history/latest");
     const movements = Array.isArray(movementRes.data) ? movementRes.data : [];
 
-    // Filter containers that are AVAILABLE in movement history
+    // Filter containers that are AVAILABLE and match search terms
     let availableMatches = movements.filter((m) => {
       if (!m.inventory?.containerNumber) return false;
+      
       const num = m.inventory.containerNumber.toLowerCase();
-      return (
-        searchTerms.some((t) => num.includes(t)) &&
-        m.status === "AVAILABLE" &&
-        m.port?.id?.toString() === form.portOfLoadingId?.toString()
-      );
+      const matchesSearch = searchTerms.some((t) => num.includes(t));
+      const isAvailable = m.status === "AVAILABLE";
+      
+      // If portOfLoadingId is selected, filter by port, otherwise show all available
+      const matchesPort = form.portOfLoadingId 
+        ? m.port?.id?.toString() === form.portOfLoadingId?.toString()
+        : true;
+
+      return matchesSearch && isAvailable && matchesPort;
     });
 
-    // STEP 2️⃣ — If no result found in movement-history/latest, check /inventory
+    // STEP 2 — If no result found in movement-history/latest, check /inventory
     if (availableMatches.length === 0) {
       const invRes = await axios.get("http://localhost:8000/inventory");
       const allInventory = Array.isArray(invRes.data) ? invRes.data : [];
@@ -330,7 +353,9 @@ const handleContainerSearch = async (value: string) => {
       const freshMatches = allInventory.filter((inv: any) => {
         const num = inv.containerNumber?.toLowerCase() || "";
         const hasMovement = movements.some((m) => m.inventoryId === inv.id);
-        return searchTerms.some((t) => num.includes(t)) && !hasMovement;
+        const matchesSearch = searchTerms.some((t) => num.includes(t));
+        
+        return matchesSearch && !hasMovement;
       });
 
       // Map /inventory results to same structure for display
@@ -343,7 +368,7 @@ const handleContainerSearch = async (value: string) => {
       }));
     }
 
-    // STEP 3️⃣ — Sort by createdAt (FIFO) and update UI
+    // STEP 3 — Sort by createdAt (FIFO) and update UI
     const sorted = availableMatches.sort(
       (a, b) =>
         new Date(a.inventory?.createdAt || 0).getTime() -
