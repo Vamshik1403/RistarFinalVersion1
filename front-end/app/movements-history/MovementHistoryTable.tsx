@@ -936,8 +936,13 @@ const MovementHistoryTable = () => {
                       />
                     </TableCell>
                     <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
-                    <TableCell className="font-medium">{row.inventory?.containerNumber || "-"}</TableCell>
-                    <TableCell>{row.shipment?.jobNumber || row.emptyRepoJob?.jobNumber || row.jobNumber}</TableCell>
+                   <TableCell className="font-medium">{row.inventory?.containerNumber || "-"}</TableCell>
+<TableCell>
+  {row.status?.toUpperCase() !== "AVAILABLE" 
+    ? row.shipment?.jobNumber || row.emptyRepoJob?.jobNumber || row.jobNumber
+    : "-"
+  }
+</TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border ${row.status === 'ALLOTTED'

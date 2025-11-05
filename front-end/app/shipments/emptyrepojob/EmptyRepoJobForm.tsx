@@ -31,6 +31,9 @@ import {
 import { Label } from "@/components/ui/label";
 import { Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "../../../lib/api";
+import dayjs from "dayjs";
+import { Calendar } from "lucide-react";
+
 
 // Component to display latest container location data
 // Component to display latest container location data (movement-history FIRST)
@@ -1035,6 +1038,68 @@ const handleContainerSearch = async (value: string) => {
     </div>
   );
 
+// Utility to format DD/MM/YY and handle invalid values
+const formatDateInput = (value: string) => {
+  if (!value) return "";
+  const parsed = dayjs(value, ["DD/MM/YY", "DD/MM/YYYY", "YYYY-MM-DD"], true);
+  return parsed.isValid() ? parsed.format("DD/MM/YY") : value;
+};
+
+
+const CustomDatePicker = ({
+  id,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  className,
+  validationError,
+}: any) => {
+  const [internalValue, setInternalValue] = useState("");
+
+  useEffect(() => {
+    if (value) {
+      const formatted = formatDateInput(value);
+      setInternalValue(formatted);
+    } else {
+      setInternalValue("");
+    }
+  }, [value]);
+
+  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const isoValue = e.target.value;
+    const formatted = dayjs(isoValue).format("DD/MM/YY");
+    setInternalValue(formatted);
+    onChange({
+      target: { value: formatted },
+    });
+  };
+
+  return (
+    <div className="relative">
+      {/* Browser date picker — only one calendar UI */}
+      <input
+        id={id}
+        type="date"
+        value={
+          internalValue
+            ? dayjs(internalValue, ["DD/MM/YY", "DD/MM/YYYY"]).format("YYYY-MM-DD")
+            : ""
+        }
+        onChange={handleDateSelect}
+        onBlur={onBlur}
+        placeholder={placeholder || "DD/MM/YY"}
+        className={className}
+      />
+
+      {/* Just the small Lucide calendar icon for aesthetics */}
+
+      {validationError && (
+        <p className="text-red-500 text-xs mt-1">{validationError}</p>
+      )}
+    </div>
+  );
+};
 
 
   return (
@@ -1063,28 +1128,36 @@ const handleContainerSearch = async (value: string) => {
               </div>
               <div className="bg-white dark:bg-neutral-900 p-4 rounded space-y-4 border border-neutral-200 dark:border-neutral-700">
                 <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                  <div>
-                    <Label
-                      htmlFor="date"
-                      className="block text-sm text-gray-900 dark:text-neutral-200 mb-1"
-                    >
-                      Date (DD/MM/YY) <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="date"
-                      value={form.date || ""}
-                      onChange={(e) => {
-                        setForm({ ...form, date: e.target.value });
-                        if (validationErrors.date) {
-                          setValidationErrors(prev => ({...prev, date: ""}));
-                        }
-                      }}
-                      className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
-                    />
-                    {validationErrors.date && (
-                      <p className="text-red-500 text-xs mt-1">{validationErrors.date}</p>
-                    )}
-                  </div>
+               <div>
+  <Label
+    htmlFor="date"
+    className="block text-sm text-gray-900 dark:text-neutral-200 mb-1"
+  >
+    Date (DD/MM/YY) <span className="text-red-500">*</span>
+  </Label>
+  <CustomDatePicker
+    id="date"
+    value={form.date || ""}
+    onChange={(e:any) => {
+      const formattedValue = formatDateInput(e.target.value);
+      if (formattedValue !== null) {
+        setForm({ ...form, date: formattedValue });
+      }
+      if (validationErrors.date) {
+        setValidationErrors(prev => ({...prev, date: ""}));
+      }
+    }}
+    onBlur={(e:any) => {
+      const formattedValue = formatDateInput(e.target.value);
+      if (formattedValue !== null) {
+        setForm({ ...form, date: formattedValue });
+      }
+    }}
+    placeholder="DD/MM/YY"
+    className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
+    validationError={validationErrors.date}
+  />
+</div>
 
                   {/* <div>
                     <Label

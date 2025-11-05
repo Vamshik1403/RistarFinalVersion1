@@ -169,11 +169,14 @@ const MovementHistoryModal: React.FC<Props> = ({
                     </td>
 
                     <td className="py-4 px-6 text-gray-700 dark:text-gray-300 font-medium">
-                      {entry.shipment?.jobNumber ||
-                        entry.emptyRepoJob?.jobNumber ||
-                        entry.jobNumber ||
-                        "NA"}
-                    </td>
+  {entry.status?.toUpperCase() !== "AVAILABLE" 
+    ? entry.shipment?.jobNumber ||
+      entry.emptyRepoJob?.jobNumber ||
+      entry.jobNumber ||
+      "NA"
+    : "-"
+  }
+</td>
 
                     <td className="py-4 px-6 text-gray-700 dark:text-gray-300">
                       {entry.status === "DAMAGED" ||

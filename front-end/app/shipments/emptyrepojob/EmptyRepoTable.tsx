@@ -768,7 +768,6 @@ const EmptyRepo = () => {
               <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">Port of Discharge</TableHead>
               <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">Vessel</TableHead>
               <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">ETD</TableHead>
-              <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">Containers</TableHead>
               <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">CRO Status</TableHead>
               <TableHead className="px-2 py-2 whitespace-nowrap text-black dark:text-neutral-200 font-medium">Actions</TableHead>
             </TableRow>
@@ -791,21 +790,16 @@ const EmptyRepo = () => {
                   <TableCell>{job.polPort?.portName || '-'}</TableCell>
                   <TableCell>{job.podPort?.portName || '-'}</TableCell>
                   <TableCell>{job.vesselName || '-'}</TableCell>
-<TableCell>{job.etaTopod ? new Date(job.etaTopod).toLocaleDateString() : '-'}</TableCell>
-                  <TableCell>
-                    {(job.containers ?? [])
-                      .map((c: any) => c.containerNumber)
-                      .join(', ') || '-'}
-                  </TableCell>
+<TableCell>{job.etaTopod ? new Date(job.etaTopod).toLocaleDateString('en-GB') : '-'}</TableCell>                 
                   <TableCell>
                     {croGenerationStatus[job.id]?.hasCroGenerated ? (
                       <div className="flex items-center space-x-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                         <span className="text-green-600 text-sm font-medium">Generated</span>
                         {croGenerationStatus[job.id]?.firstCroGenerationDate && (
-                          <span className="text-xs text-gray-500">
-                            ({new Date(croGenerationStatus[job.id].firstCroGenerationDate!).toLocaleDateString()})
-                          </span>
+                         <span className="text-xs text-gray-500">
+  ({new Date(croGenerationStatus[job.id].firstCroGenerationDate!).toLocaleDateString('en-GB')})
+</span>
                         )}
                       </div>
                     ) : (
