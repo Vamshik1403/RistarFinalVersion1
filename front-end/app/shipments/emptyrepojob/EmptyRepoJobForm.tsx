@@ -33,91 +33,96 @@ import { Plus, AlertTriangle } from "lucide-react";
 import { apiFetch } from "../../../lib/api";
 
 // Component to display latest container location data
-const ContainerLocationDisplay = ({ 
-  inventoryId, 
-  fallbackDepotName, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackDepotName?: string; 
-  fallbackPortName?: string; 
+// Component to display latest container location data (movement-history FIRST)
+const ContainerLocationDisplay = ({
+  inventoryId,
+  fallbackDepotName,
+  fallbackPortName,
+}: {
+  inventoryId: number | null;
+  fallbackDepotName?: string;
+  fallbackPortName?: string;
 }) => {
-  const [locationData, setLocationData] = useState<{
-    depotName: string;
-    portName: string;
-  } | null>(null);
+  const [locationData, setLocationData] = useState<{ depotName: string; portName: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLatestLocation = async () => {
+    const run = async () => {
       if (!inventoryId) {
+        setLocationData(
+          fallbackDepotName || fallbackPortName
+            ? { depotName: fallbackDepotName || "N/A", portName: fallbackPortName || "N/A" }
+            : null
+        );
         setLoading(false);
         return;
       }
 
       try {
-        // Fetch latest container data
-        const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inventory = inventoryResponse.data;
+        // 1) Try /movement-history/latest (source of truth for “current location”)
+        const latestRes = await axios.get("http://localhost:8000/movement-history/latest");
+        const latest = Array.isArray(latestRes.data) ? latestRes.data : [];
+        const match = latest.find((m: any) => m.inventoryId === inventoryId);
 
-        // Get the latest leasing info
-        const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
-        if (latestLeasingInfo) {
-          // Fetch port name
-          let portName = fallbackPortName || "N/A";
-          if (latestLeasingInfo.portId) {
-            try {
-              const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-              portName = portResponse.data.portName;
-            } catch (portError) {
-              console.warn("Failed to fetch port name:", portError);
-            }
-          }
+        if (match && match.port && match.addressBook) {
+          setLocationData({
+            depotName: match.addressBook.companyName || fallbackDepotName || "N/A",
+            portName: match.port.portName || fallbackPortName || "N/A",
+          });
+          return;
+        }
 
-          // Fetch depot name
-          let depotName = fallbackDepotName || "N/A";
-          if (latestLeasingInfo.onHireDepotaddressbookId) {
-            try {
-              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
-              depotName = depotResponse.data.companyName;
-            } catch (depotError) {
-              console.warn("Failed to fetch depot name:", depotError);
-            }
-          }
-
-          setLocationData({ depotName, portName });
-        } else {
-          // Fallback to stored values if no leasing info
+        // 2) Fall back to whatever the caller provided (suggestion item already carries these)
+        if (fallbackDepotName || fallbackPortName) {
           setLocationData({
             depotName: fallbackDepotName || "N/A",
-            portName: fallbackPortName || "N/A"
+            portName: fallbackPortName || "N/A",
           });
+          return;
         }
-      } catch (error) {
-        console.error("Failed to fetch latest container location:", error);
-        // Fallback to stored values
-        setLocationData({
-          depotName: fallbackDepotName || "N/A",
-          portName: fallbackPortName || "N/A"
-        });
+
+        // 3) Last resort: look at leasing info to derive something sensible
+        const invRes = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
+        const inv = invRes.data;
+        const lease = inv?.leasingInfo?.[0];
+
+        if (lease) {
+          let portName = "N/A";
+          let depotName = "N/A";
+          try {
+            if (lease.portId) {
+              const p = await axios.get(`http://localhost:8000/ports/${lease.portId}`);
+              portName = p.data?.portName || "N/A";
+            }
+          } catch {}
+          try {
+            if (lease.onHireDepotaddressbookId) {
+              const d = await axios.get(`http://localhost:8000/addressbook/${lease.onHireDepotaddressbookId}`);
+              depotName = d.data?.companyName || "N/A";
+            }
+          } catch {}
+          setLocationData({ depotName, portName });
+          return;
+        }
+
+        setLocationData(null);
+      } catch (e) {
+        console.error("Failed to resolve latest location", e);
+        setLocationData(
+          fallbackDepotName || fallbackPortName
+            ? { depotName: fallbackDepotName || "N/A", portName: fallbackPortName || "N/A" }
+            : null
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLatestLocation();
+    run();
   }, [inventoryId, fallbackDepotName, fallbackPortName]);
 
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
-
-  return (
-    <span>
-      {locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}
-    </span>
-  );
+  if (loading) return <span className="text-gray-400">Loading...</span>;
+  return <span>{locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}</span>;
 };
 
 type ContainerItem = {
@@ -232,46 +237,125 @@ const AddShipmentModal = ({
     fetchMovements();
   }, []);
 
-  const handleContainerSearch = (value: string) => {
-    setForm({ ...form, containerNumber: value });
+  // 🔍 Live search for containers inside "Select Containers" modal
+const handleModalContainerSearch = async (value: string) => {
+  setContainerSearchText(value);
 
-    // Check if quantity is set and is a valid positive number before allowing search
-    const currentQuantity = parseInt(form.quantity);
-    if (!form.quantity || isNaN(currentQuantity) || currentQuantity <= 0) {
-      setSuggestions([]);
-      return;
-    }
+  if (!value || value.trim().length < 3) {
+    setContainers([]);
+    return;
+  }
 
-    if (value.length >= 2) {
-      // Split by commas, newlines, or spaces and filter out empty strings
-      const searchTerms = value
-        .split(/[\s,\n]+/)
-        .map(term => term.trim().toLowerCase())
-        .filter(term => term.length > 0);
+  try {
+    // 1️⃣ Fetch latest movement-history (true live availability)
+    const res = await axios.get("http://localhost:8000/movement-history/latest");
+    const allLatest = Array.isArray(res.data) ? res.data : [];
 
-      const matched = allMovements.filter((m) => {
-        if (!m.inventory?.containerNumber) return false;
-        
-        const containerNumber = m.inventory.containerNumber.toLowerCase();
-        
-        // If multiple search terms, match any of them
-        if (searchTerms.length > 1) {
-          return searchTerms.some(term => containerNumber.includes(term));
-        }
-        
-        // Single search term
-        return containerNumber.includes(searchTerms[0]);
-      }).sort(
-          (a, b) =>
-            new Date(a.inventory?.createdAt || a.createdAt).getTime() -
-            new Date(b.inventory?.createdAt || b.createdAt).getTime()
-        ); // FIFO: oldest first
+    // 2️⃣ Filter AVAILABLE containers at the selected port
+    const results = allLatest.filter(
+      (m) =>
+        m.inventory?.containerNumber?.toLowerCase().includes(value.toLowerCase()) &&
+        m.status === "AVAILABLE" &&
+        m.port?.id?.toString() === selectedPort?.toString()
+    );
 
-      setSuggestions(matched);
+    // 3️⃣ If not found in movement-history, fall back to /inventory
+    if (results.length === 0) {
+      const invRes = await axios.get("http://localhost:8000/inventory");
+      const invMatches = (invRes.data || []).filter((inv: any) =>
+        inv.containerNumber?.toLowerCase().includes(value.toLowerCase())
+      );
+      const formatted = invMatches.map((inv: any) => ({
+        id: inv.id,
+        inventory: inv,
+        status: "AVAILABLE",
+        port: { id: selectedPort, portName: "Unknown Port" },
+        addressBook: { companyName: "New Container (No Movement)" },
+      }));
+      setContainers(formatted);
     } else {
-      setSuggestions([]);
+      setContainers(results);
     }
-  };
+  } catch (err) {
+    console.error("Modal container search error:", err);
+    setContainers([]);
+  }
+};
+
+
+ // ✅ Replace your existing handleContainerSearch with this one
+const handleContainerSearch = async (value: string) => {
+  setForm({ ...form, containerNumber: value });
+
+  // Check if quantity is valid before search
+  const currentQuantity = parseInt(form.quantity);
+  if (!form.quantity || isNaN(currentQuantity) || currentQuantity <= 0) {
+    setSuggestions([]);
+    return;
+  }
+
+  if (value.length < 2) {
+    setSuggestions([]);
+    return;
+  }
+
+  try {
+    // Split multiple container numbers if typed
+    const searchTerms = value
+      .split(/[\s,\n]+/)
+      .map((term) => term.trim().toLowerCase())
+      .filter(Boolean);
+
+    // STEP 1️⃣ — Fetch latest movement data
+    const movementRes = await axios.get("http://localhost:8000/movement-history/latest");
+    const movements = Array.isArray(movementRes.data) ? movementRes.data : [];
+
+    // Filter containers that are AVAILABLE in movement history
+    let availableMatches = movements.filter((m) => {
+      if (!m.inventory?.containerNumber) return false;
+      const num = m.inventory.containerNumber.toLowerCase();
+      return (
+        searchTerms.some((t) => num.includes(t)) &&
+        m.status === "AVAILABLE" &&
+        m.port?.id?.toString() === form.portOfLoadingId?.toString()
+      );
+    });
+
+    // STEP 2️⃣ — If no result found in movement-history/latest, check /inventory
+    if (availableMatches.length === 0) {
+      const invRes = await axios.get("http://localhost:8000/inventory");
+      const allInventory = Array.isArray(invRes.data) ? invRes.data : [];
+
+      // Take containers that match search term but have no movement record
+      const freshMatches = allInventory.filter((inv: any) => {
+        const num = inv.containerNumber?.toLowerCase() || "";
+        const hasMovement = movements.some((m) => m.inventoryId === inv.id);
+        return searchTerms.some((t) => num.includes(t)) && !hasMovement;
+      });
+
+      // Map /inventory results to same structure for display
+      availableMatches = freshMatches.map((inv: any) => ({
+        id: inv.id,
+        inventory: inv,
+        status: "AVAILABLE",
+        port: { id: form.portOfLoadingId, portName: form.portOfLoading },
+        addressBook: { companyName: "New Container (No Movement)" },
+      }));
+    }
+
+    // STEP 3️⃣ — Sort by createdAt (FIFO) and update UI
+    const sorted = availableMatches.sort(
+      (a, b) =>
+        new Date(a.inventory?.createdAt || 0).getTime() -
+        new Date(b.inventory?.createdAt || 0).getTime()
+    );
+
+    setSuggestions(sorted);
+  } catch (err) {
+    console.error("Error searching containers:", err);
+    setSuggestions([]);
+  }
+};
 
   const handleSuggestionSelect = (item: any) => {
     const containerNo = item.inventory?.containerNumber;
@@ -1988,7 +2072,7 @@ const AddShipmentModal = ({
               <textarea
                 id="containerSearch"
                 value={containerSearchText}
-                onChange={(e) => setContainerSearchText(e.target.value)}
+onChange={(e) => handleModalContainerSearch(e.target.value)}
                 placeholder="Search by container numbers..."
                 rows={3}
                 className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white border border-neutral-200 dark:border-neutral-700 rounded resize-none"
