@@ -27,6 +27,18 @@ export class MovementHistoryService {
     });
   }
 
+  async findAllByShipment(shipmentId: number) {
+  return this.prisma.movementHistory.findMany({
+    where: { shipmentId },
+    include: {
+      inventory: true,
+      port: true,
+      addressBook: true,
+    },
+    orderBy: { date: 'asc' },
+  });
+}
+
   async findOne(id: number) {
     const movement = await this.prisma.movementHistory.findUnique({
       where: { id },
@@ -128,13 +140,16 @@ export class MovementHistoryService {
         addressBookId = null;
         break;
 
-      case 'EMPTY RETURNED':
-        portId = shipment?.podPortId ?? emptyRepoJob?.podPortId ?? null;
-        addressBookId =
-          shipment?.emptyReturnDepotAddressBookId ??
-          emptyRepoJob?.emptyReturnDepotAddressBookId ??
-          null;
-        break;
+     case 'EMPTY RETURNED':
+  portId = shipment?.podPortId ?? emptyRepoJob?.podPortId ?? prev.portId ?? null;
+  addressBookId =
+    addressBookIdFromFrontend ??
+    shipment?.emptyReturnDepotAddressBookId ??
+    emptyRepoJob?.emptyReturnDepotAddressBookId ??
+    prev.addressBookId ??
+    null;
+  break;
+
 
       case 'UNDER CLEANING':
       case 'UNDER SURVEY':
@@ -235,6 +250,7 @@ export class MovementHistoryService {
 } else if (emptyRepoJob?.id != null) {
   createData.emptyRepoJobId = emptyRepoJob.id;
 }
+
 
 
         if (finalRemarks !== null) createData.remarks = finalRemarks;

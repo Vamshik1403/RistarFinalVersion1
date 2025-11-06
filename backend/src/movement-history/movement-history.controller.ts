@@ -80,28 +80,27 @@ export class MovementHistoryController {
     return { message: 'New status entries created', results };
   }
 
+  @Get('by-shipment/:id')
+async getByShipment(@Param('id', ParseIntPipe) id: number) {
+  return this.movementHistoryService.findAllByShipment(id);
+}
+
+
   @UseGuards(AuthGuard('jwt'))
-  @Post('bulk-update')
-  async bulkUpdate(
-    @Body()
-    dto: {
-      ids: number[];
-      newStatus: string;
-      jobNumber: string;
-      remarks: string;
-      maintenanceStatus?: string;
-      vesselName?: string;
-    },
-  ) {
-    return this.movementHistoryService.bulkUpdateStatus(
-      dto.ids,
-      dto.newStatus,
-      dto.jobNumber,
-      dto.remarks,
-      dto.maintenanceStatus,
-      dto.vesselName,
-    );
-  }
+@Post('bulk-update')
+async bulkUpdate(@Body() dto: any) {
+  return this.movementHistoryService.bulkUpdateStatus(
+    dto.ids,
+    dto.newStatus,
+    dto.jobNumber,
+    dto.remarks,
+    dto.maintenanceStatus,
+    dto.vesselName,
+    dto.addressBookIdFromClient || dto.addressBookId || null, // ✅ pass depot id
+  );
+}
+
+
 
   @UseGuards(AuthGuard('jwt'))
   @Patch(':id')

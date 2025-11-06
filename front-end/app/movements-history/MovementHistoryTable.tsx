@@ -651,7 +651,7 @@ const MovementHistoryTable = () => {
         date: movementDate,
         remarks: remarks.trim(),
         portId: selectedPortId || null,
-        addressBookId: selectedDepotId || null,
+addressBookIdFromClient: selectedDepotId || null,
         vesselName: newStatus === "SOB" ? vesselName : null,
       };
 
@@ -732,34 +732,35 @@ const MovementHistoryTable = () => {
     }
   };
 
-  useEffect(() => {
-    if (
-      (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
-      selectedIds.length > 0
-    ) {
-      const selectedRow = data.find((d) => selectedIds.includes(d.id));
-      if (selectedRow) {
-        const portId = selectedRow.port?.id || null;
-        setSelectedPortId(portId);
+useEffect(() => {
+  if (
+    (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
+    selectedIds.length > 0
+  ) {
+    const selectedRow = data.find((d) => selectedIds.includes(d.id));
+    if (!selectedRow) return;
 
-        // 🔥 Auto-load depots for this port
-        if (portId) {
-          axios.get("http://localhost:8000/addressbook").then((res) => {
-            const filtered = res.data.filter((entry: any) => {
-              return (
-                entry.businessType?.includes("Depot Terminal") &&
-                entry.businessPorts.some((bp: any) => bp.portId === portId)
-              );
-            });
-            setDepots(filtered);
-          });
-        }
+    const portId = selectedRow.port?.id || null;
+    setSelectedPortId(portId);
 
-        // preselect depot if already present
-        setSelectedDepotId(selectedRow.addressBook?.id || null);
-      }
+    if (portId) {
+      axios.get("http://localhost:8000/addressbook").then((res) => {
+        const filtered = res.data.filter((entry: any) => {
+          return (
+            entry.businessType?.includes("Depot Terminal") &&
+            entry.businessPorts?.some((bp: any) => bp.portId === portId)
+          );
+        });
+        setDepots(filtered);
+      });
     }
-  }, [newStatus, selectedIds]);
+
+    // ✅ Only set depot once (don’t override user changes)
+    if (!selectedDepotId) {
+      setSelectedDepotId(selectedRow.addressBook?.id || null);
+    }
+  }
+}, [newStatus, selectedIds]);
 
 
   return (
@@ -1218,26 +1219,36 @@ const MovementHistoryTable = () => {
               })()}
 
               {/* Show if EMPTY RETURNED or RETURNED TO DEPOT */}
-              {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (
-                <div className="space-y-4">
+             {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (
+  <div className="space-y-4">
+    {/* Depot Dropdown */}
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+        Select Depot
+      </label>
+      <select
+        value={selectedDepotId || ""}
+        onChange={(e) => {
+          const depotId = parseInt(e.target.value);
+          setSelectedDepotId(depotId);
 
-                  {/* Depot Dropdown */}
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Select Depot</label>
-                    <select
-                      value={selectedDepotId || ""}
-                      onChange={(e) => setSelectedDepotId(parseInt(e.target.value))}
-                      className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50"
-                      disabled={!selectedPortId}
-                    >
-                      <option value="">Select Depot</option>
-                      {depots.map((depot) => (
-                        <option key={depot.id} value={depot.id}>
-                          {depot.companyName}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+          // ✅ Find depot details and log or handle update
+          const selectedDepot = depots.find((d) => d.id === depotId);
+          if (selectedDepot) {
+            console.log("Depot selected:", selectedDepot.companyName);
+          }
+        }}
+        className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50"
+        disabled={!selectedPortId || depots.length === 0}
+      >
+        <option value="">Select Depot</option>
+        {depots.map((depot) => (
+          <option key={depot.id} value={depot.id}>
+            {depot.companyName}
+          </option>
+        ))}
+      </select>
+    </div>
                 </div>
               )}
 

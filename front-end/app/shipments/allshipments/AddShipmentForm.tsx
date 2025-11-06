@@ -289,11 +289,13 @@ type SelectOptions = {
 
 const ContainerLocationDisplay = ({ 
   inventoryId, 
+  shipmentId,
   fallbackDepotName, 
   fallbackPortName,
   refreshTrigger 
 }: { 
   inventoryId: number | null; 
+  shipmentId?: number | null;
   fallbackDepotName?: string; 
   fallbackPortName?: string;
   refreshTrigger?: number;
@@ -305,95 +307,88 @@ const ContainerLocationDisplay = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchLatestLocation = async () => {
+    const fetchLocation = async () => {
       if (!inventoryId) {
         setLoading(false);
         return;
       }
 
       try {
-        // First try to get latest movement history
-        const movementResponse = await axios.get(`http://localhost:8000/movement-history/latest`);
-        const latestMovements = movementResponse.data;
-        
-        // Find the latest movement for this inventory
-        const latestMovement = latestMovements.find((movement: any) => 
-          movement.inventoryId === inventoryId
-        );
-
         let portName = "N/A";
         let depotName = "N/A";
 
-        // Priority 1: Use latest movement data if available and container is AVAILABLE
-        if (latestMovement && latestMovement.status === "AVAILABLE") {
-          if (latestMovement.portId) {
-            try {
-              const portResponse = await axios.get(`http://localhost:8000/ports/${latestMovement.portId}`);
-              portName = portResponse.data.portName;
-            } catch (portError) {
-              console.warn("Failed to fetch port name from movement:", portError);
-            }
-          }
+        // ✅ 1. If editing a shipment (shipmentId exists)
+        if (shipmentId) {
+          const shipmentRes = await axios.get(
+            `http://localhost:8000/movement-history/by-shipment/${shipmentId}`
+          );
+          const shipmentMovements = shipmentRes.data || [];
 
-          if (latestMovement.addressBookId) {
-            try {
-              const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestMovement.addressBookId}`);
-              depotName = depotResponse.data.companyName;
-            } catch (depotError) {
-              console.warn("Failed to fetch depot name from movement:", depotError);
-            }
-          }
-        } 
-        // Priority 2: Fall back to leasing info (for fresh containers or no movement history)
-        else {
-          const inventoryResponse = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-          const inventory = inventoryResponse.data;
+          // Find movement record for this container with status ALLOTTED
+          const match = shipmentMovements.find(
+            (m: any) => m.inventoryId === inventoryId && m.status === "ALLOTTED"
+          );
 
-          const latestLeasingInfo = inventory.leasingInfo?.[0];
-          
-          portName = fallbackPortName || "N/A";
-          depotName = fallbackDepotName || "N/A";
-
-          if (latestLeasingInfo) {
-            if (latestLeasingInfo.portId) {
+          if (match) {
+            if (match.portId) {
               try {
-                const portResponse = await axios.get(`http://localhost:8000/ports/${latestLeasingInfo.portId}`);
-                portName = portResponse.data.portName;
-              } catch (portError) {
-                console.warn("Failed to fetch port name from leasing:", portError);
-              }
+                const portRes = await axios.get(
+                  `http://localhost:8000/ports/${match.portId}`
+                );
+                portName = portRes.data.portName || "N/A";
+              } catch {}
             }
 
-            if (latestLeasingInfo.onHireDepotaddressbookId) {
+            if (match.addressBookId) {
               try {
-                const depotResponse = await axios.get(`http://localhost:8000/addressbook/${latestLeasingInfo.onHireDepotaddressbookId}`);
-                depotName = depotResponse.data.companyName;
-              } catch (depotError) {
-                console.warn("Failed to fetch depot name from leasing:", depotError);
-              }
+                const depotRes = await axios.get(
+                  `http://localhost:8000/addressbook/${match.addressBookId}`
+                );
+                depotName = depotRes.data.companyName || "N/A";
+              } catch {}
             }
+
+            setLocationData({ depotName, portName });
+            setLoading(false);
+            return; // ✅ Stop here — we got the fixed shipment-level location
           }
         }
 
+        // ✅ 2. Fallback to normal “latest movement” logic
+        const movementRes = await axios.get(`http://localhost:8000/movement-history/latest`);
+        const latestMovements = movementRes.data;
+        const latest = latestMovements.find((m: any) => m.inventoryId === inventoryId);
+
+        if (latest && latest.status === "AVAILABLE") {
+          if (latest.portId) {
+            const portRes = await axios.get(`http://localhost:8000/ports/${latest.portId}`);
+            portName = portRes.data.portName || "N/A";
+          }
+          if (latest.addressBookId) {
+            const depotRes = await axios.get(`http://localhost:8000/addressbook/${latest.addressBookId}`);
+            depotName = depotRes.data.companyName || "N/A";
+          }
+        } else {
+          depotName = fallbackDepotName || "N/A";
+          portName = fallbackPortName || "N/A";
+        }
+
         setLocationData({ depotName, portName });
-      } catch (error) {
-        console.error("Failed to fetch latest container location:", error);
-        // Final fallback to stored values
+      } catch (err) {
+        console.error("Error fetching location:", err);
         setLocationData({
           depotName: fallbackDepotName || "N/A",
-          portName: fallbackPortName || "N/A"
+          portName: fallbackPortName || "N/A",
         });
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLatestLocation();
-  }, [inventoryId, fallbackDepotName, fallbackPortName, refreshTrigger]);
+    fetchLocation();
+  }, [inventoryId, shipmentId, refreshTrigger]);
 
-  if (loading) {
-    return <span className="text-gray-400">Loading...</span>;
-  }
+  if (loading) return <span className="text-gray-400">Loading...</span>;
 
   return (
     <span>
@@ -401,6 +396,7 @@ const ContainerLocationDisplay = ({
     </span>
   );
 };
+
 
 const ContainerSearchModal = ({
   open,
@@ -691,6 +687,7 @@ const ContainerSearchModal = ({
                 <div className="text-gray-700 dark:text-neutral-300 text-xs">
                   <ContainerLocationDisplay 
                     inventoryId={container.inventory?.id} 
+                    shipmentId={form.id}
                     fallbackDepotName={container.depotName || container.addressBook?.companyName}
                     fallbackPortName={container.port?.portName}
                     refreshTrigger={locationRefreshTrigger}
@@ -865,6 +862,8 @@ const AddShipmentModal = ({
       [field]: visible,
     }));
   };
+
+  
 
   // Function to fetch EXP handling agents by port
   const fetchExpHandlingAgentsByPort = async (portId: number) => {
@@ -3326,6 +3325,7 @@ useEffect(() => {
                            <div className="text-xs text-black-400 mt-1">
                              Location: <ContainerLocationDisplay 
                                inventoryId={sug.inventoryId} 
+                               shipmentId={form.id}
                                fallbackDepotName={sug.addressBook?.companyName}
                                fallbackPortName={sug.port?.portName}
                                refreshTrigger={locationRefreshTrigger}
@@ -3386,6 +3386,7 @@ useEffect(() => {
                             <TableCell className="text-gray-900 dark:text-white">
                               <ContainerLocationDisplay 
                                 inventoryId={item.inventoryId} 
+                                shipmentId={form.id}
                                 fallbackDepotName={item.depotName}
                                 fallbackPortName={item.port?.portName}
                                 refreshTrigger={locationRefreshTrigger}
