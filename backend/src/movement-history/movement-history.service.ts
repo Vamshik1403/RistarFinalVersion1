@@ -39,6 +39,29 @@ export class MovementHistoryService {
   });
 }
 
+async findAllByEmptyRepoJob(emptyRepoJobId: number) {
+  if (!emptyRepoJobId) {
+    throw new BadRequestException('Empty Repo Job ID is required');
+  }
+
+  const records = await this.prisma.movementHistory.findMany({
+    where: { emptyRepoJobId },
+    include: {
+      inventory: true,
+      port: true,
+      addressBook: true,
+    },
+    orderBy: { date: 'asc' },
+  });
+
+  if (!records || records.length === 0) {
+    return [];
+  }
+
+  return records;
+}
+
+
   async findOne(id: number) {
     const movement = await this.prisma.movementHistory.findUnique({
       where: { id },

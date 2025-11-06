@@ -39,10 +39,12 @@ import { Calendar } from "lucide-react";
 // Component to display latest container location data (movement-history FIRST)
 const ContainerLocationDisplay = ({
   inventoryId,
+  emptyRepoJobId,
   fallbackDepotName,
   fallbackPortName,
 }: {
   inventoryId: number | null;
+  emptyRepoJobId?: number | null;
   fallbackDepotName?: string;
   fallbackPortName?: string;
 }) => {
@@ -50,79 +52,64 @@ const ContainerLocationDisplay = ({
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const run = async () => {
+    const fetchLocation = async () => {
       if (!inventoryId) {
-        setLocationData(
-          fallbackDepotName || fallbackPortName
-            ? { depotName: fallbackDepotName || "N/A", portName: fallbackPortName || "N/A" }
-            : null
-        );
         setLoading(false);
         return;
       }
 
       try {
-        // 1) Try /movement-history/latest (source of truth for “current location”)
+        let depotName = "N/A";
+        let portName = "N/A";
+
+        // ✅ 1. If editing/viewing an existing Empty Repo Job
+        if (emptyRepoJobId) {
+          const res = await axios.get(
+            `http://localhost:8000/movement-history/by-empty-repo-job/${emptyRepoJobId}`
+          );
+          const records = res.data || [];
+
+          // Find ALLOTTED movement for this inventory
+          const match = records.find(
+            (m: any) => m.inventoryId === inventoryId && m.status === "ALLOTTED"
+          );
+
+          if (match) {
+            depotName = match.addressBook?.companyName || fallbackDepotName || "N/A";
+            portName = match.port?.portName || fallbackPortName || "N/A";
+            setLocationData({ depotName, portName });
+            setLoading(false);
+            return;
+          }
+        }
+
+        // ✅ 2. Fallback to live /movement-history/latest
         const latestRes = await axios.get("http://localhost:8000/movement-history/latest");
         const latest = Array.isArray(latestRes.data) ? latestRes.data : [];
-        const match = latest.find((m: any) => m.inventoryId === inventoryId);
+        const found = latest.find((m: any) => m.inventoryId === inventoryId);
 
-        if (match && match.port && match.addressBook) {
-          setLocationData({
-            depotName: match.addressBook.companyName || fallbackDepotName || "N/A",
-            portName: match.port.portName || fallbackPortName || "N/A",
-          });
-          return;
+        if (found && found.port && found.addressBook) {
+          depotName = found.addressBook.companyName || "N/A";
+          portName = found.port.portName || "N/A";
+        } else {
+          depotName = fallbackDepotName || "N/A";
+          portName = fallbackPortName || "N/A";
         }
 
-        // 2) Fall back to whatever the caller provided (suggestion item already carries these)
-        if (fallbackDepotName || fallbackPortName) {
-          setLocationData({
-            depotName: fallbackDepotName || "N/A",
-            portName: fallbackPortName || "N/A",
-          });
-          return;
-        }
-
-        // 3) Last resort: look at leasing info to derive something sensible
-        const invRes = await axios.get(`http://localhost:8000/inventory/${inventoryId}`);
-        const inv = invRes.data;
-        const lease = inv?.leasingInfo?.[0];
-
-        if (lease) {
-          let portName = "N/A";
-          let depotName = "N/A";
-          try {
-            if (lease.portId) {
-              const p = await axios.get(`http://localhost:8000/ports/${lease.portId}`);
-              portName = p.data?.portName || "N/A";
-            }
-          } catch {}
-          try {
-            if (lease.onHireDepotaddressbookId) {
-              const d = await axios.get(`http://localhost:8000/addressbook/${lease.onHireDepotaddressbookId}`);
-              depotName = d.data?.companyName || "N/A";
-            }
-          } catch {}
-          setLocationData({ depotName, portName });
-          return;
-        }
-
-        setLocationData(null);
-      } catch (e) {
-        console.error("Failed to resolve latest location", e);
-        setLocationData(
-          fallbackDepotName || fallbackPortName
-            ? { depotName: fallbackDepotName || "N/A", portName: fallbackPortName || "N/A" }
-            : null
-        );
+        setLocationData({ depotName, portName });
+      } catch (err) {
+        console.error("Error fetching container location:", err);
+        setLocationData({
+          depotName: fallbackDepotName || "N/A",
+          portName: fallbackPortName || "N/A",
+        });
       } finally {
         setLoading(false);
       }
     };
 
-    run();
-  }, [inventoryId, fallbackDepotName, fallbackPortName]);
+    fetchLocation();
+  }, [inventoryId, emptyRepoJobId, fallbackDepotName, fallbackPortName]);
 
   if (loading) return <span className="text-gray-400">Loading...</span>;
   return <span>{locationData ? `${locationData.depotName} - ${locationData.portName}` : "N/A"}</span>;
@@ -1617,6 +1604,7 @@ const CustomDatePicker = ({
                           <div className="text-xs text-black-400 mt-1">
                             Location: <ContainerLocationDisplay 
                               inventoryId={sug.inventory?.id} 
+                              emptyRepoJobId={form.id}
                               fallbackDepotName={sug.addressBook?.companyName}
                               fallbackPortName={sug.port?.portName}
                             />
@@ -1677,6 +1665,7 @@ const CustomDatePicker = ({
                               <TableCell className="text-gray-900 dark:text-white">
                                 <ContainerLocationDisplay 
                                   inventoryId={item.inventoryId} 
+                                  emptyRepoJobId={form.id}
                                   fallbackDepotName={item.depotName}
                                   fallbackPortName={item.port?.portName}
                                 />
@@ -2273,7 +2262,8 @@ onChange={(e) => handleModalContainerSearch(e.target.value)}
                     </div>
                     <div className="text-gray-700 dark:text-neutral-300 text-xs">
                       <ContainerLocationDisplay 
-                        inventoryId={container.inventory?.id || container.inventoryId} 
+                        inventoryId={container.inventory?.id || container.inventoryId}
+                       emptyRepoJobId={form.id}
                         fallbackDepotName={container.depotName || container.addressBook?.companyName}
                         fallbackPortName={container.port?.portName}
                       />

@@ -85,6 +85,12 @@ async getByShipment(@Param('id', ParseIntPipe) id: number) {
   return this.movementHistoryService.findAllByShipment(id);
 }
 
+@Get('by-empty-repo-job/:id')
+async getByEmptyRepoJob(@Param('id', ParseIntPipe) id: number) {
+  return this.movementHistoryService.findAllByEmptyRepoJob(id);
+}
+
+
 
   @UseGuards(AuthGuard('jwt'))
 @Post('bulk-update')
