@@ -511,6 +511,7 @@ model EmptyRepoJob {
   gsDate                        DateTime?
   sob                           DateTime?
   etaTopod                      DateTime?
+  status                        String?   @default("ACTIVE")
   estimateDate                  DateTime?
   createdAt                     DateTime                @default(now())
   updatedAt                     DateTime                @updatedAt
@@ -542,7 +543,7 @@ model RepoShipmentContainer {
 model MovementHistory {
   id             Int           @id @default(autoincrement())
   inventoryId    Int
-  portId         Int
+  portId         Int?
   addressBookId  Int?
   shipmentId     Int?
   emptyRepoJobId Int?
@@ -555,7 +556,7 @@ model MovementHistory {
   addressBook    AddressBook?  @relation(fields: [addressBookId], references: [id])
   emptyRepoJob   EmptyRepoJob? @relation(fields: [emptyRepoJobId], references: [id])
   inventory      Inventory     @relation(fields: [inventoryId], references: [id])
-  port           Ports         @relation(fields: [portId], references: [id])
+  port           Ports?         @relation(fields: [portId], references: [id])
   shipment       Shipment?     @relation(fields: [shipmentId], references: [id])
 }
 

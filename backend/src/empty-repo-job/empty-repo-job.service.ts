@@ -5,70 +5,11 @@ import { UpdateEmptyRepoJobDto } from './dto/update-emptyRepoJob.dto';
 
 @Injectable()
 export class EmptyRepoJobService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  private async generateJobNumber(polCode: string, podCode: string): Promise<string> {
-    // GLOBAL sequence across all EmptyRepoJobs irrespective of ports
-    const year = new Date().getFullYear().toString().slice(-2);
-    const prefix = `RST/${polCode}${podCode}/${year}/`;
 
-    // Fetch all job numbers and compute the global max ER sequence
-    const allJobs = await this.prisma.emptyRepoJob.findMany({ select: { jobNumber: true } });
-    let maxSeq = 0;
-    for (const j of allJobs) {
-      const match = j.jobNumber?.match(/ER(\d{5})$/);
-      if (match) {
-        const n = parseInt(match[1], 10);
-        if (!isNaN(n)) maxSeq = Math.max(maxSeq, n);
-      }
-    }
 
-    const nextSeq = maxSeq + 1;
-    const paddedSeq = String(nextSeq).padStart(5, '0');
-    return `${prefix}ER${paddedSeq}`;
-  }
 
-  /**
-   * Preview-only: returns a dummy job number template
-   */
- async getNextJobNumber(): Promise<{ jobNumber: string; houseBL: string }> {
-  const year = new Date().getFullYear().toString().slice(-2);
-  const prefix = `RST/`; // Match all RST/XXYYZZ/25/ER000xx patterns
-
-  const jobs = await this.prisma.emptyRepoJob.findMany({
-    where: {
-      jobNumber: {
-        startsWith: prefix,
-      },
-    },
-    orderBy: {
-      jobNumber: 'desc',
-    },
-  });
-
-  let maxSeq = 0;
-
-  for (const job of jobs) {
-    const parts = job.jobNumber.split('/');
-    if (parts.length === 4 && parts[3].startsWith('ER')) {
-      const seq = parseInt(parts[3].replace('ER', ''), 10);
-      if (!isNaN(seq)) {
-        maxSeq = Math.max(maxSeq, seq);
-      }
-    }
-  }
-
-  const nextSeq = maxSeq + 1;
-  const paddedSeq = String(nextSeq).padStart(5, '0');
-  const placeholderPrefix = `RST/[POL][POD]/${year}/`;
-
-  const jobNumber = `${placeholderPrefix}ER${paddedSeq}`;
-
-  return {
-    jobNumber,
-    houseBL: jobNumber,
-  };
-}
 
 
   async create(data: CreateEmptyRepoJobDto) {
@@ -133,6 +74,15 @@ export class EmptyRepoJobService {
             where: { containerNumber: container.containerNumber },
           });
 
+          if (!inventory) continue;
+
+          await tx.movementHistory.updateMany({
+            where: { inventoryId: inventory.id, status: 'AVAILABLE' },
+            data: {
+              remarks: `Container allocated to Empty Repo ${createdJob.jobNumber}`,
+            },
+          });
+
           if (inventory) {
             const leasingInfo = await tx.leasingInfo.findFirst({
               where: { inventoryId: inventory.id },
@@ -140,16 +90,45 @@ export class EmptyRepoJobService {
             });
 
             if (leasingInfo) {
+              // Find latest movement entry to get current depot and port
+              const lastMovement = await tx.movementHistory.findFirst({
+                where: { inventoryId: inventory.id },
+                orderBy: { date: 'desc' },
+              });
+
+              // Determine correct source port and depot
+              const sourcePortId =
+                lastMovement?.portId ??
+                createdJob.polPortId ??
+                leasingInfo?.portId ??
+                null;
+
+              const sourceDepotId =
+                lastMovement?.addressBookId ??
+                leasingInfo?.onHireDepotaddressbookId ??
+                null;
+
+              // Create new movement entry for the Empty Repo Job
               await tx.movementHistory.create({
                 data: {
                   inventoryId: inventory.id,
-                  portId: leasingInfo.portId,
-                  addressBookId: leasingInfo.onHireDepotaddressbookId,
+                  portId: sourcePortId,
+                  addressBookId: sourceDepotId,
+                  shipmentId: null,
                   emptyRepoJobId: createdJob.id,
                   status: 'ALLOTTED',
                   date: new Date(),
+                  jobNumber: createdJob.jobNumber,
+                  remarks: `Empty Repo created - ${createdJob.jobNumber}`,
                 },
               });
+
+
+
+
+              console.log(
+                `✅ Movement recorded for ${container.containerNumber}: Port ${createdJob.polPortId}, Depot ${createdJob.emptyReturnDepotAddressBookId}`
+              );
             }
           }
         }
@@ -158,6 +137,72 @@ export class EmptyRepoJobService {
       return createdJob;
     });
   }
+
+
+  private async generateJobNumber(polCode: string, podCode: string): Promise<string> {
+    // GLOBAL sequence across all EmptyRepoJobs irrespective of ports
+    const year = new Date().getFullYear().toString().slice(-2);
+    const prefix = `RST/${polCode}${podCode}/${year}/`;
+
+    // Fetch all job numbers and compute the global max ER sequence
+    const allJobs = await this.prisma.emptyRepoJob.findMany({ select: { jobNumber: true } });
+    let maxSeq = 0;
+    for (const j of allJobs) {
+      const match = j.jobNumber?.match(/ER(\d{5})$/);
+      if (match) {
+        const n = parseInt(match[1], 10);
+        if (!isNaN(n)) maxSeq = Math.max(maxSeq, n);
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const paddedSeq = String(nextSeq).padStart(5, '0');
+    return `${prefix}ER${paddedSeq}`;
+  }
+
+  /**
+   * Preview-only: returns a dummy job number template
+   */
+  async getNextJobNumber(): Promise<{ jobNumber: string; houseBL: string }> {
+    const year = new Date().getFullYear().toString().slice(-2);
+    const prefix = `RST/`; // Match all RST/XXYYZZ/25/ER000xx patterns
+
+    const jobs = await this.prisma.emptyRepoJob.findMany({
+      where: {
+        jobNumber: {
+          startsWith: prefix,
+        },
+      },
+      orderBy: {
+        jobNumber: 'desc',
+      },
+    });
+
+    let maxSeq = 0;
+
+    for (const job of jobs) {
+      const parts = job.jobNumber.split('/');
+      if (parts.length === 4 && parts[3].startsWith('ER')) {
+        const seq = parseInt(parts[3].replace('ER', ''), 10);
+        if (!isNaN(seq)) {
+          maxSeq = Math.max(maxSeq, seq);
+        }
+      }
+    }
+
+    const nextSeq = maxSeq + 1;
+    const paddedSeq = String(nextSeq).padStart(5, '0');
+    const placeholderPrefix = `RST/[POL][POD]/${year}/`;
+
+    const jobNumber = `${placeholderPrefix}ER${paddedSeq}`;
+
+    return {
+      jobNumber,
+      houseBL: jobNumber,
+    };
+  }
+
+
 
   async update(id: number, data: UpdateEmptyRepoJobDto) {
     const { containers, polPortId, podPortId, ...jobData } = data;
@@ -256,7 +301,7 @@ export class EmptyRepoJobService {
     });
   }
 
-  
+
 
   findAll() {
     return this.prisma.emptyRepoJob.findMany({
@@ -288,6 +333,70 @@ export class EmptyRepoJobService {
       },
     });
   }
+
+  async cancelEmptyRepoJob(id: number, cancellationReason: string) {
+    const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+
+    return this.prisma.$transaction(async (tx) => {
+      // 1️⃣ Fetch empty repo job details (including polPortId)
+      const emptyRepoJob = await tx.emptyRepoJob.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          jobNumber: true,
+          polPortId: true,
+          containers: {
+            select: { inventoryId: true },
+          },
+        },
+      });
+
+      // 2️⃣ Update empty repo job remark
+      const updatedEmptyRepoJob = await tx.emptyRepoJob.update({
+        where: { id },
+        data: {
+          remark: `[CANCELLED on ${timestamp}] ${cancellationReason}`,
+          status: 'CANCELLED',
+        },
+      });
+
+      // 3️⃣ Update movement history for all containers in this empty repo job
+      for (const container of emptyRepoJob.containers) {
+        const inventoryId = container.inventoryId;
+        if (!inventoryId) continue;
+
+        const leasingInfo = await tx.leasingInfo.findFirst({
+          where: { inventoryId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // Skip containers with incomplete leasing info
+        if (!leasingInfo || !leasingInfo.onHireDepotaddressbookId) {
+          console.warn(
+            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`
+          );
+          continue;
+        }
+
+        // 4️⃣ Create movement history entry — AVAILABLE at empty repo job’s POL (fromPort)
+        await tx.movementHistory.create({
+          data: {
+            inventoryId,
+            portId: emptyRepoJob.polPortId ?? leasingInfo.portId ?? null, // ✅ Prefer polPortId
+            addressBookId: leasingInfo.onHireDepotaddressbookId ?? null,
+            status: 'AVAILABLE',
+            date: new Date(),
+            remarks: `Empty Repo Job cancelled - ${emptyRepoJob.jobNumber}`,
+            shipmentId: null,
+            emptyRepoJobId: emptyRepoJob.id,
+          },
+        });
+      }
+
+      return updatedEmptyRepoJob;
+    });
+  }
+
 
   async remove(id: number) {
     return this.prisma.$transaction(async (tx) => {

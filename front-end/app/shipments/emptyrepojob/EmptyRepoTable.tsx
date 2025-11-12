@@ -137,21 +137,24 @@ const EmptyRepo = () => {
     fetchEmptyRepoJobs();
   }, []);
 
-  // Handle delete
-  const handleDelete = async (id: number) => {
-    const confirmDelete = window.confirm('Are you sure you want to delete this empty repo job?');
-    if (!confirmDelete) return;
+  const handleCancel = async (id: number) => {
+  const reason = prompt("Enter cancellation reason:");
+  if (!reason) return;
 
-    try {
-      await apiFetch(`http://localhost:8000/empty-repo-job/${id}`, {
-        method: 'DELETE',
-      });
-      await fetchEmptyRepoJobs();
-    } catch (err) {
-      console.error('Failed to delete empty repo job', err);
-      alert('Error deleting empty repo job.');
-    }
-  };
+  try {
+    await apiFetch(`http://localhost:8000/empty-repo-job/cancel/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ cancellationReason: reason }),
+      headers: { "Content-Type": "application/json" },
+    });
+    alert("Empty Repo Job cancelled successfully.");
+    await fetchEmptyRepoJobs();
+  } catch (err) {
+    console.error("Failed to cancel empty repo job", err);
+    alert("Error cancelling empty repo job.");
+  }
+};
+
 
   // Handle edit
   const handleEdit = async (job: any) => {
@@ -781,11 +784,31 @@ const EmptyRepo = () => {
               </TableRow>
             ) : (
               paginatedJobs.map((job: any) => (
-                <TableRow
-                  key={job.id}
-                  className="text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                >
-                  <TableCell className="font-medium">{job.jobNumber}</TableCell>
+<TableRow
+  key={job.id}
+  className={`text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 
+    bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800
+    transition-colors duration-150 ${
+      job.remark?.includes("CANCELLED")
+        ? "opacity-75 bg-red-50 dark:bg-red-900/10 border-l-4 border-red-600"
+        : ""
+    }`}
+>
+
+
+
+<TableCell className="flex items-center gap-2 font-medium">
+  {job.remark?.includes("CANCELLED") ? (
+    <>
+      <span className="line-through opacity-70">{job.jobNumber}</span>
+      <span className="bg-red-700 text-white text-xs px-2 py-0.5 rounded-md font-medium">
+        Cancelled
+      </span>
+    </>
+  ) : (
+    <span>{job.jobNumber}</span>
+  )}
+</TableCell>
                   {/* <TableCell>{job.houseBL || '-'}</TableCell> */}
                   <TableCell>{job.polPort?.portName || '-'}</TableCell>
                   <TableCell>{job.podPort?.portName || '-'}</TableCell>
@@ -810,34 +833,62 @@ const EmptyRepo = () => {
                     )}
                   </TableCell>
                   <TableCell className="space-x-2">
-                    <Button
-                      onClick={() => handleView(job)}
-                      title="View Details"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
-                    >
-                      <Eye size={16} />
-                    </Button>
-                    <Button
-                      onClick={() => handleEdit(job)}
-                      title="Edit"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
-                    >
-                      <Pencil size={16} />
-                    </Button>
-                  
-                    <Button
-                      onClick={() => handleDelete(job.id)}
-                      title="Delete"
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
+                   
+
+
+<Button
+  onClick={() => handleView(job)}
+  title="View Details"
+  variant="ghost"
+  size="icon"
+  className="h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
+>
+  <Eye size={16} />
+</Button>
+
+{job.remark?.includes("CANCELLED") ? (
+  <>
+    <Button
+      title="Edit (Disabled - Cancelled)"
+      variant="ghost"
+      size="icon"
+      disabled
+      className="h-8 w-8 text-gray-400 bg-gray-100 dark:bg-neutral-800 cursor-not-allowed"
+    >
+      <Pencil size={16} />
+    </Button>
+    <Button
+      title="Cancelled"
+      variant="ghost"
+      size="icon"
+      disabled
+      className="h-8 w-8 text-gray-400 bg-gray-100 dark:bg-neutral-800 cursor-not-allowed"
+    >
+      <Trash2 size={16} />
+    </Button>
+  </>
+) : (
+  <>
+    <Button
+      onClick={() => handleEdit(job)}
+      title="Edit"
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
+    >
+      <Pencil size={16} />
+    </Button>
+    <Button
+      onClick={() => handleCancel(job.id)}
+      title="Cancel Job"
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
+    >
+      <Trash2 size={16} />
+    </Button>
+  </>
+)}
 
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -852,19 +903,37 @@ const EmptyRepo = () => {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="min-w-[240px]">
                         {/* CRO Options */}
-                        <DropdownMenuItem className='cursor-pointer flex items-center justify-between py-2'>
-                          <span onClick={() => handleOpenCroModal(job)} className="flex-1 hover:text-blue-600">
-                            Generate CRO
-                          </span>
-                          <Download 
-                            size={16} 
-                            className="text-green-600 hover:text-green-700 cursor-pointer" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDirectCroDownload(job);
-                            }}
-                          />
-                        </DropdownMenuItem>
+                       <DropdownMenuItem
+  className={`cursor-pointer flex items-center justify-between py-2 ${
+    job.remark?.includes("CANCELLED") ? "opacity-60 cursor-not-allowed" : ""
+  }`}
+  disabled={job.remark?.includes("CANCELLED")}
+>
+  {job.remark?.includes("CANCELLED") ? (
+    <>
+      <span className="flex-1 text-gray-500">Generate CRO (Disabled)</span>
+      <Download size={16} className="text-gray-400" />
+    </>
+  ) : (
+    <>
+      <span
+        onClick={() => handleOpenCroModal(job)}
+        className="flex-1 hover:text-blue-600"
+      >
+        Generate CRO
+      </span>
+      <Download
+        size={16}
+        className="text-green-600 hover:text-green-700 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          handleDirectCroDownload(job);
+        }}
+      />
+    </>
+  )}
+</DropdownMenuItem>
+
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>

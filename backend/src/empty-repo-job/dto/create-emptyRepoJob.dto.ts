@@ -39,6 +39,10 @@ export class CreateEmptyRepoJobDto {
     @IsString()
   remark?: string;
 
+  @IsOptional()
+   @IsString()
+  status:string;
+
   @IsOptional() @IsInt()
   expHandlingAgentAddressBookId?: number;
 

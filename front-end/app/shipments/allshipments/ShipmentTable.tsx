@@ -2046,9 +2046,14 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           </span>
         )}
       </TableCell>
-      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-        {new Date(shipment.date).toLocaleDateString()}
-      </TableCell>
+     <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+  {new Date(shipment.date).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit"
+  })}
+</TableCell>
+
       <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
         {shipment.customerAddressBook?.companyName || '-'}
       </TableCell>

@@ -567,7 +567,9 @@ export default function DashboardPage() {
                           {portIdx === 0 && rowIdx === 0 ? <Td rowSpan={countryRowSpan}>{country}</Td> : null}
                           {rowIdx === 0 ? <Td rowSpan={rows.length}>{port}</Td> : null}
 
-                          <Td>{r.depot}</Td>
+<Td>
+  {`${r.depot} (${r.available + r.alloted + r.emptyReturned + r.UC + r.US + r.UR})`}
+</Td>
                           <Td>{r.available}</Td>
                           <Td>{r.alloted}</Td>
                           <Td>{r.emptyReturned}</Td>

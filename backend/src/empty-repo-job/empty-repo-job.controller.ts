@@ -35,6 +35,19 @@ export class EmptyRepoJobController {
     return this.service.getNextJobNumber();
   }
 
+  @UseGuards(AuthGuard('jwt'))
+   @Patch('cancel/:id')
+  async cancel(
+    @Param('id') id: string,
+    @Body() body: { cancellationReason: string },
+  ) {
+    const { cancellationReason } = body;
+    if (!cancellationReason || !cancellationReason.trim()) {
+      throw new Error('Cancellation reason is required.');
+    }
+    return this.service.cancelEmptyRepoJob(+id, cancellationReason);
+  }
+
 
   @Get(':id')
   findOne(@Param('id') id: string) {

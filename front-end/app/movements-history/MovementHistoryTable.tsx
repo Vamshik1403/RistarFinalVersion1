@@ -319,11 +319,12 @@ const MovementHistoryTable = () => {
           if (!invId) return;
 
           // ✅ Always prefer the most recent known port/depot combination
-          if (
-            ["EMPTY RETURNED", "AVAILABLE"].includes(row.status?.toUpperCase()) &&
-            row.port &&
-            row.addressBook
-          ) {
+        if (
+  ["EMPTY RETURNED", "AVAILABLE", "ALLOTTED"].includes(row.status?.toUpperCase()) &&
+  row.port &&
+  row.addressBook
+) {
+
             latestMap[invId] = {
               depotName: row.addressBook?.companyName || "N/A",
               portName: row.port?.portName || "N/A",
@@ -651,7 +652,7 @@ const MovementHistoryTable = () => {
         date: movementDate,
         remarks: remarks.trim(),
         portId: selectedPortId || null,
-addressBookIdFromClient: selectedDepotId || null,
+        addressBookIdFromClient: selectedDepotId || null,
         vesselName: newStatus === "SOB" ? vesselName : null,
       };
 
@@ -732,35 +733,35 @@ addressBookIdFromClient: selectedDepotId || null,
     }
   };
 
-useEffect(() => {
-  if (
-    (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
-    selectedIds.length > 0
-  ) {
-    const selectedRow = data.find((d) => selectedIds.includes(d.id));
-    if (!selectedRow) return;
+  useEffect(() => {
+    if (
+      (newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") &&
+      selectedIds.length > 0
+    ) {
+      const selectedRow = data.find((d) => selectedIds.includes(d.id));
+      if (!selectedRow) return;
 
-    const portId = selectedRow.port?.id || null;
-    setSelectedPortId(portId);
+      const portId = selectedRow.port?.id || null;
+      setSelectedPortId(portId);
 
-    if (portId) {
-      axios.get("http://localhost:8000/addressbook").then((res) => {
-        const filtered = res.data.filter((entry: any) => {
-          return (
-            entry.businessType?.includes("Depot Terminal") &&
-            entry.businessPorts?.some((bp: any) => bp.portId === portId)
-          );
+      if (portId) {
+        axios.get("http://localhost:8000/addressbook").then((res) => {
+          const filtered = res.data.filter((entry: any) => {
+            return (
+              entry.businessType?.includes("Depot Terminal") &&
+              entry.businessPorts?.some((bp: any) => bp.portId === portId)
+            );
+          });
+          setDepots(filtered);
         });
-        setDepots(filtered);
-      });
-    }
+      }
 
-    // ✅ Only set depot once (don’t override user changes)
-    if (!selectedDepotId) {
-      setSelectedDepotId(selectedRow.addressBook?.id || null);
+      // ✅ Only set depot once (don’t override user changes)
+      if (!selectedDepotId) {
+        setSelectedDepotId(selectedRow.addressBook?.id || null);
+      }
     }
-  }
-}, [newStatus, selectedIds]);
+  }, [newStatus, selectedIds]);
 
 
   return (
@@ -936,14 +937,20 @@ useEffect(() => {
                         className="data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500 border-gray-400 dark:border-gray-600"
                       />
                     </TableCell>
-                    <TableCell>{new Date(row.date).toLocaleDateString()}</TableCell>
-                   <TableCell className="font-medium">{row.inventory?.containerNumber || "-"}</TableCell>
-<TableCell>
-  {row.status?.toUpperCase() !== "AVAILABLE" 
-    ? row.shipment?.jobNumber || row.emptyRepoJob?.jobNumber || row.jobNumber
-    : "-"
-  }
-</TableCell>
+                    <TableCell>
+                      {new Date(row.date).toLocaleDateString("en-GB", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit"
+                      })}
+                    </TableCell>
+                    <TableCell className="font-medium">{row.inventory?.containerNumber || "-"}</TableCell>
+                    <TableCell>
+                      {row.status?.toUpperCase() !== "AVAILABLE"
+                        ? row.shipment?.jobNumber || row.emptyRepoJob?.jobNumber || row.jobNumber
+                        : "-"
+                      }
+                    </TableCell>
                     <TableCell>
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border ${row.status === 'ALLOTTED'
@@ -1219,36 +1226,36 @@ useEffect(() => {
               })()}
 
               {/* Show if EMPTY RETURNED or RETURNED TO DEPOT */}
-             {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (
-  <div className="space-y-4">
-    {/* Depot Dropdown */}
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-        Select Depot
-      </label>
-      <select
-        value={selectedDepotId || ""}
-        onChange={(e) => {
-          const depotId = parseInt(e.target.value);
-          setSelectedDepotId(depotId);
+              {(newStatus === "EMPTY RETURNED" || newStatus === "RETURNED TO DEPOT") && (
+                <div className="space-y-4">
+                  {/* Depot Dropdown */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Select Depot
+                    </label>
+                    <select
+                      value={selectedDepotId || ""}
+                      onChange={(e) => {
+                        const depotId = parseInt(e.target.value);
+                        setSelectedDepotId(depotId);
 
-          // ✅ Find depot details and log or handle update
-          const selectedDepot = depots.find((d) => d.id === depotId);
-          if (selectedDepot) {
-            console.log("Depot selected:", selectedDepot.companyName);
-          }
-        }}
-        className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50"
-        disabled={!selectedPortId || depots.length === 0}
-      >
-        <option value="">Select Depot</option>
-        {depots.map((depot) => (
-          <option key={depot.id} value={depot.id}>
-            {depot.companyName}
-          </option>
-        ))}
-      </select>
-    </div>
+                        // ✅ Find depot details and log or handle update
+                        const selectedDepot = depots.find((d) => d.id === depotId);
+                        if (selectedDepot) {
+                          console.log("Depot selected:", selectedDepot.companyName);
+                        }
+                      }}
+                      className="w-full px-3 py-2 rounded-md bg-white dark:bg-neutral-800 text-gray-900 dark:text-white border border-gray-300 dark:border-neutral-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 disabled:opacity-50"
+                      disabled={!selectedPortId || depots.length === 0}
+                    >
+                      <option value="">Select Depot</option>
+                      {depots.map((depot) => (
+                        <option key={depot.id} value={depot.id}>
+                          {depot.companyName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
               )}
 

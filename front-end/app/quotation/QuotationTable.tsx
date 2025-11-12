@@ -410,7 +410,7 @@ const QuotationPage = () => {
             <TableRow className="bg-white dark:bg-neutral-900">
               {[
                 'Quote Ref.',
-                'createdAt',
+                'CreatedAt',
                 'Effective',
                 'Valid Till',
                 'Customer',
@@ -436,18 +436,44 @@ const QuotationPage = () => {
               <TableRow key={q.id} className="border-b border-neutral-200 dark:border-neutral-800 text-black dark:text-white bg-white dark:bg-neutral-900 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition">
                 <TableCell className="text-center">{q.quotationRefNumber}</TableCell>
                 <TableCell className="text-center">
-                  {q.createdAt ? new Date(q.createdAt).toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                    hour12: false
-                  }) : '-'}
-                </TableCell>
-                <TableCell className="text-center">{q.effectiveDate?.split('T')[0]}</TableCell>
-                <TableCell className="text-center">{q.validTillDate?.split('T')[0]}</TableCell>
+  {q.createdAt
+    ? (() => {
+        const d = new Date(q.createdAt);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = String(d.getFullYear()).slice(-2);
+        const hours = String(d.getHours()).padStart(2, "0");
+        const minutes = String(d.getMinutes()).padStart(2, "0");
+        const seconds = String(d.getSeconds()).padStart(2, "0");
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+      })()
+    : "-"}
+</TableCell>
+
+<TableCell className="text-center">
+  {q.effectiveDate
+    ? (() => {
+        const d = new Date(q.effectiveDate);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+      })()
+    : "-"}
+</TableCell>
+
+<TableCell className="text-center">
+  {q.validTillDate
+    ? (() => {
+        const d = new Date(q.validTillDate);
+        const day = String(d.getDate()).padStart(2, "0");
+        const month = String(d.getMonth() + 1).padStart(2, "0");
+        const year = String(d.getFullYear()).slice(-2);
+        return `${day}/${month}/${year}`;
+      })()
+    : "-"}
+</TableCell>
+
                 <TableCell className="text-center">{q.custAddressBook?.companyName}</TableCell>
                 <TableCell className="text-center">{q.product.productName}</TableCell>
                 <TableCell className="text-center">{q.rateType}</TableCell>

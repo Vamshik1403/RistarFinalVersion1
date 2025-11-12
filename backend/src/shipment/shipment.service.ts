@@ -149,67 +149,93 @@ export class ShipmentService {
         data: shipmentData,
       });
 
-      // ✅ Handle containers if provided
-      if (containers?.length) {
-        await tx.shipmentContainer.createMany({
-          data: containers.map((c) => ({
-            containerNumber: c.containerNumber,
-            capacity: c.capacity,
-            tare: c.tare,
-            portId: c.portId ?? undefined,
-            depotName: c.depotName ?? undefined,
-            inventoryId: c.inventoryId ?? undefined,
-            shipmentId: createdShipment.id,
-          })),
-        });
-
-        // ✅ Update inventory + movement history
-        for (const container of containers) {
-          if (!container.containerNumber) continue;
-
-          const inventory = await tx.inventory.findFirst({
-            where: { containerNumber: container.containerNumber },
-          });
-
-          if (inventory) {
-            const leasingInfo = await tx.leasingInfo.findFirst({
-              where: { inventoryId: inventory.id },
-              orderBy: { createdAt: 'desc' },
-            });
-
-            if (leasingInfo) {
-              await tx.movementHistory.create({
-                data: {
-                  inventoryId: inventory.id,
-                  portId: leasingInfo.portId,
-                  addressBookId: leasingInfo.onHireDepotaddressbookId,
-                  shipmentId: createdShipment.id,
-                  status: 'ALLOTTED',
-                  date: new Date(),
-                  jobNumber: createdShipment.jobNumber,
-                },
-              });
-            }
-          }
-        }
-      }
-
-      // ✅ Create bill management record automatically
-      await tx.billManagement.create({
-        data: {
-          invoiceNo: '', // Null initially, user will fill it manually
-          invoiceAmount: 0, // Start with 0, user will fill in the actual amount
-          paidAmount: 0,
-          dueAmount: 0,
+    // ✅ Handle containers if provided
+    if (containers?.length) {
+      await tx.shipmentContainer.createMany({
+        data: containers.map((c) => ({
+          containerNumber: c.containerNumber,
+          capacity: c.capacity,
+          tare: c.tare,
+          portId: c.portId ?? undefined,
+          depotName: c.depotName ?? undefined,
+          inventoryId: c.inventoryId ?? undefined,
           shipmentId: createdShipment.id,
-          billingStatus: 'Pending',
-          paymentStatus: 'Unpaid',
-        },
+        })),
       });
 
-      return createdShipment;
+      // ✅ Update inventory + movement history
+      for (const container of containers) {
+        if (!container.containerNumber) continue;
+
+        const inventory = await tx.inventory.findFirst({
+          where: { containerNumber: container.containerNumber },
+        });
+
+        if (!inventory) continue;
+
+        // Close any previous AVAILABLE movement
+       await tx.movementHistory.updateMany({
+  where: { inventoryId: inventory.id, status: 'AVAILABLE' },
+  data: {
+    remarks: `Container allocated to shipment ${createdShipment.jobNumber}`,
+  },
+});
+
+
+        // Fetch latest leasing info (fallback only)
+        const leasingInfo = await tx.leasingInfo.findFirst({
+          where: { inventoryId: inventory.id },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // ✅ Always create new movement using shipment's POL + Depot
+      await tx.movementHistory.create({
+  data: {
+    inventoryId: inventory.id,
+
+    // ✅ Port should come from POL (shipment port of loading)
+    portId: createdShipment.polPortId ?? leasingInfo?.portId ?? null,
+
+    // ✅ Depot should come from on-hire depot (not empty return depot)
+    addressBookId:
+      leasingInfo?.onHireDepotaddressbookId ??
+      createdShipment.emptyReturnDepotAddressBookId ??
+      null,
+
+    shipmentId: createdShipment.id,
+    emptyRepoJobId: null,
+    status: 'ALLOTTED',
+    date: new Date(),
+    jobNumber: createdShipment.jobNumber,
+    remarks: `Shipment created - ${createdShipment.jobNumber}`,
+  },
+});
+
+
+
+        console.log(
+          `✅ Movement recorded for ${container.containerNumber}: Port ${createdShipment.polPortId}, Depot ${createdShipment.emptyReturnDepotAddressBookId}`
+        );
+      }
+    }
+
+    // ✅ Create bill management record automatically
+    await tx.billManagement.create({
+      data: {
+        invoiceNo: '',
+        invoiceAmount: 0,
+        paidAmount: 0,
+        dueAmount: 0,
+        shipmentId: createdShipment.id,
+        billingStatus: 'Pending',
+        paymentStatus: 'Unpaid',
+      },
     });
-  }
+
+    return createdShipment;
+  });
+}
+
 
   async getNextJobNumber(): Promise<string> {
     const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
@@ -260,71 +286,66 @@ export class ShipmentService {
   }
 
   async cancelShipment(id: number, cancellationReason: string) {
-  const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
 
-  return this.prisma.$transaction(async (tx) => {
-    // Get shipment details
-    const shipment = await tx.shipment.findUniqueOrThrow({
-      where: { id },
-      select: {
-        id: true,
-        jobNumber: true,
-        containers: {
-          select: {
-            inventoryId: true
-          }
-        }
-      },
-    });
-
-    // Update shipment remark
-    const updatedShipment = await tx.shipment.update({
-      where: { id },
-      data: {
-        remark: `[CANCELLED on ${timestamp}] ${cancellationReason}`,
-      },
-    });
-
-    // Update movement history for all containers in this shipment
-    for (const container of shipment.containers) {
-      const inventoryId = container.inventoryId;
-      if (!inventoryId) continue;
-
-      const leasingInfo = await tx.leasingInfo.findFirst({
-        where: { inventoryId },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      // Skip containers with incomplete leasing info
-      if (
-        !leasingInfo ||
-        !leasingInfo.portId ||
-        !leasingInfo.onHireDepotaddressbookId
-      ) {
-        console.warn(
-          `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
-        );
-        continue;
-      }
-
-      // Create movement history entry for cancellation
-      await tx.movementHistory.create({
-        data: {
-          inventoryId,
-          portId: leasingInfo.portId,
-          addressBookId: leasingInfo.onHireDepotaddressbookId,
-          status: 'AVAILABLE',
-          date: new Date(),
-          remarks: `Shipment cancelled - ${shipment.jobNumber}`,
-          shipmentId: shipment.id,
-          emptyRepoJobId: null,
+    return this.prisma.$transaction(async (tx) => {
+      // 1️⃣ Fetch shipment details (including polPortId)
+      const shipment = await tx.shipment.findUniqueOrThrow({
+        where: { id },
+        select: {
+          id: true,
+          jobNumber: true,
+          polPortId: true,
+          containers: {
+            select: { inventoryId: true },
+          },
         },
       });
-    }
 
-    return updatedShipment;
-  });
-}
+      // 2️⃣ Update shipment remark
+      const updatedShipment = await tx.shipment.update({
+        where: { id },
+        data: {
+          remark: `[CANCELLED on ${timestamp}] ${cancellationReason}`,
+        },
+      });
+
+      // 3️⃣ Update movement history for all containers in this shipment
+      for (const container of shipment.containers) {
+        const inventoryId = container.inventoryId;
+        if (!inventoryId) continue;
+
+        const leasingInfo = await tx.leasingInfo.findFirst({
+          where: { inventoryId },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        // Skip containers with incomplete leasing info
+        if (!leasingInfo || !leasingInfo.onHireDepotaddressbookId) {
+          console.warn(
+            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+          );
+          continue;
+        }
+
+        // 4️⃣ Create movement history entry — AVAILABLE at shipment’s POL
+        await tx.movementHistory.create({
+          data: {
+            inventoryId,
+            portId: shipment.polPortId ?? leasingInfo.portId ?? null, // ✅ Prefer POL from shipment
+            addressBookId: leasingInfo.onHireDepotaddressbookId ?? null,
+            status: 'AVAILABLE',
+            date: new Date(),
+            remarks: `Shipment cancelled - ${shipment.jobNumber}`,
+            shipmentId: shipment.id,
+            emptyRepoJobId: null,
+          },
+        });
+      }
+
+      return updatedShipment;
+    });
+  }
 
   async canEditInventory(id: number) {
     // Get latest movement entry
