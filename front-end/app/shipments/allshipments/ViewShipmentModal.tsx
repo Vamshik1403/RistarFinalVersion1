@@ -4,14 +4,14 @@ import { Button } from "@/components/ui/button";
 import axios from "axios";
 
 // Component to display latest container location data
-const ContainerLocationDisplay = ({ 
-  inventoryId, 
-  fallbackDepotName, 
-  fallbackPortName 
-}: { 
-  inventoryId: number | null; 
-  fallbackDepotName?: string; 
-  fallbackPortName?: string; 
+const ContainerLocationDisplay = ({
+  inventoryId,
+  fallbackDepotName,
+  fallbackPortName
+}: {
+  inventoryId: number | null;
+  fallbackDepotName?: string;
+  fallbackPortName?: string;
 }) => {
   const [locationData, setLocationData] = useState<{
     depotName: string;
@@ -33,7 +33,7 @@ const ContainerLocationDisplay = ({
 
         // Get the latest leasing info
         const latestLeasingInfo = inventory.leasingInfo?.[0];
-        
+
         if (latestLeasingInfo) {
           // Fetch port name
           let portName = fallbackPortName || "N/A";
@@ -230,8 +230,8 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
             ["Detention Rate (POD)", shipment.podDetentionRate],
             ...(shipment.transhipmentPort
               ? ([
-                  ["Transhipment Port", shipment.transhipmentPort?.portName],
-                ] as [string, any][])
+                ["Transhipment Port", shipment.transhipmentPort?.portName],
+              ] as [string, any][])
               : ([] as [string, any][])),
           ])}
 
@@ -244,7 +244,7 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
               "Imp. Handling Agent",
               shipment.impHandlingAgentAddressBook?.companyName,
             ],
-            
+
           ])}
 
           {renderSection("Vessel Details", [
@@ -252,13 +252,13 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
             ["Gate Closing Date", formatDate(shipment.gsDate)],
             ["SOB Date", formatDate(shipment.sob)],
             ["ETA to POD", formatDate(shipment.etaTopod)],
-            
+
           ])}
-           {renderSection("Return Depot Information", [
+          {renderSection("Return Depot Information", [
             [
-                "Empty Return Depot",
-                shipment.emptyReturnDepotAddressBook?.companyName,
-              ],
+              "Empty Return Depot",
+              shipment.emptyReturnDepotAddressBook?.companyName,
+            ],
             ["Estimated Empty Return Date", formatDate(shipment.estimateDate)],
           ])}
 
@@ -280,47 +280,57 @@ const ViewShipmentModal: React.FC<ViewShipmentModalProps> = ({
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full border border-neutral-200 dark:border-neutral-700 rounded-lg">
-                  <thead className="bg-neutral-100 dark:bg-neutral-800">
-                    <tr>
-                      <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                        Container Number
-                      </th>
-                      <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                        Capacity
-                      </th>
-                      <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                        Tare Weight
-                      </th>
-                      <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                        Depot
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {shipment.containers.map((container: any, index: number) => (
-                      <tr
-                        key={index}
-                        className="bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800"
-                      >
-                        <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                          {container.containerNumber || "-"}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                          {container.capacity || "-"}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                          {container.tare || "-"}
-                        </td>
-                        <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
-                          <ContainerLocationDisplay 
-                            inventoryId={container.inventoryId} 
-                            fallbackDepotName={container.depotName}
-                            fallbackPortName={container.port?.portName}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
+               <thead className="bg-neutral-100 dark:bg-neutral-800">
+  <tr>
+    <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+      Container Number
+    </th>
+    <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+      Capacity
+    </th>
+    <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+      Tare Weight
+    </th>
+    <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+      Depot
+    </th>
+    <th className="px-4 py-2 text-left text-sm font-medium text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+      Port
+    </th>
+  </tr>
+</thead>
+
+<tbody>
+  {shipment.containers.map((container: any, index: number) => (
+    <tr
+      key={index}
+      className="bg-white dark:bg-neutral-900 hover:bg-neutral-50 dark:hover:bg-neutral-800"
+    >
+      <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+        {container.containerNumber || "-"}
+      </td>
+
+      <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+        {container.capacity || "-"}
+      </td>
+
+      <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+        {container.tare || "-"}
+      </td>
+
+      {/* DEPOT — Always from container.depotName */}
+      <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+        {container.depotName || shipment.emptyReturnDepotAddressBook?.companyName || "-"}
+      </td>
+
+      {/* PORT — Always from POL Port */}
+      <td className="px-4 py-2 text-sm text-black dark:text-white border-b border-neutral-200 dark:border-neutral-700">
+        {shipment.polPort?.portName || "-"}
+      </td>
+    </tr>
+  ))}
+</tbody>
+
                 </table>
               </div>
             </div>

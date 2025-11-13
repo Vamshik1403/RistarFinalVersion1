@@ -72,6 +72,8 @@ const MovementHistoryTable = () => {
   const [selectedCarrierId, setSelectedCarrierId] = useState<number | null>(null);
   const [carriers, setCarriers] = useState<any[]>([]);
   const [movementPermissions, setMovementPermissions] = useState<any>(null);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -532,6 +534,10 @@ setLatestReturnLocation(latestMap);
   };
 
   const handleBulkUpdate = async () => {
+
+    if (isUpdatingStatus) return; // ⛔ prevent double execution
+  setIsUpdatingStatus(true);
+
     if (!newStatus) {
       alert("Please select a new status.");
       return;
@@ -704,6 +710,9 @@ setLatestReturnLocation(latestMap);
       console.error("Update failed:", err?.response || err?.message || err);
       alert("Update failed. Check console for details.");
     }
+    finally {
+    setIsUpdatingStatus(false); // ✅ unlock button
+  }
   };
 
 
@@ -1373,12 +1382,17 @@ const formatDateToDDMMYY = (isoDate: string) => {
               >
                 Cancel
               </Button>
-              <Button
-                onClick={handleBulkUpdate}
-                className="bg-orange-600 hover:bg-orange-700 text-white cursor-pointer"
-              >
-                Confirm
-              </Button>
+             <Button
+  onClick={handleBulkUpdate}
+  disabled={isUpdatingStatus}
+  className={`${isUpdatingStatus
+      ? "bg-gray-400 cursor-not-allowed"
+      : "bg-orange-600 hover:bg-orange-700 cursor-pointer"
+    } text-white`}
+>
+  {isUpdatingStatus ? "Processing..." : "Confirm"}
+</Button>
+
             </div>
           </Card>
         </div>

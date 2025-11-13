@@ -18,24 +18,24 @@ import dayjs from "dayjs";
 // Date formatting functions to ensure consistent DD/MM/YY format
 const formatDateForDisplay = (dateValue: string): string => {
   if (!dateValue) return "";
-  
+
   // If it's already in YYYY-MM-DD format (from API), convert to DD/MM/YY
   if (dateValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
     const [year, month, day] = dateValue.split('-');
     return `${day}/${month}/${year.slice(-2)}`;
   }
-  
+
   // If it's already in DD/MM/YY format, return as is
   if (dateValue.match(/^\d{2}\/\d{2}\/\d{2}$/)) {
     return dateValue;
   }
-  
+
   return dateValue;
 };
 
 const formatDateInput = (inputValue: string): string | null => {
   if (!inputValue) return null;
-  
+
   // Handle YYYY-MM-DD format (from calendar selection)
   if (inputValue.match(/^\d{4}-\d{2}-\d{2}$/)) {
     const [year, month, day] = inputValue.split('-');
@@ -44,42 +44,42 @@ const formatDateInput = (inputValue: string): string | null => {
       return inputValue; // Return as-is since it's already in correct format
     }
   }
-  
+
   // Remove any non-digit characters except slashes for DD/MM/YY format
   const cleaned = inputValue.replace(/[^\d/]/g, '');
-  
+
   // Handle DD/MM/YY input patterns
   if (cleaned.match(/^\d{1,2}\/\d{1,2}\/\d{2,4}$/)) {
     const parts = cleaned.split('/');
     let day = parts[0].padStart(2, '0');
     let month = parts[1].padStart(2, '0');
     let year = parts[2];
-    
+
     // Convert 2-digit year to 4-digit (assuming 20xx for years 00-30, 19xx for 31-99)
     if (year.length === 2) {
       const yearNum = parseInt(year);
       year = yearNum <= 30 ? `20${year}` : `19${year}`;
     }
-    
+
     // Validate date
     const date = new Date(`${year}-${month}-${day}`);
     if (date.getFullYear() == parseInt(year) && date.getMonth() == parseInt(month) - 1 && date.getDate() == parseInt(day)) {
       return `${year}-${month}-${day}`; // Return in YYYY-MM-DD format for API
     }
   }
-  
+
   return null; // Invalid date
 };
 
 // Custom Date Picker Component
-const CustomDatePicker = ({ 
-  id, 
-  value, 
-  onChange, 
-  onBlur, 
-  placeholder, 
-  className, 
-  validationError 
+const CustomDatePicker = ({
+  id,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  className,
+  validationError
 }: {
   id: string;
   value: string;
@@ -126,12 +126,12 @@ const CustomDatePicker = ({
     const formattedDate = date.format('YYYY-MM-DD');
     setSelectedDate(date);
     setShowCalendar(false);
-    
+
     // Create a synthetic event with the YYYY-MM-DD format for direct form update
     const syntheticEvent = {
       target: { value: formattedDate }
     } as React.ChangeEvent<HTMLInputElement>;
-    
+
     // Call onChange directly with the formatted date
     onChange(syntheticEvent);
   };
@@ -141,15 +141,15 @@ const CustomDatePicker = ({
     const endOfMonth = currentMonth.endOf('month');
     const startDate = startOfMonth.startOf('week');
     const endDate = endOfMonth.endOf('week');
-    
+
     const days = [];
     let currentDate = startDate;
-    
+
     while (currentDate.isBefore(endDate) || currentDate.isSame(endDate, 'day')) {
       days.push(currentDate);
       currentDate = currentDate.add(1, 'day');
     }
-    
+
     return days;
   };
 
@@ -178,7 +178,7 @@ const CustomDatePicker = ({
           <Calendar size={16} />
         </button>
       </div>
-      
+
       {showCalendar && (
         <div ref={calendarRef} className="absolute z-50 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg shadow-lg p-4 w-80">
           {/* Calendar Header */}
@@ -205,7 +205,7 @@ const CustomDatePicker = ({
               </svg>
             </button>
           </div>
-          
+
           {/* Calendar Grid */}
           <div className="grid grid-cols-7 gap-1 mb-2">
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
@@ -214,7 +214,7 @@ const CustomDatePicker = ({
               </div>
             ))}
           </div>
-          
+
           <div className="grid grid-cols-7 gap-1">
             {generateCalendarDays().map((date, index) => (
               <button
@@ -232,7 +232,7 @@ const CustomDatePicker = ({
               </button>
             ))}
           </div>
-          
+
           {/* Today Button */}
           <div className="mt-4 pt-4 border-t border-neutral-200 dark:border-neutral-700">
             <button
@@ -245,7 +245,7 @@ const CustomDatePicker = ({
           </div>
         </div>
       )}
-      
+
       {validationError && (
         <p className="text-red-500 text-xs mt-1">{validationError}</p>
       )}
@@ -286,13 +286,19 @@ const AddQuotationModal = ({
   const [trsHandlingAgents, setTrsHandlingAgents] = useState<any[]>([]);
 
   // Add validation error state
-  const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
+  const [validationErrors, setValidationErrors] = useState<{ [key: string]: string }>({});
   const [showValidationAlert, setShowValidationAlert] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isSubmitting) return;        // ⛔ prevent double click
+    setIsSubmitting(true);           // 🔐 lock submit button
+
 
     // Clear previous validation errors
     setValidationErrors({});
@@ -300,13 +306,13 @@ const AddQuotationModal = ({
     // Required field validations
     const requiredFields = [
       "customerId",
-      "productId", 
+      "productId",
       "portOfLoadingId",
       "portOfDischargeId",
     ];
 
-    const errors: {[key: string]: string} = {};
-    
+    const errors: { [key: string]: string } = {};
+
     for (const field of requiredFields) {
       if (!form[field]) {
         errors[field] = "Please fill this field";
@@ -320,6 +326,7 @@ const AddQuotationModal = ({
       setTimeout(() => {
         setShowValidationAlert(false);
       }, 2000);
+      setIsSubmitting(false);
       return;
     }
 
@@ -388,23 +395,26 @@ const AddQuotationModal = ({
     };
 
     try {
-  const isUpdate = Boolean(form.id);
-  const url = isUpdate
-    ? `http://localhost:8000/quotations/${form.id}`
-    : 'http://localhost:8000/quotations';
+      const isUpdate = Boolean(form.id);
+      const url = isUpdate
+        ? `http://localhost:8000/quotations/${form.id}`
+        : 'http://localhost:8000/quotations';
 
-  const result = await apiFetch(url, {
-    method: isUpdate ? 'PATCH' : 'POST',
-    body: payload, // 👈 plain object allowed now
-  });
+      const result = await apiFetch(url, {
+        method: isUpdate ? 'PATCH' : 'POST',
+        body: payload, // 👈 plain object allowed now
+      });
 
-  alert(isUpdate ? 'Quotation updated successfully!' : 'Quotation created successfully!');
-  fetchQuotations?.();
-  onClose();
-} catch (err: any) {
-  console.error('Error submitting quotation:', err);
-  alert(`Failed to save quotation. ${err?.message ? `Details: ${err.message}` : 'Please try again.'}`);
-}
+      alert(isUpdate ? 'Quotation updated successfully!' : 'Quotation created successfully!');
+      fetchQuotations?.();
+      onClose();
+    } catch (err: any) {
+      console.error('Error submitting quotation:', err);
+      alert(`Failed to save quotation. ${err?.message ? `Details: ${err.message}` : 'Please try again.'}`);
+    }
+    finally {
+      setIsSubmitting(false);       // 🔓 always unlock on end
+    }
   };
 
   useEffect(() => {
@@ -1075,11 +1085,10 @@ const AddQuotationModal = ({
 
   // Professional Top Alert Component
   const ProfessionalTopAlert = () => (
-    <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] transition-all duration-500 ease-out ${
-      showValidationAlert 
-        ? 'translate-y-0 opacity-100 scale-100' 
+    <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] transition-all duration-500 ease-out ${showValidationAlert
+        ? 'translate-y-0 opacity-100 scale-100'
         : '-translate-y-full opacity-0 scale-95'
-    }`}>
+      }`}>
       <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 min-w-[400px] border border-red-400">
         <div className="flex-shrink-0">
           <AlertTriangle className="h-5 w-5 animate-pulse" />
@@ -1108,1063 +1117,1068 @@ const AddQuotationModal = ({
     <>
       <ProfessionalTopAlert />
       {/* Rest of the component */}
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-lg w-[1200px] max-h-[90vh] overflow-y-auto border border-neutral-200 dark:border-neutral-800">
-        <div className="flex justify-between items-center px-6 pt-6 pb-2 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
-          <button
-            onClick={onClose}
-          className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-2xl"
+      <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-lg w-[1200px] max-h-[90vh] overflow-y-auto border border-neutral-200 dark:border-neutral-800">
+          <div className="flex justify-between items-center px-6 pt-6 pb-2 border-b border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{formTitle}</h2>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-900 dark:hover:text-white text-2xl"
+            >
+              &times;
+            </button>
+          </div>
+          <form
+            className="px-6 pb-6 pt-2 [&_label]:text-gray-900 [&_input]:bg-white [&_input]:text-gray-900 [&_select]:bg-white [&_select]:text-gray-900 dark:[&_label]:text-white dark:[&_input]:bg-neutral-900 dark:[&_input]:text-white dark:[&_select]:bg-neutral-900 dark:[&_select]:text-white"
+            onSubmit={handleSubmit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.preventDefault();
+            }}
           >
-            &times;
-          </button>
-        </div>
-        <form
-          className="px-6 pb-6 pt-2 [&_label]:text-gray-900 [&_input]:bg-white [&_input]:text-gray-900 [&_select]:bg-white [&_select]:text-gray-900 dark:[&_label]:text-white dark:[&_input]:bg-neutral-900 dark:[&_input]:text-white dark:[&_select]:bg-neutral-900 dark:[&_select]:text-white"
-          onSubmit={handleSubmit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.preventDefault();
-          }}
-        >
-          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-            {/* Status */}
-            <div className="flex items-center gap-2 mt-2">
-              <span className="text-gray-900 dark:text-white">Status</span>
-              <Checkbox
-                id="status"
-                checked={form.status}
-                onCheckedChange={(checked) =>
-                  setForm({ ...form, status: checked })
-                }
-              />
-              <Label htmlFor="status" className="text-gray-900 dark:text-white text-sm">
-                Active
-              </Label>
-            </div>
-            <div></div>
-
-            {/* Quotation Ref No. */}
-            <div className="col-span-2">
-              <Label htmlFor="quotationRef" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Quotation Ref No.
-              </Label>
-              <Input
-                type="text"
-                value={form.quotationRef || ""}
-                readOnly
-                id="quotationRef"
-                className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-              />
-            </div>
-
-            {/* Effective Date */}
-            <div>
-              <Label htmlFor="effectiveDate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Effective Date (DD/MM/YY)
-              </Label>
-              <CustomDatePicker
-                id="effectiveDate"
-                value={form.effectiveDate || ""}
-                onChange={(e) => {
-                  const formattedValue = formatDateInput(e.target.value);
-                  if (formattedValue !== null) {
-                    setForm({ ...form, effectiveDate: formattedValue });
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              {/* Status */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-gray-900 dark:text-white">Status</span>
+                <Checkbox
+                  id="status"
+                  checked={form.status}
+                  onCheckedChange={(checked) =>
+                    setForm({ ...form, status: checked })
                   }
-                }}
-                onBlur={(e) => {
-                  const formattedValue = formatDateInput(e.target.value);
-                  if (formattedValue !== null) {
-                    setForm({ ...form, effectiveDate: formattedValue });
-                  }
-                }}
-                placeholder="DD/MM/YY"
-                className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-              />
-            </div>
+                />
+                <Label htmlFor="status" className="text-gray-900 dark:text-white text-sm">
+                  Active
+                </Label>
+              </div>
+              <div></div>
 
-            {/* Valid Till */}
-            <div>
-              <Label htmlFor="validTillDate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Valid Till (DD/MM/YY)
-              </Label>
-              <CustomDatePicker
-                id="validTillDate"
-                value={form.validTillDate || ""}
-                onChange={(e) => {
-                  const formattedValue = formatDateInput(e.target.value);
-                  if (formattedValue !== null) {
-                    setForm({ ...form, validTillDate: formattedValue });
-                  }
-                }}
-                onBlur={(e) => {
-                  const formattedValue = formatDateInput(e.target.value);
-                  if (formattedValue !== null) {
-                    setForm({ ...form, validTillDate: formattedValue });
-                  }
-                }}
-                placeholder="DD/MM/YY"
-                className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-              />
-            </div>
+              {/* Quotation Ref No. */}
+              <div className="col-span-2">
+                <Label htmlFor="quotationRef" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Quotation Ref No.
+                </Label>
+                <Input
+                  type="text"
+                  value={form.quotationRef || ""}
+                  readOnly
+                  id="quotationRef"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+                />
+              </div>
 
-            {/* Shipping Term */}
-            <div>
-              <Label htmlFor="shippingTerm" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Shipping Term
-              </Label>
-              <Select onValueChange={(value) => setForm({ ...form, shippingTerm: value })} value={form.shippingTerm}>
-              <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
-                  <SelectValue placeholder="Select Term" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="CY-CY">CY-CY</SelectItem>
-                  <SelectItem value="CY-Door">CY-Door</SelectItem>
-                  <SelectItem value="Door-CY">Door-CY</SelectItem>
-                  <SelectItem value="Door-Door">Door-Door</SelectItem>
-                  <SelectItem value="EX-WORK-CY">EX-WORK-CY</SelectItem>
-                  <SelectItem value="EX-WORK-DOOR">EX-WORK-DOOR</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Effective Date */}
+              <div>
+                <Label htmlFor="effectiveDate" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Effective Date (DD/MM/YY)
+                </Label>
+                <CustomDatePicker
+                  id="effectiveDate"
+                  value={form.effectiveDate || ""}
+                  onChange={(e) => {
+                    const formattedValue = formatDateInput(e.target.value);
+                    if (formattedValue !== null) {
+                      setForm({ ...form, effectiveDate: formattedValue });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const formattedValue = formatDateInput(e.target.value);
+                    if (formattedValue !== null) {
+                      setForm({ ...form, effectiveDate: formattedValue });
+                    }
+                  }}
+                  placeholder="DD/MM/YY"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+                />
+              </div>
 
-            {/* Customer Name */}
-            <div className="relative">
-              <Label htmlFor="customerName" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Customer Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="text"
-                value={form.customerName || ""}
-                onChange={(e) => {
-                  setForm((prev: any) => ({
-                    ...prev,
-                    customerName: e.target.value,
-                    customerId: null,
-                  }));
-                  setShowSuggestions(true);
-                  if (validationErrors.customerId) {
-                    setValidationErrors(prev => ({...prev, customerId: ""}));
-                  }
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                id="customerName"
-                className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-                placeholder="Start typing customer name..."
-              />
-              {showSuggestions && form.customerName && (
-                <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                  {customerSuggestions
-                    .filter((c) =>
+              {/* Valid Till */}
+              <div>
+                <Label htmlFor="validTillDate" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Valid Till (DD/MM/YY)
+                </Label>
+                <CustomDatePicker
+                  id="validTillDate"
+                  value={form.validTillDate || ""}
+                  onChange={(e) => {
+                    const formattedValue = formatDateInput(e.target.value);
+                    if (formattedValue !== null) {
+                      setForm({ ...form, validTillDate: formattedValue });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const formattedValue = formatDateInput(e.target.value);
+                    if (formattedValue !== null) {
+                      setForm({ ...form, validTillDate: formattedValue });
+                    }
+                  }}
+                  placeholder="DD/MM/YY"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+                />
+              </div>
+
+              {/* Shipping Term */}
+              <div>
+                <Label htmlFor="shippingTerm" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Shipping Term
+                </Label>
+                <Select onValueChange={(value) => setForm({ ...form, shippingTerm: value })} value={form.shippingTerm}>
+                  <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
+                    <SelectValue placeholder="Select Term" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CY-CY">CY-CY</SelectItem>
+                    <SelectItem value="CY-Door">CY-Door</SelectItem>
+                    <SelectItem value="Door-CY">Door-CY</SelectItem>
+                    <SelectItem value="Door-Door">Door-Door</SelectItem>
+                    <SelectItem value="EX-WORK-CY">EX-WORK-CY</SelectItem>
+                    <SelectItem value="EX-WORK-DOOR">EX-WORK-DOOR</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Customer Name */}
+              <div className="relative">
+                <Label htmlFor="customerName" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Customer Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="text"
+                  value={form.customerName || ""}
+                  onChange={(e) => {
+                    setForm((prev: any) => ({
+                      ...prev,
+                      customerName: e.target.value,
+                      customerId: null,
+                    }));
+                    setShowSuggestions(true);
+                    if (validationErrors.customerId) {
+                      setValidationErrors(prev => ({ ...prev, customerId: "" }));
+                    }
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  id="customerName"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+                  placeholder="Start typing customer name..."
+                />
+                {showSuggestions && form.customerName && (
+                  <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
+                    {customerSuggestions
+                      .filter((c) =>
+                        c.companyName
+                          .toLowerCase()
+                          .includes(form.customerName.toLowerCase())
+                      )
+                      .map((company) => (
+                        <li
+                          key={company.id}
+                          onMouseDown={() => {
+                            setForm((prev: any) => ({
+                              ...prev,
+                              customerName: company.companyName,
+                              customerId: company.id,
+                            }));
+                            setShowSuggestions(false);
+                          }}
+                          className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                        >
+                          {company.companyName}
+                        </li>
+                      ))}
+                    {customerSuggestions.filter((c) =>
                       c.companyName
                         .toLowerCase()
-                        .includes(form.customerName.toLowerCase())
-                    )
-                    .map((company) => (
+                        .includes(form.customerName?.toLowerCase())
+                    ).length === 0 && (
+                        <li className="px-3 py-1 text-gray-400 text-sm">
+                          No match found
+                        </li>
+                      )}
+                  </ul>
+                )}
+                {validationErrors.customerId && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.customerId}</p>
+                )}
+              </div>
+
+              {/* Billing Party */}
+              <div>
+                <Label htmlFor="billingParty" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Billing Party
+                </Label>
+                <Select onValueChange={(value) => setForm({ ...form, billingParty: value })} value={form.billingParty}>
+                  <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Freight Forwarder">Freight Forwarder</SelectItem>
+                    <SelectItem value="Shipper">Shipper</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Rate Type */}
+              <div>
+                <Label htmlFor="rateType" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Rate Type
+                </Label>
+                <Select onValueChange={(value) => setForm({ ...form, rateType: value })} value={form.rateType}>
+                  <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Tender">Tender</SelectItem>
+                    <SelectItem value="Spot">Spot</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Billing Type */}
+              <div>
+                <Label htmlFor="billingType" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Billing Type
+                </Label>
+                <Select onValueChange={(value) => setForm({ ...form, billingType: value })} value={form.billingType}>
+                  <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Ocean Freight">Ocean Freight</SelectItem>
+                    <SelectItem value="Rental">Rental</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Product Name */}
+              <div className="relative">
+                <Label htmlFor="productName" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Product Name <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  type="text"
+                  value={form.productName || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((prev: any) => ({
+                      ...prev,
+                      productName: value,
+                      productId: undefined,
+                    }));
+
+                    if (validationErrors.productId) {
+                      setValidationErrors(prev => ({ ...prev, productId: "" }));
+                    }
+
+                    if (value.length > 1) {
+                      fetchProducts(value);
+                      setShowProductDropdown(true);
+                    } else {
+                      setShowProductDropdown(false);
+                      setProductSuggestions([]);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (form.productName?.length > 1) {
+                      fetchProducts(form.productName);
+                      setShowProductDropdown(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowProductDropdown(false), 100);
+                  }}
+                  id="productName"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  placeholder="Start typing product name..."
+                />
+
+                {showProductDropdown && productSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
+                    {productSuggestions.map((product) => (
                       <li
-                        key={company.id}
-                        onMouseDown={() => {
-                          setForm((prev: any) => ({
-                            ...prev,
-                            customerName: company.companyName,
-                            customerId: company.id,
-                          }));
-                          setShowSuggestions(false);
+                        key={product.id}
+                        onMouseDown={async () => {
+                          const updatedForm = {
+                            ...form,
+                            productName: `${product.productId} - ${product.productName} - ${product.productType}`,
+                            productId: product.id,
+                            productCategory: product.containerCategory,
+                            productType: product.containerType,
+                            productClass: product.classType,
+                          };
+
+                          setForm(updatedForm);
+                          setShowProductDropdown(false);
+
+                          try {
+                            const res = await fetch(
+                              "http://localhost:8000/container-lease-tariff"
+                            );
+                            const leaseTariffs = await res.json();
+
+                            const matchedLease = leaseTariffs.find(
+                              (lease: any) =>
+                                lease.containerCategory ===
+                                product.containerCategory &&
+                                lease.containerType === product.containerType &&
+                                lease.containerClass === product.classType
+                            );
+
+                            if (matchedLease) {
+                              const exp = parseInt(form.expFreeDays || "0", 10);
+                              const imp = parseInt(form.impFreeDays || "0", 10);
+                              const transit = parseInt(
+                                form.transitDays || "0",
+                                10
+                              );
+                              const rent = parseFloat(
+                                matchedLease.leaseRentPerDay || "0"
+                              );
+
+                              const leasingCost = (exp + imp + transit) * rent;
+
+                              setForm((prev: any) => ({
+                                ...prev,
+                                leasingCost: leasingCost.toFixed(2),
+                              }));
+                            } else {
+                              setForm((prev: any) => ({
+                                ...prev,
+                                leasingCost: "",
+                              }));
+                            }
+                          } catch (error) {
+                            console.error(
+                              "Failed to fetch container lease tariff:",
+                              error
+                            );
+                          }
                         }}
                         className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
                       >
-                        {company.companyName}
+                        {`${product.productId} - ${product.productName} - ${product.productType}`}
                       </li>
                     ))}
-                  {customerSuggestions.filter((c) =>
-                    c.companyName
-                      .toLowerCase()
-                      .includes(form.customerName?.toLowerCase())
-                  ).length === 0 && (
-                    <li className="px-3 py-1 text-gray-400 text-sm">
-                      No match found
-                    </li>
-                  )}
-                </ul>
-              )}
-              {validationErrors.customerId && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.customerId}</p>
-              )}
-            </div>
+                  </ul>
+                )}
+                {validationErrors.productId && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.productId}</p>
+                )}
+              </div>
 
-            {/* Billing Party */}
-            <div>
-              <Label htmlFor="billingParty" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Billing Party
-              </Label>
-              <Select onValueChange={(value) => setForm({ ...form, billingParty: value })} value={form.billingParty}>
-              <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Freight Forwarder">Freight Forwarder</SelectItem>
-                  <SelectItem value="Shipper">Shipper</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
 
-            {/* Rate Type */}
-            <div>
-              <Label htmlFor="rateType" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Rate Type
-              </Label>
-              <Select onValueChange={(value) => setForm({ ...form, rateType: value })} value={form.rateType}>
-              <SelectTrigger className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Tender">Tender</SelectItem>
-                  <SelectItem value="Spot">Spot</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Billing Type */}
-            <div>
-              <Label htmlFor="billingType" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Billing Type
-              </Label>
-              <Select onValueChange={(value) => setForm({ ...form, billingType: value })} value={form.billingType}>
-                <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Ocean Freight">Ocean Freight</SelectItem>
-                  <SelectItem value="Rental">Rental</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Product Name */}
-            <div className="relative">
-              <Label htmlFor="productName" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Product Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="text"
-                value={form.productName || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setForm((prev: any) => ({
-                    ...prev,
-                    productName: value,
-                    productId: undefined,
-                  }));
-
-                  if (validationErrors.productId) {
-                    setValidationErrors(prev => ({...prev, productId: ""}));
-                  }
-
-                  if (value.length > 1) {
-                    fetchProducts(value);
-                    setShowProductDropdown(true);
-                  } else {
-                    setShowProductDropdown(false);
-                    setProductSuggestions([]);
-                  }
-                }}
-                onFocus={() => {
-                  if (form.productName?.length > 1) {
-                    fetchProducts(form.productName);
-                    setShowProductDropdown(true);
-                  }
-                }}
-                onBlur={() => {
-                  setTimeout(() => setShowProductDropdown(false), 100);
-                }}
-                id="productName"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                placeholder="Start typing product name..."
-              />
-
-              {showProductDropdown && productSuggestions.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                  {productSuggestions.map((product) => (
-                    <li
-                      key={product.id}
-                      onMouseDown={async () => {
-                        const updatedForm = {
-                          ...form,
-                          productName: `${product.productId} - ${product.productName} - ${product.productType}`,
-                          productId: product.id,
-                          productCategory: product.containerCategory,
-                          productType: product.containerType,
-                          productClass: product.classType,
-                        };
-
-                        setForm(updatedForm);
-                        setShowProductDropdown(false);
-
-                        try {
-                          const res = await fetch(
-                            "http://localhost:8000/container-lease-tariff"
-                          );
-                          const leaseTariffs = await res.json();
-
-                          const matchedLease = leaseTariffs.find(
-                            (lease: any) =>
-                              lease.containerCategory ===
-                                product.containerCategory &&
-                              lease.containerType === product.containerType &&
-                              lease.containerClass === product.classType
-                          );
-
-                          if (matchedLease) {
-                            const exp = parseInt(form.expFreeDays || "0", 10);
-                            const imp = parseInt(form.impFreeDays || "0", 10);
-                            const transit = parseInt(
-                              form.transitDays || "0",
-                              10
-                            );
-                            const rent = parseFloat(
-                              matchedLease.leaseRentPerDay || "0"
-                            );
-
-                            const leasingCost = (exp + imp + transit) * rent;
-
-                            setForm((prev: any) => ({
-                              ...prev,
-                              leasingCost: leasingCost.toFixed(2),
-                            }));
-                          } else {
-                            setForm((prev: any) => ({
-                              ...prev,
-                              leasingCost: "",
-                            }));
-                          }
-                        } catch (error) {
-                          console.error(
-                            "Failed to fetch container lease tariff:",
-                            error
-                          );
-                        }
-                      }}
-                      className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
-                    >
-                      {`${product.productId} - ${product.productName} - ${product.productType}`}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {validationErrors.productId && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.productId}</p>
-              )}
-            </div>
-
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
-
-            {/* Port Of Loading */}
-            <div className="relative">
-              <Label htmlFor="portOfLoading" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Port Of Loading <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="text"
-                value={form.portOfLoading || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setForm((prev: any) => ({
-                    ...prev,
-                    portOfLoading: value,
-                    portOfLoadingId: undefined, // reset on change
-                  }));
-
-                  if (validationErrors.portOfLoadingId) {
-                    setValidationErrors(prev => ({...prev, portOfLoadingId: ""}));
-                  }
-
-                  if (value.length > 1) {
-                    fetchPorts(value);
-                    setShowPortDropdown(true);
-                  } else {
-                    setShowPortDropdown(false);
-                    setPortSuggestions([]);
-                  }
-                }}
-                onFocus={() => {
-                  if (form.portOfLoading?.length > 1) {
-                    fetchPorts(form.portOfLoading);
-                    setShowPortDropdown(true);
-                  }
-                }}
-                onBlur={() => {
-                  setTimeout(() => setShowPortDropdown(false), 100);
-                }}
-                id="portOfLoading"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                placeholder="Start typing port of loading..."
-              />
-
-              {showPortDropdown && portSuggestions.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                  {portSuggestions.map((port) => (
-                    <li
-                      key={port.id}
-                      onMouseDown={() => {
-                        setForm((prev: any) => ({
-                          ...prev,
-                          portOfLoading: port.portName,
-                          portOfLoadingId: port.id,
-                        }));
-                        setShowPortDropdown(false);
-                      }}
-                      className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
-                    >
-                      {port.portName}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {validationErrors.portOfLoadingId && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.portOfLoadingId}</p>
-              )}
-            </div>
-
-            {/* Port Of Discharge */}
-            <div className="relative">
-              <Label htmlFor="portOfDischarge" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Port Of Discharge <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                type="text"
-                value={form.portOfDischarge || ""}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setForm((prev: any) => ({
-                    ...prev,
-                    portOfDischarge: value,
-                    portOfDischargeId: undefined,
-                  }));
-
-                  if (validationErrors.portOfDischargeId) {
-                    setValidationErrors(prev => ({...prev, portOfDischargeId: ""}));
-                  }
-
-                  if (value.length > 1) {
-                    fetchPorts(value);
-                    setShowDischargeDropdown(true);
-                  } else {
-                    setShowDischargeDropdown(false);
-                  }
-                }}
-                onFocus={() => {
-                  if (form.portOfDischarge?.length > 1) {
-                    fetchPorts(form.portOfDischarge);
-                    setShowDischargeDropdown(true);
-                  }
-                }}
-                onBlur={() => {
-                  setTimeout(() => setShowDischargeDropdown(false), 100);
-                }}
-                id="portOfDischarge"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                placeholder="Start typing port of discharge..."
-              />
-
-              {showDischargeDropdown && portSuggestions.length > 0 && (
-                <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                  {portSuggestions.map((port) => (
-                    <li
-                      key={port.id}
-                      onMouseDown={() => {
-                        setForm((prev: any) => ({
-                          ...prev,
-                          portOfDischarge: port.portName,
-                          portOfDischargeId: port.id,
-                        }));
-                        setShowDischargeDropdown(false);
-                      }}
-                      className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
-                    >
-                      {port.portName}
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {validationErrors.portOfDischargeId && (
-                <p className="text-red-500 text-xs mt-1">{validationErrors.portOfDischargeId}</p>
-              )}
-            </div>
-
-            {/* Free Days and Detention Rate */}
-            <div className="flex w-full gap-4 col-span-2">
-              <div className="flex-5">
-                <Label htmlFor="expFreeDays" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Free Days
+              {/* Port Of Loading */}
+              <div className="relative">
+                <Label htmlFor="portOfLoading" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Port Of Loading <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   type="text"
-                  value={form.expFreeDays}
-                  onChange={(e) =>
-                    setForm({ ...form, expFreeDays: e.target.value })
-                  }
-                  id="expFreeDays"
+                  value={form.portOfLoading || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((prev: any) => ({
+                      ...prev,
+                      portOfLoading: value,
+                      portOfLoadingId: undefined, // reset on change
+                    }));
+
+                    if (validationErrors.portOfLoadingId) {
+                      setValidationErrors(prev => ({ ...prev, portOfLoadingId: "" }));
+                    }
+
+                    if (value.length > 1) {
+                      fetchPorts(value);
+                      setShowPortDropdown(true);
+                    } else {
+                      setShowPortDropdown(false);
+                      setPortSuggestions([]);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (form.portOfLoading?.length > 1) {
+                      fetchPorts(form.portOfLoading);
+                      setShowPortDropdown(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowPortDropdown(false), 100);
+                  }}
+                  id="portOfLoading"
                   className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  placeholder="Start typing port of loading..."
                 />
+
+                {showPortDropdown && portSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
+                    {portSuggestions.map((port) => (
+                      <li
+                        key={port.id}
+                        onMouseDown={() => {
+                          setForm((prev: any) => ({
+                            ...prev,
+                            portOfLoading: port.portName,
+                            portOfLoadingId: port.id,
+                          }));
+                          setShowPortDropdown(false);
+                        }}
+                        className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                      >
+                        {port.portName}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {validationErrors.portOfLoadingId && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.portOfLoadingId}</p>
+                )}
               </div>
 
-              <div className="flex-5 gap-1">
-                <Label htmlFor="expDetentionRate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Detention Rate
+              {/* Port Of Discharge */}
+              <div className="relative">
+                <Label htmlFor="portOfDischarge" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Port Of Discharge <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   type="text"
-                  value={form.expDetentionRate}
-                  onChange={(e) =>
-                    setForm({ ...form, expDetentionRate: e.target.value })
-                  }
-                  id="expDetentionRate"
+                  value={form.portOfDischarge || ""}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setForm((prev: any) => ({
+                      ...prev,
+                      portOfDischarge: value,
+                      portOfDischargeId: undefined,
+                    }));
+
+                    if (validationErrors.portOfDischargeId) {
+                      setValidationErrors(prev => ({ ...prev, portOfDischargeId: "" }));
+                    }
+
+                    if (value.length > 1) {
+                      fetchPorts(value);
+                      setShowDischargeDropdown(true);
+                    } else {
+                      setShowDischargeDropdown(false);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (form.portOfDischarge?.length > 1) {
+                      fetchPorts(form.portOfDischarge);
+                      setShowDischargeDropdown(true);
+                    }
+                  }}
+                  onBlur={() => {
+                    setTimeout(() => setShowDischargeDropdown(false), 100);
+                  }}
+                  id="portOfDischarge"
                   className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  placeholder="Start typing port of discharge..."
                 />
+
+                {showDischargeDropdown && portSuggestions.length > 0 && (
+                  <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
+                    {portSuggestions.map((port) => (
+                      <li
+                        key={port.id}
+                        onMouseDown={() => {
+                          setForm((prev: any) => ({
+                            ...prev,
+                            portOfDischarge: port.portName,
+                            portOfDischargeId: port.id,
+                          }));
+                          setShowDischargeDropdown(false);
+                        }}
+                        className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                      >
+                        {port.portName}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {validationErrors.portOfDischargeId && (
+                  <p className="text-red-500 text-xs mt-1">{validationErrors.portOfDischargeId}</p>
+                )}
               </div>
 
-              <div className="flex-5">
-                <Label htmlFor="impFreeDays" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Free Days
-                </Label>
-                <Input
-                  type="text"
-                  value={form.impFreeDays}
-                  onChange={(e) =>
-                    setForm({ ...form, impFreeDays: e.target.value })
-                  }
-                  id="impFreeDays"
-                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                />
-              </div>
-
-              <div className="flex-5">
-                <Label htmlFor="impDetentionRate" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Detention Rate
-                </Label>
-                <Input
-                  type="text"
-                  value={form.impDetentionRate}
-                  onChange={(e) =>
-                    setForm({ ...form, impDetentionRate: e.target.value })
-                  }
-                  id="impDetentionRate"
-                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                />
-              </div>
-            </div>
-
-            {/* Exp. Depot Name */}
-            <div>
-              <Label htmlFor="expDepotId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Exp. Depot Name
-              </Label>
-              <Select onValueChange={(value) => {
-                const selectedId = Number(value);
-                const selectedDepot = expDepots.find(
-                  (d: any) => d.id === selectedId
-                );
-                setForm({
-                  ...form,
-                  expDepotId: selectedId,
-                  expDepotName: selectedDepot?.companyName || "",
-                });
-              }} value={form.expDepotId || ""}>
-                <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                  <SelectValue placeholder="First Select Port of Loading" />
-                </SelectTrigger>
-                <SelectContent>
-                  {expDepots.map((depot: any) => (
-                    <SelectItem key={depot.id} value={depot.id}>
-                      {depot.companyName} - {depot.businessType}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Empty Return Depot */}
-            <div>
-              <Label htmlFor="emptyReturnDepot" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Empty Return Depot
-              </Label>
-
-              <Select onValueChange={(value) => {
-                const selectedId = Number(value);
-                const selectedDepot = emptyReturnDepots.find(
-                  (d) => d.id === selectedId
-                );
-                setForm({
-                  ...form,
-                  emptyReturnDepot: selectedId,
-                  emptyReturnDepotName: selectedDepot?.companyName || "",
-                });
-              }} value={form.emptyReturnDepot || ""}>
-                <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                  <SelectValue placeholder="First Select Port of Discharge" />
-                </SelectTrigger>
-                <SelectContent>
-                  {emptyReturnDepots.map((depot: any) => (
-                    <SelectItem key={depot.id} value={depot.id}>
-                      {depot.companyName} - {depot.businessType}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Exp. H. Agent Name */}
-            <div>
-              <Label htmlFor="expHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Exp. H. Agent Name
-              </Label>
-              <Select onValueChange={(value) => {
-                const selectedId = Number(value);
-                const selected = expAgents.find(
-                  (a: any) => a.id === selectedId
-                );
-                setForm({
-                  ...form,
-                  expHAgentId: selectedId,
-                  expHAgentName: selected?.companyName || "",
-                });
-              }} value={form.expHAgentId || ""}>
-                <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  {expAgents.map((agent: any) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.companyName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Imp. H. Agent Name */}
-            <div>
-              <Label htmlFor="impHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                Imp. H. Agent Name
-              </Label>
-              <Select onValueChange={(value) => {
-                const selectedId = Number(value);
-                const selected = impHandlingAgents.find(
-                  (a: any) => a.id === selectedId
-                );
-                setForm({
-                  ...form,
-                  impHAgentId: selectedId,
-                  impHAgentName: selected?.companyName || "",
-                });
-              }} value={form.impHAgentId || ""}>
-                <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                  <SelectValue placeholder="Select" />
-                </SelectTrigger>
-                <SelectContent>
-                  {impHandlingAgents.map((agent: any) => (
-                    <SelectItem key={agent.id} value={agent.id}>
-                      {agent.companyName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
-
-            {/* Transit Days */}
-            <div className="col-span-2">
-              <Label htmlFor="transitDays" className="block text-sm text-white mb-1">
-                Transit Days
-              </Label>
-              <Input
-                type="text"
-                value={form.transitDays}
-                onChange={(e) =>
-                  setForm({ ...form, transitDays: e.target.value })
-                }
-                id="transitDays"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-              />
-            </div>
-
-            {/* Enable Transhipment Port */}
-            <div className="col-span-2 flex items-center gap-2">
-              <Checkbox
-                id="enableTranshipmentPort"
-                checked={form.enableTranshipmentPort ?? false}
-                onCheckedChange={(checked) =>
-                  setForm({ ...form, enableTranshipmentPort: checked })
-                }
-              />
-
-              <Label
-                htmlFor="enableTranshipmentPort"
-                className="text-white text-sm"
-              >
-                Enable Transhipment Port
-              </Label>
-            </div>
-
-            {form.enableTranshipmentPort && (
-              <>
-                {/* Transhipment Port */}
-                <div className="col-span-2">
-                  <Label htmlFor="transhipmentPortName" className="block text-sm text-white mb-1">
-                    Transhipment Port
+              {/* Free Days and Detention Rate */}
+              <div className="flex w-full gap-4 col-span-2">
+                <div className="flex-5">
+                  <Label htmlFor="expFreeDays" className="block text-sm text-gray-900 dark:text-white mb-1">
+                    Free Days
                   </Label>
-                  <div className="relative w-1/2">
-                    <Input
-                      type="text"
-                      value={form.transhipmentPortName || ""}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        setForm((prev: any) => ({
-                          ...prev,
-                          transhipmentPortName: value,
-                          transhipmentPortId: undefined,
-                        }));
-
-                        if (value.length > 1) {
-                          fetchTranshipmentPorts(value);
-                          setShowTranshipmentDropdown(true);
-                        } else {
-                          setShowTranshipmentDropdown(false);
-                        }
-                      }}
-                      onFocus={() => {
-                        if ((form.transhipmentPortName || "").length > 1) {
-                          fetchTranshipmentPorts(
-                            form.transhipmentPortName || ""
-                          );
-                          setShowTranshipmentDropdown(true);
-                        }
-                      }}
-                      onBlur={() =>
-                        setTimeout(
-                          () => setShowTranshipmentDropdown(false),
-                          150
-                        )
-                      }
-                      id="transhipmentPortName"
-                      className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-800"
-                      placeholder="Start typing transhipment port..."
-                    />
-                    {showTranshipmentDropdown &&
-                      transhipmentPortSuggestions.length > 0 && (
-                        <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                          {transhipmentPortSuggestions.map((port) => (
-                            <li
-                              key={port.id}
-                              onMouseDown={() => {
-                                setForm((prev: any) => ({
-                                  ...prev,
-                                  transhipmentPortName: port.portName,
-                                  transhipmentPortId: port.id,
-                                }));
-                                setShowTranshipmentDropdown(false);
-                              }}
-                              className="px-3 py-1 hover:bg-blue-600 hover:text-white cursor-pointer text-sm text-gray-900 dark:text-white"
-                            >
-                              {port.portName}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                  </div>
-                </div>
-
-                {/* TRS. H. Agent Name */}
-                <div className="col-span-2">
-                  <Label htmlFor="transhipmentAgentId" className="block text-sm text-white mb-1">
-                    TRS. H. Agent Name
-                  </Label>
-                  <div className="w-1/2">
-                    <Select
-                      onValueChange={(value) => {
-                        const selectedId = Number(value);
-                        const selected = trsHandlingAgents.find((a) => a.id === selectedId);
-                        setForm({
-                          ...form,
-                          transhipmentAgentId: selectedId,
-                          transhipmentAgentName: selected?.companyName || "",
-                        });
-                      }}
-                      value={form.transhipmentAgentId || ""}
-                    >
-                      <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {trsHandlingAgents.map((agent) => (
-                          <SelectItem key={agent.id} value={agent.id}>
-                            {agent.companyName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
-
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
-
-            {/* Financial Details */}
-            <div>
-              <Label htmlFor="slotRate" className="block text-sm text-white mb-1">
-                Slot Rate
-              </Label>
-              <Input
-                type="text"
-                value={form.slotRate ?? ""}
-                onChange={(e) => setForm({ ...form, slotRate: e.target.value })}
-                id="slotRate"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="depotAvgCost" className="block text-sm text-white mb-1">
-                Depot Avg Cost
-              </Label>
-              <Input
-                type="text"
-                value={form.depotAvgCost ?? ""}
-                readOnly
-                id="depotAvgCost"
-                className="w-full p-2 bg-white dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                placeholder={form.isEditing ? "" : "Auto-calculated"}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="leasingCost" className="block text-sm text-white mb-1">
-                Leasing Cost
-              </Label>
-              <Input
-                type="text"
-                value={form.leasingCost ?? ""}
-                readOnly
-                id="leasingCost"
-                className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800 bg-opacity-70 cursor-not-allowed"
-                placeholder={form.isEditing ? "" : "Auto-calculated"}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="depotCleaningCost" className="block text-sm text-white mb-1">
-                Depot Cleaning Cost
-              </Label>
-              <Input
-                type="text"
-                value={form.depotCleaningCost ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, depotCleaningCost: e.target.value })
-                }
-                id="depotCleaningCost"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                placeholder={form.isEditing ? "" : "Auto-calculated"}
-                readOnly
-              />
-            </div>
-
-
-             <div>
-              <Label htmlFor="terminalHandlingFee" className="block text-sm text-white mb-1">
-                Other Cost
-              </Label>
-              <Input
-                type="text"
-                value={form.terminalHandlingFee ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, terminalHandlingFee: e.target.value })
-                }
-                id="terminalHandlingFee"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-              />
-            </div>
-
-          
-            <div>
-              <Label htmlFor="containerPreparationCost" className="block text-sm text-white mb-1">
-                Container Preparation
-              </Label>
-              <Input
-                type="text"
-                value={form.containerPreparationCost ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, containerPreparationCost: e.target.value })
-                }
-                id="containerPreparationCost"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-              />
-            </div>
-
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
-
-            <div>
-              <Label htmlFor="expAgencyCommission" className="block text-sm text-white mb-1">
-                Exp. Agency Commission
-              </Label>
-              <Input
-                type="text"
-                value={form.expAgencyCommission ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, expAgencyCommission: e.target.value })
-                }
-                id="expAgencyCommission"
-                className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
-                readOnly
-                placeholder={form.isEditing ? "" : "Auto-calculated"}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="impAgencyCommission" className="block text-sm text-white mb-1">
-                Imp. Agency Commission
-              </Label>
-              <Input
-                type="text"
-                value={form.impAgencyCommission ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, impAgencyCommission: e.target.value })
-                }
-                id="impAgencyCommission"
-                className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-                readOnly
-                placeholder={form.isEditing ? "" : "Auto-calculated"}
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="expCollection" className="block text-sm text-white mb-1">
-                Exp. Collection
-              </Label>
-              <Input
-                type="text"
-                value={form.expCollection ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, expCollection: e.target.value })
-                }
-                id="expCollection"
-                className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="impCollection" className="block text-sm text-white mb-1">
-                Imp. Collection
-              </Label>
-              <Input
-                type="text"
-                value={form.impCollection ?? ""}
-                onChange={(e) =>
-                  setForm({ ...form, impCollection: e.target.value })
-                }
-                id="impCollection"
-                className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-              />
-            </div>
-
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
-
-            <div className="space-y-4">
-              {" "}
-              {/* Ensures vertical stacking with spacing */}
-              <div>
-                <Label htmlFor="totalCost" className="block text-sm text-white mb-1">
-                  Total Cost
-                </Label>
-                <Input
-                  type="text"
-                  value={form.totalCost ?? ""}
-                  readOnly
-                  id="totalCost"
-                  className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700"
-                />
-              </div>
-              <div>
-                <Label htmlFor="sellingAmount" className="block text-sm text-white mb-1">
-                  Selling Amount (Ocean Freight)
-                </Label>
-                <Input
-                  type="text"
-                  value={form.sellingAmount ?? ""}
-                  onChange={(e) =>
-                    setForm({ ...form, sellingAmount: e.target.value })
-                  }
-                  id="sellingAmount"
-                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-                />
-              </div>
-              <div>
-                <Label htmlFor="totalRevenueAmount" className="block text-sm text-white mb-1">
-                  Total Revenue Amount
-                </Label>
-                <Input
-                  type="text"
-                  value={form.totalRevenueAmount ?? ""}
-                  readOnly
-                  id="totalRevenueAmount"
-                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-                />
-              </div>
-              <div>
-                <Label htmlFor="totalPLAmount" className="block text-sm text-white mb-1">
-                  Total P & L
-                </Label>
-                <Input
-                  type="text"
-                  value={form.totalPLAmount ?? ""}
-                  readOnly
-                  id="totalPLAmount"
-                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
-                />
-              </div>
-              <div>
-                <Label htmlFor="plMargin" className="block text-sm text-white mb-1">
-                  P/L Margin %
-                </Label>
-                <div className="relative">
                   <Input
                     type="text"
-                    value={form.plMargin ?? ""}
+                    value={form.expFreeDays}
                     onChange={(e) =>
-                      setForm({ ...form, plMargin: e.target.value })
+                      setForm({ ...form, expFreeDays: e.target.value })
                     }
-                    id="plMargin"
-                    className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800 pr-6"
+                    id="expFreeDays"
+                    className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
                   />
-                  <span className="absolute right-2 top-2 text-white">%</span>
+                </div>
+
+                <div className="flex-5 gap-1">
+                  <Label htmlFor="expDetentionRate" className="block text-sm text-gray-900 dark:text-white mb-1">
+                    Detention Rate
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.expDetentionRate}
+                    onChange={(e) =>
+                      setForm({ ...form, expDetentionRate: e.target.value })
+                    }
+                    id="expDetentionRate"
+                    className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  />
+                </div>
+
+                <div className="flex-5">
+                  <Label htmlFor="impFreeDays" className="block text-sm text-gray-900 dark:text-white mb-1">
+                    Free Days
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.impFreeDays}
+                    onChange={(e) =>
+                      setForm({ ...form, impFreeDays: e.target.value })
+                    }
+                    id="impFreeDays"
+                    className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  />
+                </div>
+
+                <div className="flex-5">
+                  <Label htmlFor="impDetentionRate" className="block text-sm text-gray-900 dark:text-white mb-1">
+                    Detention Rate
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.impDetentionRate}
+                    onChange={(e) =>
+                      setForm({ ...form, impDetentionRate: e.target.value })
+                    }
+                    id="impDetentionRate"
+                    className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  />
                 </div>
               </div>
+
+              {/* Exp. Depot Name */}
+              <div>
+                <Label htmlFor="expDepotId" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Exp. Depot Name
+                </Label>
+                <Select onValueChange={(value) => {
+                  const selectedId = Number(value);
+                  const selectedDepot = expDepots.find(
+                    (d: any) => d.id === selectedId
+                  );
+                  setForm({
+                    ...form,
+                    expDepotId: selectedId,
+                    expDepotName: selectedDepot?.companyName || "",
+                  });
+                }} value={form.expDepotId || ""}>
+                  <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                    <SelectValue placeholder="First Select Port of Loading" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {expDepots.map((depot: any) => (
+                      <SelectItem key={depot.id} value={depot.id}>
+                        {depot.companyName} - {depot.businessType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Empty Return Depot */}
+              <div>
+                <Label htmlFor="emptyReturnDepot" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Empty Return Depot
+                </Label>
+
+                <Select onValueChange={(value) => {
+                  const selectedId = Number(value);
+                  const selectedDepot = emptyReturnDepots.find(
+                    (d) => d.id === selectedId
+                  );
+                  setForm({
+                    ...form,
+                    emptyReturnDepot: selectedId,
+                    emptyReturnDepotName: selectedDepot?.companyName || "",
+                  });
+                }} value={form.emptyReturnDepot || ""}>
+                  <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                    <SelectValue placeholder="First Select Port of Discharge" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {emptyReturnDepots.map((depot: any) => (
+                      <SelectItem key={depot.id} value={depot.id}>
+                        {depot.companyName} - {depot.businessType}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Exp. H. Agent Name */}
+              <div>
+                <Label htmlFor="expHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Exp. H. Agent Name
+                </Label>
+                <Select onValueChange={(value) => {
+                  const selectedId = Number(value);
+                  const selected = expAgents.find(
+                    (a: any) => a.id === selectedId
+                  );
+                  setForm({
+                    ...form,
+                    expHAgentId: selectedId,
+                    expHAgentName: selected?.companyName || "",
+                  });
+                }} value={form.expHAgentId || ""}>
+                  <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {expAgents.map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Imp. H. Agent Name */}
+              <div>
+                <Label htmlFor="impHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
+                  Imp. H. Agent Name
+                </Label>
+                <Select onValueChange={(value) => {
+                  const selectedId = Number(value);
+                  const selected = impHandlingAgents.find(
+                    (a: any) => a.id === selectedId
+                  );
+                  setForm({
+                    ...form,
+                    impHAgentId: selectedId,
+                    impHAgentName: selected?.companyName || "",
+                  });
+                }} value={form.impHAgentId || ""}>
+                  <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                    <SelectValue placeholder="Select" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {impHandlingAgents.map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
+
+              {/* Transit Days */}
+              <div className="col-span-2">
+                <Label htmlFor="transitDays" className="block text-sm text-white mb-1">
+                  Transit Days
+                </Label>
+                <Input
+                  type="text"
+                  value={form.transitDays}
+                  onChange={(e) =>
+                    setForm({ ...form, transitDays: e.target.value })
+                  }
+                  id="transitDays"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                />
+              </div>
+
+              {/* Enable Transhipment Port */}
+              <div className="col-span-2 flex items-center gap-2">
+                <Checkbox
+                  id="enableTranshipmentPort"
+                  checked={form.enableTranshipmentPort ?? false}
+                  onCheckedChange={(checked) =>
+                    setForm({ ...form, enableTranshipmentPort: checked })
+                  }
+                />
+
+                <Label
+                  htmlFor="enableTranshipmentPort"
+                  className="text-white text-sm"
+                >
+                  Enable Transhipment Port
+                </Label>
+              </div>
+
+              {form.enableTranshipmentPort && (
+                <>
+                  {/* Transhipment Port */}
+                  <div className="col-span-2">
+                    <Label htmlFor="transhipmentPortName" className="block text-sm text-white mb-1">
+                      Transhipment Port
+                    </Label>
+                    <div className="relative w-1/2">
+                      <Input
+                        type="text"
+                        value={form.transhipmentPortName || ""}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setForm((prev: any) => ({
+                            ...prev,
+                            transhipmentPortName: value,
+                            transhipmentPortId: undefined,
+                          }));
+
+                          if (value.length > 1) {
+                            fetchTranshipmentPorts(value);
+                            setShowTranshipmentDropdown(true);
+                          } else {
+                            setShowTranshipmentDropdown(false);
+                          }
+                        }}
+                        onFocus={() => {
+                          if ((form.transhipmentPortName || "").length > 1) {
+                            fetchTranshipmentPorts(
+                              form.transhipmentPortName || ""
+                            );
+                            setShowTranshipmentDropdown(true);
+                          }
+                        }}
+                        onBlur={() =>
+                          setTimeout(
+                            () => setShowTranshipmentDropdown(false),
+                            150
+                          )
+                        }
+                        id="transhipmentPortName"
+                        className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-800"
+                        placeholder="Start typing transhipment port..."
+                      />
+                      {showTranshipmentDropdown &&
+                        transhipmentPortSuggestions.length > 0 && (
+                          <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
+                            {transhipmentPortSuggestions.map((port) => (
+                              <li
+                                key={port.id}
+                                onMouseDown={() => {
+                                  setForm((prev: any) => ({
+                                    ...prev,
+                                    transhipmentPortName: port.portName,
+                                    transhipmentPortId: port.id,
+                                  }));
+                                  setShowTranshipmentDropdown(false);
+                                }}
+                                className="px-3 py-1 hover:bg-blue-600 hover:text-white cursor-pointer text-sm text-gray-900 dark:text-white"
+                              >
+                                {port.portName}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                    </div>
+                  </div>
+
+                  {/* TRS. H. Agent Name */}
+                  <div className="col-span-2">
+                    <Label htmlFor="transhipmentAgentId" className="block text-sm text-white mb-1">
+                      TRS. H. Agent Name
+                    </Label>
+                    <div className="w-1/2">
+                      <Select
+                        onValueChange={(value) => {
+                          const selectedId = Number(value);
+                          const selected = trsHandlingAgents.find((a) => a.id === selectedId);
+                          setForm({
+                            ...form,
+                            transhipmentAgentId: selectedId,
+                            transhipmentAgentName: selected?.companyName || "",
+                          });
+                        }}
+                        value={form.transhipmentAgentId || ""}
+                      >
+                        <SelectTrigger className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {trsHandlingAgents.map((agent) => (
+                            <SelectItem key={agent.id} value={agent.id}>
+                              {agent.companyName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
+
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
+
+              {/* Financial Details */}
+              <div>
+                <Label htmlFor="slotRate" className="block text-sm text-white mb-1">
+                  Slot Rate
+                </Label>
+                <Input
+                  type="text"
+                  value={form.slotRate ?? ""}
+                  onChange={(e) => setForm({ ...form, slotRate: e.target.value })}
+                  id="slotRate"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="depotAvgCost" className="block text-sm text-white mb-1">
+                  Depot Avg Cost
+                </Label>
+                <Input
+                  type="text"
+                  value={form.depotAvgCost ?? ""}
+                  readOnly
+                  id="depotAvgCost"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  placeholder={form.isEditing ? "" : "Auto-calculated"}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="leasingCost" className="block text-sm text-white mb-1">
+                  Leasing Cost
+                </Label>
+                <Input
+                  type="text"
+                  value={form.leasingCost ?? ""}
+                  readOnly
+                  id="leasingCost"
+                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800 bg-opacity-70 cursor-not-allowed"
+                  placeholder={form.isEditing ? "" : "Auto-calculated"}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="depotCleaningCost" className="block text-sm text-white mb-1">
+                  Depot Cleaning Cost
+                </Label>
+                <Input
+                  type="text"
+                  value={form.depotCleaningCost ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, depotCleaningCost: e.target.value })
+                  }
+                  id="depotCleaningCost"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  placeholder={form.isEditing ? "" : "Auto-calculated"}
+                  readOnly
+                />
+              </div>
+
+
+              <div>
+                <Label htmlFor="terminalHandlingFee" className="block text-sm text-white mb-1">
+                  Other Cost
+                </Label>
+                <Input
+                  type="text"
+                  value={form.terminalHandlingFee ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, terminalHandlingFee: e.target.value })
+                  }
+                  id="terminalHandlingFee"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                />
+              </div>
+
+
+              <div>
+                <Label htmlFor="containerPreparationCost" className="block text-sm text-white mb-1">
+                  Container Preparation
+                </Label>
+                <Input
+                  type="text"
+                  value={form.containerPreparationCost ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, containerPreparationCost: e.target.value })
+                  }
+                  id="containerPreparationCost"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                />
+              </div>
+
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
+
+              <div>
+                <Label htmlFor="expAgencyCommission" className="block text-sm text-white mb-1">
+                  Exp. Agency Commission
+                </Label>
+                <Input
+                  type="text"
+                  value={form.expAgencyCommission ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, expAgencyCommission: e.target.value })
+                  }
+                  id="expAgencyCommission"
+                  className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
+                  readOnly
+                  placeholder={form.isEditing ? "" : "Auto-calculated"}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="impAgencyCommission" className="block text-sm text-white mb-1">
+                  Imp. Agency Commission
+                </Label>
+                <Input
+                  type="text"
+                  value={form.impAgencyCommission ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, impAgencyCommission: e.target.value })
+                  }
+                  id="impAgencyCommission"
+                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                  readOnly
+                  placeholder={form.isEditing ? "" : "Auto-calculated"}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="expCollection" className="block text-sm text-white mb-1">
+                  Exp. Collection
+                </Label>
+                <Input
+                  type="text"
+                  value={form.expCollection ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, expCollection: e.target.value })
+                  }
+                  id="expCollection"
+                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="impCollection" className="block text-sm text-white mb-1">
+                  Imp. Collection
+                </Label>
+                <Input
+                  type="text"
+                  value={form.impCollection ?? ""}
+                  onChange={(e) =>
+                    setForm({ ...form, impCollection: e.target.value })
+                  }
+                  id="impCollection"
+                  className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                />
+              </div>
+
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
+
+              <div className="space-y-4">
+                {" "}
+                {/* Ensures vertical stacking with spacing */}
+                <div>
+                  <Label htmlFor="totalCost" className="block text-sm text-white mb-1">
+                    Total Cost
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.totalCost ?? ""}
+                    readOnly
+                    id="totalCost"
+                    className="w-full p-2 bg-gray-800 text-white rounded border border-gray-700"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sellingAmount" className="block text-sm text-white mb-1">
+                    Selling Amount (Ocean Freight)
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.sellingAmount ?? ""}
+                    onChange={(e) =>
+                      setForm({ ...form, sellingAmount: e.target.value })
+                    }
+                    id="sellingAmount"
+                    className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="totalRevenueAmount" className="block text-sm text-white mb-1">
+                    Total Revenue Amount
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.totalRevenueAmount ?? ""}
+                    readOnly
+                    id="totalRevenueAmount"
+                    className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="totalPLAmount" className="block text-sm text-white mb-1">
+                    Total P & L
+                  </Label>
+                  <Input
+                    type="text"
+                    value={form.totalPLAmount ?? ""}
+                    readOnly
+                    id="totalPLAmount"
+                    className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="plMargin" className="block text-sm text-white mb-1">
+                    P/L Margin %
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      value={form.plMargin ?? ""}
+                      onChange={(e) =>
+                        setForm({ ...form, plMargin: e.target.value })
+                      }
+                      id="plMargin"
+                      className="w-full p-2 bg-neutral-900 text-white rounded border border-neutral-800 pr-6"
+                    />
+                    <span className="absolute right-2 top-2 text-white">%</span>
+                  </div>
+                </div>
+              </div>
+
+              <hr className="border-t border-gray-600 my-4 col-span-2" />
+
+              {/* Continue mapping remaining fields similarly based on your form design */}
             </div>
 
-            <hr className="border-t border-gray-600 my-4 col-span-2" />
+            <div className="flex justify-center gap-3 mt-8">
+              <Button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-neutral-800 cursor-pointer text-white rounded hover:bg-neutral-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className={`px-4 py-2 text-white rounded ${isSubmitting
+                    ? "bg-blue-300 cursor-not-allowed"
+                    : "bg-blue-600 hover:bg-blue-500 cursor-pointer"
+                  }`}
+              >
+                {isSubmitting ? "Please wait..." : "Submit"}
+              </Button>
 
-            {/* Continue mapping remaining fields similarly based on your form design */}
-          </div>
-
-          <div className="flex justify-center gap-3 mt-8">
-            <Button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-neutral-800 cursor-pointer text-white rounded hover:bg-neutral-700"
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              className="px-4 py-2 bg-blue-600 cursor-pointer text-white rounded hover:bg-blue-500"
-            >
-              Submit
-            </Button>
-          </div>
-        </form>
+            </div>
+          </form>
+        </div>
       </div>
-    </div>
     </>
   );
 };

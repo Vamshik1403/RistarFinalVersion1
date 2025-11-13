@@ -188,6 +188,8 @@ const AddShipmentModal = ({
   // Add validation error state
   const [validationErrors, setValidationErrors] = useState<{[key: string]: string}>({});
   const [showValidationAlert, setShowValidationAlert] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
 
 
@@ -431,6 +433,11 @@ const handleContainerSearch = async (value: string) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+      // 🔒 Prevent double submit
+  if (isSubmitting) return;
+  setIsSubmitting(true);
+
+
     try {
       // Clear previous validation errors
       setValidationErrors({});
@@ -552,6 +559,9 @@ const handleContainerSearch = async (value: string) => {
         }`
       );
     }
+    finally {
+    setIsSubmitting(false); // 🔓 unlock
+  }
   };
 
   const fetchPorts = async (searchTerm: string) => {
@@ -2019,11 +2029,14 @@ const CustomDatePicker = ({
                 Cancel
               </Button>
               <Button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 cursor-pointer"
-              >
-                Submit
-              </Button>
+  type="submit"
+  disabled={isSubmitting}
+  className={`px-4 py-2 text-white rounded cursor-pointer 
+    ${isSubmitting ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"}`}
+>
+  {isSubmitting ? "Submitting..." : "Submit"}
+</Button>
+
             </DialogFooter>
           </form>
         </DialogContent>

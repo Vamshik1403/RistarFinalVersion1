@@ -800,6 +800,8 @@ const AddShipmentModal = ({
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [allMovements, setAllMovements] = useState<any[]>([]);
   const [allInventories, setAllInventories] = useState<any[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
 
   // Add state for showing the container modal
   const [showContainerModal, setShowContainerModal] = useState(false);
@@ -1625,7 +1627,8 @@ useEffect(() => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
+ if (isSubmitting) return;  // 🔥 Prevent double submits
+  setIsSubmitting(true);     // 🔥 Lock form
     try {
       // Clear previous validation errors
       setValidationErrors({});
@@ -1802,6 +1805,10 @@ useEffect(() => {
           error.response?.data?.message || error.message
         }`
       );
+      
+    }
+    finally {
+      setIsSubmitting(false); // 🔥 Unlock form after API is done
     }
   };
 
@@ -3697,12 +3704,15 @@ useEffect(() => {
               >
                 Cancel
               </Button>
-              <Button
-                type="submit"
-                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 cursor-pointer"
-              >
-                Submit
-              </Button>
+            <Button
+  type="submit"
+  disabled={isSubmitting}
+  className={`px-4 py-2 rounded text-white cursor-pointer 
+    ${isSubmitting ? "bg-blue-300 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-500"}`}
+>
+  {isSubmitting ? "Submitting..." : "Submit"}
+</Button>
+
             </DialogFooter>
           </form>
           {/* New Modal Component for Container Search */}
