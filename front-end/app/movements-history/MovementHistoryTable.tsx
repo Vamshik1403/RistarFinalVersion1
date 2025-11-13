@@ -312,26 +312,22 @@ const MovementHistoryTable = () => {
         });
 
         // 🔄 Refresh latestReturnLocation - Only update for EMPTY RETURNED status
-        const latestMap: { [key: number]: { depotName: string; portName: string } } = { ...latestReturnLocation };
+     // 🔄 Refresh latestReturnLocation - Only update for EMPTY RETURNED status
+const latestMap: { [key: number]: { depotName: string; portName: string } } = { ...latestReturnLocation };
 
-        (movementRes.data || []).forEach((row: any) => {
-          const invId = row.inventory?.id;
-          if (!invId) return;
+(movementRes.data || []).forEach((row: any) => {
+  const invId = row.inventory?.id;
+  if (!invId) return;
 
-          // ✅ Always prefer the most recent known port/depot combination
-        if (
-  ["EMPTY RETURNED", "AVAILABLE", "ALLOTTED"].includes(row.status?.toUpperCase()) &&
-  row.port &&
-  row.addressBook
-) {
-
-            latestMap[invId] = {
-              depotName: row.addressBook?.companyName || "N/A",
-              portName: row.port?.portName || "N/A",
-            };
-          }
-        });
-        setLatestReturnLocation(latestMap);
+  // ✅ Always use current record's port and addressBook if available
+  if (row.port && row.addressBook) {
+    latestMap[invId] = {
+      depotName: row.addressBook?.companyName || "N/A",
+      portName: row.port?.portName || "N/A",
+    };
+  }
+});
+setLatestReturnLocation(latestMap);
 
 
 
@@ -764,6 +760,16 @@ const MovementHistoryTable = () => {
   }, [newStatus, selectedIds]);
 
 
+  // Helper function to format ISO date to DD/MM/YY
+const formatDateToDDMMYY = (isoDate: string) => {
+  if (!isoDate) return '';
+  const date = new Date(isoDate);
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const year = date.getFullYear().toString().slice(-2);
+  return `${day}/${month}/${year}`;
+};
+
   return (
     <div className="p-6 my-0 bg-white dark:bg-neutral-950 text-gray-900 dark:text-white min-h-screen mb-6">
 
@@ -988,47 +994,64 @@ const MovementHistoryTable = () => {
                           : row.status}
                       </span>
                     </TableCell>
-                    <TableCell>
-                      {latestReturnLocation[row.inventory?.id || 0]?.portName
-                        ? latestReturnLocation[row.inventory?.id || 0].portName
-                        : row.port?.portName
-                          ? row.port.portName
-                          : containerLocationCache[row.inventory?.id || 0]?.portName
-                            ? containerLocationCache[row.inventory?.id || 0].portName
-                            : "-"}
-                    </TableCell>
+             <TableCell>
+  {(() => {
+    // Always show current movement record's port first
+    if (row.port?.portName) {
+      return row.port.portName;
+    }
+    
+    // Only fall back to cache if no current port
+    const containerId = row.inventory?.id || 0;
+    if (latestReturnLocation[containerId]?.portName) {
+      return latestReturnLocation[containerId].portName;
+    }
+    
+    if (containerLocationCache[containerId]?.portName) {
+      return containerLocationCache[containerId].portName;
+    }
+    
+    return "-";
+  })()}
+</TableCell>
 
-                    <TableCell>
-                      {row.status?.toUpperCase() === "SOB" ? (
-                        row.addressBook?.companyName && row.vesselName ? (
-                          `${row.addressBook.companyName} - ${row.vesselName}`
-                        ) : row.addressBook?.companyName ? (
-                          row.addressBook.companyName
-                        ) : row.vesselName ? (
-                          row.vesselName
-                        ) : (
-                          "-"
-                        )
-                      ) : row.status?.toUpperCase() === "EMPTY RETURNED" ? (
-                        // ✅ For EMPTY RETURNED, show current addressBook (depot) only
-                        row.addressBook?.companyName ||
-                        latestReturnLocation[row.inventory?.id || 0]?.depotName ||
-                        "-"
-                      ) : latestReturnLocation[row.inventory?.id || 0] ? (
-                        // ✅ For AVAILABLE or others with updated API data
-                        latestReturnLocation[row.inventory?.id || 0].depotName ||
-                        row.addressBook?.companyName ||
-                        "-"
-                      ) : containerLocationCache[row.inventory?.id || 0] ? (
-                        containerLocationCache[row.inventory?.id || 0].depotName ||
-                        row.addressBook?.companyName ||
-                        "-"
-                      ) : row.addressBook?.companyName ? (
-                        row.addressBook.companyName
-                      ) : (
-                        "-"
-                      )}
-                    </TableCell>
+                  <TableCell>
+  {(() => {
+    // For GATE-IN and DISCHARGE statuses, show only port (hide depot)
+    if (
+      row.status?.toUpperCase() === "EMPTY GATE-IN" || 
+      row.status?.toUpperCase() === "EMPTY DISCHARGE" ||
+      row.status?.toUpperCase() === "LADEN GATE-IN" ||
+      row.status?.toUpperCase() === "LADEN DISCHARGE(ATA)"
+    ) {
+      return "-";
+    }
+    
+    // For SOB status, show carrier + vessel name
+    if (row.status?.toUpperCase() === "SOB") {
+      return row.addressBook?.companyName && row.vesselName 
+        ? `${row.addressBook.companyName} - ${row.vesselName}`
+        : row.addressBook?.companyName || row.vesselName || "-";
+    }
+    
+    // For ALL other statuses, show current movement record's addressBook first
+    if (row.addressBook?.companyName) {
+      return row.addressBook.companyName;
+    }
+    
+    // Only fall back to cache if no current addressBook
+    const containerId = row.inventory?.id || 0;
+    if (latestReturnLocation[containerId]?.depotName) {
+      return latestReturnLocation[containerId].depotName;
+    }
+    
+    if (containerLocationCache[containerId]?.depotName) {
+      return containerLocationCache[containerId].depotName;
+    }
+    
+    return "-";
+  })()}
+</TableCell>
 
 
 
@@ -1293,13 +1316,41 @@ const MovementHistoryTable = () => {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Date</label>
-                <Input
-                  type="date"
-                  value={movementDate}
-                  onChange={(e) => setMovementDate(e.target.value)}
-                />
-              </div>
+  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+    Date (DD/MM/YY)
+  </label>
+  <Input
+    type="text"
+    value={movementDate ? formatDateToDDMMYY(movementDate) : ""}
+    onChange={(e) => {
+      const value = e.target.value;
+      // Allow only numbers and slashes
+      const cleaned = value.replace(/[^\d/]/g, '');
+      
+      // Auto-format as user types
+      let formatted = cleaned;
+      if (cleaned.length > 2 && cleaned.length <= 4) {
+        formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
+      } else if (cleaned.length > 4) {
+        formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4) + '/' + cleaned.slice(4, 6);
+      }
+      
+      // Update state with ISO format for storage
+      if (formatted.length === 8) { // DD/MM/YY
+        const [day, month, year] = formatted.split('/');
+        const fullYear = `20${year}`; // Assuming 20xx
+        const isoDate = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        setMovementDate(isoDate);
+      } else {
+        setMovementDate(formatted);
+      }
+    }}
+    placeholder="DD/MM/YY"
+    className="w-full"
+  />
+</div>
+
+
 
               <div className="space-y-2">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -182,26 +182,26 @@ export class ShipmentService {
 });
 
 
-        // Fetch latest leasing info (fallback only)
-        const leasingInfo = await tx.leasingInfo.findFirst({
-          where: { inventoryId: inventory.id },
-          orderBy: { createdAt: 'desc' },
-        });
 
-        // ✅ Always create new movement using shipment's POL + Depot
-      await tx.movementHistory.create({
+// 1️⃣ Get container’s latest movement (correct current depot + port)
+const lastMovement = await tx.movementHistory.findFirst({
+  where: { inventoryId: inventory.id },
+  orderBy: { date: 'desc' },
+});
+
+// 2️⃣ Determine actual current depot and port
+const currentDepotId =
+  lastMovement?.addressBookId ?? null;
+
+const currentPortId =
+  lastMovement?.portId ?? createdShipment.polPortId ?? null;
+
+// 3️⃣ Create new ALLOTTED movement for the shipment
+await tx.movementHistory.create({
   data: {
     inventoryId: inventory.id,
-
-    // ✅ Port should come from POL (shipment port of loading)
-    portId: createdShipment.polPortId ?? leasingInfo?.portId ?? null,
-
-    // ✅ Depot should come from on-hire depot (not empty return depot)
-    addressBookId:
-      leasingInfo?.onHireDepotaddressbookId ??
-      createdShipment.emptyReturnDepotAddressBookId ??
-      null,
-
+    portId: currentPortId,
+    addressBookId: currentDepotId,
     shipmentId: createdShipment.id,
     emptyRepoJobId: null,
     status: 'ALLOTTED',
@@ -210,6 +210,7 @@ export class ShipmentService {
     remarks: `Shipment created - ${createdShipment.jobNumber}`,
   },
 });
+
 
 
 
@@ -415,144 +416,131 @@ export class ShipmentService {
     });
   }
 
-  async update(id: number, data: UpdateShipmentDto) {
-    const { containers, ...shipmentData } = data;
+ async update(id: number, data: UpdateShipmentDto) {
+  const { containers, ...shipmentData } = data;
 
-    // Fetch the current shipment to get the jobNumber
-    const currentShipment = await this.prisma.shipment.findUnique({
-      where: { id },
-      select: { jobNumber: true },
+  // Fetch current jobNumber for remarks
+  const currentShipment = await this.prisma.shipment.findUnique({
+    where: { id },
+    select: { jobNumber: true },
+  });
+  const jobNumber = currentShipment?.jobNumber || 'UNKNOWN';
+
+  return this.prisma.$transaction(async (tx) => {
+    // 1️⃣ Existing containers on shipment
+    const existingContainers = await tx.shipmentContainer.findMany({
+      where: { shipmentId: id },
     });
-    const jobNumber = currentShipment?.jobNumber || 'UNKNOWN';
 
-    return this.prisma.$transaction(async (tx) => {
-      // 1. Fetch existing containers for this shipment
-      const existingContainers = await tx.shipmentContainer.findMany({
-        where: { shipmentId: id },
+    const existingInventoryIds = existingContainers
+      .map((c) => c.inventoryId)
+      .filter((id): id is number => !!id);
+
+    const newInventoryIds = (containers || [])
+      .map((c) => c.inventoryId)
+      .filter((id): id is number => !!id);
+
+    // 2️⃣ Containers REMOVED from shipment
+    const removedInventoryIds = existingInventoryIds.filter(
+      (oldId) => !newInventoryIds.includes(oldId),
+    );
+
+    // 3️⃣ Handle removed containers
+    for (const inventoryId of removedInventoryIds) {
+      // Container becomes AVAILABLE again at its last known depot
+
+      const lastMovement = await tx.movementHistory.findFirst({
+        where: { inventoryId },
+        orderBy: { date: 'desc' },
       });
 
-      const existingInventoryIds = existingContainers
-        .map((c) => c.inventoryId)
-        .filter((id): id is number => id !== null && id !== undefined);
+      const currentDepotId = lastMovement?.addressBookId ?? null;
+      const currentPortId = lastMovement?.portId ?? null;
 
-      const newInventoryIds = (containers || [])
-        .map((c) => c.inventoryId)
-        .filter((id): id is number => id !== null && id !== undefined);
+      await tx.movementHistory.create({
+        data: {
+          inventoryId,
+          portId: currentPortId,
+          addressBookId: currentDepotId,
+          status: 'AVAILABLE',
+          date: new Date(),
+          remarks: `Removed from shipment - ${jobNumber}`,
+          shipmentId: null,
+          emptyRepoJobId: null,
+        },
+      });
+    }
 
-      // 2. Identify removed inventoryIds (no longer in the new list)
-      const removedInventoryIds = existingInventoryIds.filter(
-        (oldId) => !newInventoryIds.includes(oldId),
-      );
+    // 4️⃣ Update shipment
+    const updatedShipment = await tx.shipment.update({
+      where: { id },
+      data: {
+        ...shipmentData,
+        date: shipmentData.date ? new Date(shipmentData.date) : undefined,
+        gsDate: shipmentData.gsDate ? new Date(shipmentData.gsDate) : undefined,
+        etaTopod: shipmentData.etaTopod
+          ? new Date(shipmentData.etaTopod)
+          : undefined,
+        estimateDate: shipmentData.estimateDate
+          ? new Date(shipmentData.estimateDate)
+          : undefined,
+        sob: shipmentData.sob ? new Date(shipmentData.sob) : null,
+      },
+    });
 
-      // 3. Handle removed containers
-      for (const inventoryId of removedInventoryIds) {
-        const leasingInfo = await tx.leasingInfo.findFirst({
+    // 5️⃣ Delete old containers
+    await tx.shipmentContainer.deleteMany({ where: { shipmentId: id } });
+
+    // 6️⃣ Add new containers
+    if (containers && containers.length > 0) {
+      await tx.shipmentContainer.createMany({
+        data: containers.map((c) => ({
+          containerNumber: c.containerNumber,
+          capacity: c.capacity,
+          tare: c.tare,
+          portId: c.portId ?? undefined,
+          depotName: c.depotName ?? undefined,
+          inventoryId: c.inventoryId ?? undefined,
+          shipmentId: id,
+        })),
+      });
+
+      // 7️⃣ Create ALLOTTED movements for new containers
+      for (const container of containers) {
+        if (!container.inventoryId) continue;
+
+        const inventoryId = container.inventoryId;
+
+        // Get CURRENT depot/port from latest movement
+        const lastMovement = await tx.movementHistory.findFirst({
           where: { inventoryId },
-          orderBy: { createdAt: 'desc' },
+          orderBy: { date: 'desc' },
         });
 
-        // Skip containers with incomplete leasing info instead of throwing error
-        if (
-          !leasingInfo ||
-          leasingInfo.portId == null ||
-          leasingInfo.onHireDepotaddressbookId == null
-        ) {
-          console.warn(
-            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
-          );
-          continue;
-        }
+        const currentDepotId = lastMovement?.addressBookId ?? null;
+        const currentPortId =
+          lastMovement?.portId ??
+          shipmentData.polPortId ??
+          null;
 
         await tx.movementHistory.create({
           data: {
             inventoryId,
-            portId: leasingInfo.portId,
-            addressBookId: leasingInfo.onHireDepotaddressbookId,
-            status: 'AVAILABLE',
+            portId: currentPortId,
+            addressBookId: currentDepotId,
+            status: 'ALLOTTED',
             date: new Date(),
-            remarks: `Removed from shipment - ${jobNumber}`,
-            shipmentId: null,
+            remarks: `Shipment updated - ${jobNumber}`,
+            shipmentId: id,
             emptyRepoJobId: null,
           },
         });
       }
+    }
 
-      // 4. Update shipment main data
-      const updatedShipment = await tx.shipment.update({
-        where: { id },
-        data: {
-          ...shipmentData,
-          date: shipmentData.date ? new Date(shipmentData.date) : undefined,
-          gsDate: shipmentData.gsDate
-            ? new Date(shipmentData.gsDate)
-            : undefined,
-          etaTopod: shipmentData.etaTopod
-            ? new Date(shipmentData.etaTopod)
-            : undefined,
-          estimateDate: shipmentData.estimateDate
-            ? new Date(shipmentData.estimateDate)
-            : undefined,
-          sob: shipmentData.sob ? new Date(shipmentData.sob) : null,
-        },
-      });
-
-      // 5. Delete old containers
-      await tx.shipmentContainer.deleteMany({
-        where: { shipmentId: id },
-      });
-
-      // 6. Re-create container records
-      if (containers && containers.length > 0) {
-        await tx.shipmentContainer.createMany({
-          data: containers.map((container) => ({
-            containerNumber: container.containerNumber,
-            capacity: container.capacity,
-            tare: container.tare,
-            portId: container.portId ?? undefined,
-            depotName: container.depotName ?? undefined,
-            inventoryId: container.inventoryId ?? undefined,
-            shipmentId: id,
-          })),
-        });
-
-        // 7. Log movement history for new containers
-        for (const container of containers) {
-          if (!container.inventoryId) continue;
-
-          const leasingInfo = await tx.leasingInfo.findFirst({
-            where: { inventoryId: container.inventoryId },
-            orderBy: { createdAt: 'desc' },
-          });
-
-          // Skip containers with incomplete leasing info instead of throwing error
-          if (
-            !leasingInfo ||
-            leasingInfo.portId == null ||
-            leasingInfo.onHireDepotaddressbookId == null
-          ) {
-            console.warn(
-              `Skipping movement history for inventoryId ${container.inventoryId} - incomplete leasing info`,
-            );
-            continue;
-          }
-
-          await tx.movementHistory.create({
-            data: {
-              inventoryId: container.inventoryId,
-              portId: leasingInfo.portId,
-              addressBookId: leasingInfo.onHireDepotaddressbookId,
-              status: 'ALLOTTED',
-              date: new Date(),
-              shipmentId: id,
-              emptyRepoJobId: null,
-            },
-          });
-        }
-      }
-
-      return updatedShipment;
-    });
-  }
+    return updatedShipment;
+  });
+}
 
   async getBlAssignments(
     shipmentId: number,
