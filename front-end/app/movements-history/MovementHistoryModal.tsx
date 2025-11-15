@@ -50,12 +50,16 @@ const MovementHistoryModal: React.FC<Props> = ({
           containerNumber.toLowerCase()
       );
 
-      setHistory(filtered);
+      // ✅ Sort by ID (latest status first)
+      const sorted = filtered.sort((a: any, b: any) => b.id - a.id);
+
+      setHistory(sorted);
     } catch (err) {
       console.error("Error fetching movement history:", err);
     }
     setLoading(false);
   };
+
 
   useEffect(() => {
     if (containerNumber) fetchHistory();
@@ -152,8 +156,8 @@ const MovementHistoryModal: React.FC<Props> = ({
                   <tr
                     key={entry.id}
                     className={`border-b border-gray-100 dark:border-neutral-700 hover:bg-blue-50/50 dark:hover:bg-blue-900/10 transition-colors duration-150 ${index % 2 === 0
-                        ? "bg-gray-50/70 dark:bg-neutral-800/70"
-                        : ""
+                      ? "bg-gray-50/70 dark:bg-neutral-800/70"
+                      : ""
                       }`}
                   >
                     <td className="py-4 px-6 text-gray-900 dark:text-gray-100 font-semibold">
@@ -161,9 +165,6 @@ const MovementHistoryModal: React.FC<Props> = ({
                         year: "numeric",
                         month: "numeric",
                         day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        second: "2-digit",
                       })}
                     </td>
 
@@ -191,26 +192,26 @@ const MovementHistoryModal: React.FC<Props> = ({
                     <td className="py-4 px-6">
                       <span
                         className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-semibold border ${entry.status === "ALLOTTED"
-                            ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700"
-                            : entry.status === "AVAILABLE"
-                              ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
-                              : entry.status === "EMPTY PICKED UP"
-                                ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700"
-                                : entry.status === "LADEN GATE-IN"
-                                  ? "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700"
-                                  : entry.status === "SOB"
-                                    ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700"
-                                    : entry.status === "LADEN GATE-OUT"
-                                      ? "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700"
-                                      : entry.status === "EMPTY RETURNED"
-                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700"
-                                        : entry.status === "UNAVAILABLE"
+                          ? "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-700"
+                          : entry.status === "AVAILABLE"
+                            ? "bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-300 dark:border-green-700"
+                            : entry.status === "EMPTY PICKED UP"
+                              ? "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-700"
+                              : entry.status === "LADEN GATE-IN"
+                                ? "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/20 dark:text-slate-300 dark:border-slate-700"
+                                : entry.status === "SOB"
+                                  ? "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-700"
+                                  : entry.status === "LADEN GATE-OUT"
+                                    ? "bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-900/20 dark:text-cyan-300 dark:border-cyan-700"
+                                    : entry.status === "EMPTY RETURNED"
+                                      ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-700"
+                                      : entry.status === "UNAVAILABLE"
+                                        ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700"
+                                        : entry.status === "DAMAGED"
                                           ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700"
-                                          : entry.status === "DAMAGED"
-                                            ? "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-300 dark:border-red-700"
-                                            : entry.status === "CANCELLED"
-                                              ? "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700"
-                                              : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700"
+                                          : entry.status === "CANCELLED"
+                                            ? "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700"
+                                            : "bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-900/20 dark:text-gray-300 dark:border-gray-700"
                           }`}
                       >
                         {entry.status}

@@ -12,131 +12,139 @@ export class EmptyRepoJobService {
 
 
 
-  async create(data: CreateEmptyRepoJobDto) {
-    const { containers, polPortId, podPortId, ...jobData } = data;
+ async create(data: CreateEmptyRepoJobDto) {
+  const { containers, polPortId, podPortId, ...jobData } = data;
 
-    if (!polPortId || !podPortId) {
-      throw new Error('polPortId and podPortId are required');
+  if (!polPortId || !podPortId) {
+    throw new Error('polPortId and podPortId are required');
+  }
+
+  const [polPort, podPort] = await Promise.all([
+    this.prisma.ports.findUnique({ where: { id: polPortId } }),
+    this.prisma.ports.findUnique({ where: { id: podPortId } }),
+  ]);
+
+  if (!polPort || !podPort) {
+    throw new Error('Invalid port IDs provided');
+  }
+
+  const jobNumber = await this.generateJobNumber(polPort.portCode, podPort.portCode);
+  const houseBL = jobNumber;
+
+  // ✅ FIX: Proper date parsing function
+  const parseDateOrNull = (d: string | Date | undefined | null) => {
+    if (!d) return null;
+    try {
+      const date = new Date(d);
+      return isNaN(date.getTime()) ? null : date;
+    } catch {
+      return null;
+    }
+  };
+
+  // ✅ Use job date for movement history - ensure it's a valid Date object
+  const jobDate = parseDateOrNull(jobData.date) || new Date();
+
+  return this.prisma.$transaction(async (tx) => {
+    const jobDataForCreate: any = {
+      ...jobData,
+      jobNumber,
+      houseBL,
+      polPortId,
+      podPortId,
+      date: jobDate, // ✅ Use Date object directly
+      gsDate: parseDateOrNull(jobData.gsDate),
+      etaTopod: parseDateOrNull(jobData.etaTopod), // ✅ Fix typo: etaTopod -> etaToPod
+      estimateDate: parseDateOrNull(jobData.estimateDate),
+    };
+
+    if (jobData.sob) {
+      jobDataForCreate.sob = parseDateOrNull(jobData.sob);
     }
 
-    const [polPort, podPort] = await Promise.all([
-      this.prisma.ports.findUnique({ where: { id: polPortId } }),
-      this.prisma.ports.findUnique({ where: { id: podPortId } }),
-    ]);
+    const createdJob = await tx.emptyRepoJob.create({
+      data: jobDataForCreate,
+    });
 
-    if (!polPort || !podPort) {
-      throw new Error('Invalid port IDs provided');
-    }
-
-    const jobNumber = await this.generateJobNumber(polPort.portCode, podPort.portCode);
-    const houseBL = jobNumber;
-
-    const parseDateOrNull = (d: string | Date | undefined) =>
-      d ? new Date(d).toISOString() : null;
-
-    return this.prisma.$transaction(async (tx) => {
-      const jobDataForCreate: any = {
-        ...jobData,
-        jobNumber,
-        houseBL,
-        polPortId,
-        podPortId,
-        date: jobData.date ? new Date(jobData.date).toISOString() : new Date().toISOString(),
-        gsDate: parseDateOrNull(jobData.gsDate),
-        etaTopod: parseDateOrNull(jobData.etaTopod),
-        estimateDate: parseDateOrNull(jobData.estimateDate),
-      };
-
-      if (jobData.sob) {
-        jobDataForCreate.sob = new Date(jobData.sob).toISOString();
-      }
-
-      const createdJob = await tx.emptyRepoJob.create({
-        data: jobDataForCreate,
+    // Create containers
+    if (containers && containers.length > 0) {
+      await tx.repoShipmentContainer.createMany({
+        data: containers.map((c) => ({
+          shipmentId: createdJob.id,
+          containerNumber: c.containerNumber,
+          capacity: c.capacity,
+          tare: c.tare,
+          portId: c.portId,
+          inventoryId: c.inventoryId,
+          depotName: c.depotName,
+        })),
       });
 
-      // Create containers
-      if (containers && containers.length > 0) {
-        await tx.repoShipmentContainer.createMany({
-          data: containers.map((c) => ({
-            shipmentId: createdJob.id,
-            containerNumber: c.containerNumber,
-            capacity: c.capacity,
-            tare: c.tare,
-            portId: c.portId,
-            inventoryId: c.inventoryId,
-            depotName: c.depotName,
-          })),
+      for (const container of containers) {
+        const inventory = await tx.inventory.findFirst({
+          where: { containerNumber: container.containerNumber },
         });
 
-        for (const container of containers) {
-          const inventory = await tx.inventory.findFirst({
-            where: { containerNumber: container.containerNumber },
+        if (!inventory) continue;
+
+        await tx.movementHistory.updateMany({
+          where: { inventoryId: inventory.id, status: 'AVAILABLE' },
+          data: {
+            remarks: `Container allocated to Empty Repo ${createdJob.jobNumber}`,
+          },
+        });
+
+        if (inventory) {
+          const leasingInfo = await tx.leasingInfo.findFirst({
+            where: { inventoryId: inventory.id },
+            orderBy: { createdAt: 'desc' },
           });
 
-          if (!inventory) continue;
-
-          await tx.movementHistory.updateMany({
-            where: { inventoryId: inventory.id, status: 'AVAILABLE' },
-            data: {
-              remarks: `Container allocated to Empty Repo ${createdJob.jobNumber}`,
-            },
-          });
-
-          if (inventory) {
-            const leasingInfo = await tx.leasingInfo.findFirst({
+          if (leasingInfo) {
+            // Find latest movement entry to get current depot and port
+            const lastMovement = await tx.movementHistory.findFirst({
               where: { inventoryId: inventory.id },
-              orderBy: { createdAt: 'desc' },
+              orderBy: { date: 'desc' },
             });
 
-            if (leasingInfo) {
-              // Find latest movement entry to get current depot and port
-              const lastMovement = await tx.movementHistory.findFirst({
-                where: { inventoryId: inventory.id },
-                orderBy: { date: 'desc' },
-              });
+            // Determine correct source port and depot
+            const sourcePortId =
+              lastMovement?.portId ??
+              createdJob.polPortId ??
+              leasingInfo?.portId ??
+              null;
 
-              // Determine correct source port and depot
-              const sourcePortId =
-                lastMovement?.portId ??
-                createdJob.polPortId ??
-                leasingInfo?.portId ??
-                null;
+            const sourceDepotId =
+              lastMovement?.addressBookId ??
+              leasingInfo?.onHireDepotaddressbookId ??
+              null;
 
-              const sourceDepotId =
-                lastMovement?.addressBookId ??
-                leasingInfo?.onHireDepotaddressbookId ??
-                null;
+            // Create new movement entry for the Empty Repo Job - USE JOB DATE
+            await tx.movementHistory.create({
+              data: {
+                inventoryId: inventory.id,
+                portId: sourcePortId,
+                addressBookId: sourceDepotId,
+                shipmentId: null,
+                emptyRepoJobId: createdJob.id,
+                status: 'ALLOTTED',
+                date: jobDate, // ✅ Use job date instead of new Date()
+                jobNumber: createdJob.jobNumber,
+                remarks: `Empty Repo created - ${createdJob.jobNumber}`,
+              },
+            });
 
-              // Create new movement entry for the Empty Repo Job
-              await tx.movementHistory.create({
-                data: {
-                  inventoryId: inventory.id,
-                  portId: sourcePortId,
-                  addressBookId: sourceDepotId,
-                  shipmentId: null,
-                  emptyRepoJobId: createdJob.id,
-                  status: 'ALLOTTED',
-                  date: new Date(),
-                  jobNumber: createdJob.jobNumber,
-                  remarks: `Empty Repo created - ${createdJob.jobNumber}`,
-                },
-              });
-
-
-
-
-              console.log(
-                `✅ Movement recorded for ${container.containerNumber}: Port ${createdJob.polPortId}, Depot ${createdJob.emptyReturnDepotAddressBookId}`
-              );
-            }
+            console.log(
+              `✅ Movement recorded for ${container.containerNumber}: Port ${createdJob.polPortId}, Depot ${createdJob.emptyReturnDepotAddressBookId}`
+            );
           }
         }
       }
+    }
 
-      return createdJob;
-    });
-  }
+    return createdJob;
+  });
+}
 
 
   private async generateJobNumber(polCode: string, podCode: string): Promise<string> {
@@ -204,102 +212,154 @@ export class EmptyRepoJobService {
 
 
 
-  async update(id: number, data: UpdateEmptyRepoJobDto) {
-    const { containers, polPortId, podPortId, ...jobData } = data;
+ async update(id: number, data: UpdateEmptyRepoJobDto) {
+  const { containers, polPortId, podPortId, ...jobData } = data;
 
-    return this.prisma.$transaction(async (tx) => {
-      const existingJob = await tx.emptyRepoJob.findUnique({ where: { id } });
-      if (!existingJob) throw new Error('Job not found');
+  return this.prisma.$transaction(async (tx) => {
 
-      const updatedPolPortId = polPortId ?? existingJob.polPortId;
-      const updatedPodPortId = podPortId ?? existingJob.podPortId;
+    // 1️⃣ Fetch existing job
+    const existingJob = await tx.emptyRepoJob.findUnique({ where: { id } });
+    if (!existingJob) throw new Error("Empty Repo Job not found");
 
-      const [polPort, podPort] = await Promise.all([
-        tx.ports.findUnique({ where: { id: updatedPolPortId ?? undefined } }),
-        tx.ports.findUnique({ where: { id: updatedPodPortId ?? undefined } }),
-      ]);
+    // 2️⃣ Handle updated or existing POL/POD
+    const updatedPolPortId = polPortId ?? existingJob.polPortId;
+    const updatedPodPortId = podPortId ?? existingJob.podPortId;
 
-      if (!polPort || !podPort) throw new Error('Invalid port IDs');
+    const [polPort, podPort] = await Promise.all([
+      tx.ports.findUnique({ where: { id: updatedPolPortId ?? undefined } }),
+      tx.ports.findUnique({ where: { id: updatedPodPortId ?? undefined } }),
+    ]);
 
-      // Preserve existing ER sequence suffix globally, only change the prefix if ports changed
-      const year = new Date().getFullYear().toString().slice(-2);
-      const newPrefix = `RST/${polPort.portCode}${podPort.portCode}/${year}/`;
-      const seqMatch = existingJob.jobNumber.match(/(ER\d{5})$/);
-      const seqSuffix = seqMatch ? seqMatch[1] : undefined;
-      const jobNumber = existingJob.jobNumber.startsWith(newPrefix) || !seqSuffix
+    if (!polPort || !podPort) throw new Error("Invalid POL/POD port");
+
+    // 3️⃣ Proper date parsing helper
+    const parseDateOrNull = (d: string | Date | null | undefined) => {
+      if (!d) return undefined;
+      const dt = new Date(d);
+      return isNaN(dt.getTime()) ? undefined : dt;
+    };
+
+    const jobDate =
+      parseDateOrNull(jobData.date) || existingJob.date || new Date();
+
+    // 4️⃣ Preserve ER job number sequence
+    const year = new Date().getFullYear().toString().slice(-2);
+    const prefix = `RST/${polPort.portCode}${podPort.portCode}/${year}/`;
+    const seqMatch = existingJob.jobNumber.match(/(ER\d{5})$/);
+    const seqSuffix = seqMatch ? seqMatch[1] : null;
+
+    const jobNumber =
+      existingJob.jobNumber.startsWith(prefix) || !seqSuffix
         ? existingJob.jobNumber
-        : `${newPrefix}${seqSuffix}`;
+        : `${prefix}${seqSuffix}`;
 
-      const updatedJob = await tx.emptyRepoJob.update({
-        where: { id },
+    // 5️⃣ Update the empty-repo job
+    const updatedJob = await tx.emptyRepoJob.update({
+      where: { id },
+      data: {
+        ...jobData,
+        jobNumber,
+        houseBL: jobNumber,
+        polPortId: updatedPolPortId,
+        podPortId: updatedPodPortId,
+        date: parseDateOrNull(jobData.date),
+        gsDate: parseDateOrNull(jobData.gsDate),
+        sob: parseDateOrNull(jobData.sob),
+        etaTopod: parseDateOrNull(jobData.etaTopod),
+        estimateDate: parseDateOrNull(jobData.estimateDate),
+      },
+    });
+
+    // 6️⃣ Fetch existing containers for job
+    const existingContainers = await tx.repoShipmentContainer.findMany({
+      where: { shipmentId: id },
+    });
+
+    const existingInventoryIds = existingContainers
+      .map((c) => c.inventoryId)
+      .filter((v): v is number => !!v);
+
+    const newInventoryIds = (containers || [])
+      .map((c) => c.inventoryId)
+      .filter((v): v is number => !!v);
+
+    // 7️⃣ Determine REMOVED containers
+    const removedInventoryIds = existingInventoryIds.filter(
+      (oldId) => !newInventoryIds.includes(oldId)
+    );
+
+    // 8️⃣ Handle REMOVED container movement history → AVAILABLE
+    for (const inventoryId of removedInventoryIds) {
+      const lastMovement = await tx.movementHistory.findFirst({
+        where: { inventoryId },
+        orderBy: { date: "desc" },
+      });
+
+      await tx.movementHistory.create({
         data: {
-          ...jobData,
-          jobNumber,
-          houseBL: jobNumber,
-          polPortId: updatedPolPortId,
-          podPortId: updatedPodPortId,
-          date: jobData.date ? new Date(jobData.date) : undefined,
-          gsDate: jobData.gsDate ? new Date(jobData.gsDate) : undefined,
-          sob: jobData.sob ? new Date(jobData.sob) : undefined,
-          etaTopod: jobData.etaTopod ? new Date(jobData.etaTopod) : undefined,
-          estimateDate: jobData.estimateDate
-            ? new Date(jobData.estimateDate)
-            : undefined,
+          inventoryId,
+          portId: lastMovement?.portId ?? null,
+          addressBookId: lastMovement?.addressBookId ?? null,
+          status: "AVAILABLE",
+          date: jobDate,
+          remarks: `Removed from Empty Repo - ${jobNumber}`,
+          shipmentId: null,
+          emptyRepoJobId: null,
         },
       });
+    }
 
-      const existingContainers = await tx.repoShipmentContainer.findMany({
-        where: { shipmentId: id },
+    // 9️⃣ Determine NEW containers (added now)
+    const newContainers = (containers || []).filter(
+      (c) => c.inventoryId && !existingInventoryIds.includes(c.inventoryId)
+    );
+
+    // 🔟 Update container list (remove old → add new)
+    await tx.repoShipmentContainer.deleteMany({ where: { shipmentId: id } });
+
+    if (containers && containers.length > 0) {
+      await tx.repoShipmentContainer.createMany({
+        data: containers.map((c) => ({
+          containerNumber: c.containerNumber,
+          capacity: c.capacity,
+          tare: c.tare,
+          portId: c.portId ?? undefined,
+          depotName: c.depotName ?? undefined,
+          inventoryId: c.inventoryId ?? undefined,
+          shipmentId: id,
+        })),
+      });
+    }
+
+    // 1️⃣1️⃣ Create ALLOTTED history ONLY for new containers
+    for (const container of newContainers) {
+      if (!container.inventoryId) continue;
+      const inventoryId = Number(container.inventoryId);
+
+      const leasingInfo = await tx.leasingInfo.findFirst({
+        where: { inventoryId },
+        orderBy: { createdAt: "desc" },
       });
 
-      await tx.repoShipmentContainer.deleteMany({
-        where: { shipmentId: id },
+      await tx.movementHistory.create({
+        data: {
+          inventoryId,
+          portId: leasingInfo?.portId ?? updatedPolPortId ?? null,
+          addressBookId:
+            leasingInfo?.onHireDepotaddressbookId ??
+            existingJob.emptyReturnDepotAddressBookId ??
+            null,
+          emptyRepoJobId: id,
+          status: "ALLOTTED",
+          date: jobDate,
+          remarks: `Empty Repo updated - ${jobNumber}`,
+        },
       });
+    }
 
-      const existingContainerNumbers = new Set(
-        existingContainers.map((c) => c.containerNumber),
-      );
-
-      if (containers && containers.length > 0) {
-        await tx.repoShipmentContainer.createMany({
-          data: containers.map((container) => ({
-            ...container,
-            shipmentId: id,
-          })),
-        });
-
-        for (const container of containers) {
-          if (!existingContainerNumbers.has(container.containerNumber)) {
-            const inventory = await tx.inventory.findFirst({
-              where: { containerNumber: container.containerNumber },
-            });
-
-            if (inventory) {
-              const leasingInfo = await tx.leasingInfo.findFirst({
-                where: { inventoryId: inventory.id },
-                orderBy: { createdAt: 'desc' },
-              });
-
-              if (leasingInfo) {
-                await tx.movementHistory.create({
-                  data: {
-                    inventoryId: inventory.id,
-                    portId: leasingInfo.portId,
-                    addressBookId: leasingInfo.onHireDepotaddressbookId,
-                    emptyRepoJobId: id,
-                    status: 'ALLOTTED',
-                    date: new Date(),
-                  },
-                });
-              }
-            }
-          }
-        }
-      }
-
-      return updatedJob;
-    });
-  }
+    return updatedJob;
+  });
+}
 
 
 

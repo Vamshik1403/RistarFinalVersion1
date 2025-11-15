@@ -8,7 +8,13 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @Injectable()
 export class MovementHistoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
+
+  private normalizeDate(dateString: string | Date): Date {
+    const d = new Date(dateString);
+    return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  }
+
 
   findAll() {
     return this.prisma.movementHistory.findMany({
@@ -23,43 +29,43 @@ export class MovementHistoryService {
           select: { jobNumber: true, vesselName: true },
         },
       },
-      orderBy: { date: 'desc' },
+orderBy: { id: "desc" }
     });
   }
 
   async findAllByShipment(shipmentId: number) {
-  return this.prisma.movementHistory.findMany({
-    where: { shipmentId },
-    include: {
-      inventory: true,
-      port: true,
-      addressBook: true,
-    },
-    orderBy: { date: 'asc' },
-  });
-}
-
-async findAllByEmptyRepoJob(emptyRepoJobId: number) {
-  if (!emptyRepoJobId) {
-    throw new BadRequestException('Empty Repo Job ID is required');
+    return this.prisma.movementHistory.findMany({
+      where: { shipmentId },
+      include: {
+        inventory: true,
+        port: true,
+        addressBook: true,
+      },
+orderBy: { id: "desc" }
+    });
   }
 
-  const records = await this.prisma.movementHistory.findMany({
-    where: { emptyRepoJobId },
-    include: {
-      inventory: true,
-      port: true,
-      addressBook: true,
-    },
-    orderBy: { date: 'asc' },
-  });
+  async findAllByEmptyRepoJob(emptyRepoJobId: number) {
+    if (!emptyRepoJobId) {
+      throw new BadRequestException('Empty Repo Job ID is required');
+    }
 
-  if (!records || records.length === 0) {
-    return [];
+    const records = await this.prisma.movementHistory.findMany({
+      where: { emptyRepoJobId },
+      include: {
+        inventory: true,
+        port: true,
+        addressBook: true,
+      },
+orderBy: { id: "desc" }
+    });
+
+    if (!records || records.length === 0) {
+      return [];
+    }
+
+    return records;
   }
-
-  return records;
-}
 
 
   async findOne(id: number) {
@@ -90,7 +96,7 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
         shipment: true,
         emptyRepoJob: true,
       },
-      orderBy: { date: 'desc' },
+orderBy: { id: "desc" }
     });
   }
 
@@ -163,15 +169,15 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
         addressBookId = null;
         break;
 
-     case 'EMPTY RETURNED':
-  portId = shipment?.podPortId ?? emptyRepoJob?.podPortId ?? prev.portId ?? null;
-  addressBookId =
-    addressBookIdFromFrontend ??
-    shipment?.emptyReturnDepotAddressBookId ??
-    emptyRepoJob?.emptyReturnDepotAddressBookId ??
-    prev.addressBookId ??
-    null;
-  break;
+      case 'EMPTY RETURNED':
+        portId = shipment?.podPortId ?? emptyRepoJob?.podPortId ?? prev.portId ?? null;
+        addressBookId =
+          addressBookIdFromFrontend ??
+          shipment?.emptyReturnDepotAddressBookId ??
+          emptyRepoJob?.emptyReturnDepotAddressBookId ??
+          prev.addressBookId ??
+          null;
+        break;
 
 
       case 'UNDER CLEANING':
@@ -209,6 +215,7 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
     maintenanceStatus?: string,
     vesselName?: string,
     addressBookIdFromFrontend?: number,
+    date?: string,
   ) {
     const shipment = await this.prisma.shipment.findFirst({
       where: { jobNumber },
@@ -217,15 +224,15 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
 
     const emptyRepoJob = !shipment
       ? await this.prisma.emptyRepoJob.findFirst({
-          where: { jobNumber },
-          select: {
-            id: true,
-            polPortId: true,
-            podPortId: true,
-            carrierAddressBookId: true,
-            emptyReturnDepotAddressBookId: true,
-          },
-        })
+        where: { jobNumber },
+        select: {
+          id: true,
+          polPortId: true,
+          podPortId: true,
+          carrierAddressBookId: true,
+          emptyReturnDepotAddressBookId: true,
+        },
+      })
       : null;
 
     const status = newStatus.toUpperCase();
@@ -256,23 +263,23 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
         const createData: any = {
           inventoryId: prev.inventoryId,
           status: finalStatus,
-          date: new Date(),
+date: date ? this.normalizeDate(date) : this.normalizeDate(new Date()),
         };
 
         if (portId !== null && portId !== undefined) createData.portId = portId;
         if (addressBookId !== null && addressBookId !== undefined)
           createData.addressBookId = addressBookId;
-       if (prev.shipmentId != null) {
-  createData.shipmentId = prev.shipmentId;
-} else if (shipment?.id != null) {
-  createData.shipmentId = shipment.id;
-}
+        if (prev.shipmentId != null) {
+          createData.shipmentId = prev.shipmentId;
+        } else if (shipment?.id != null) {
+          createData.shipmentId = shipment.id;
+        }
 
-     if (prev.emptyRepoJobId != null) {
-  createData.emptyRepoJobId = prev.emptyRepoJobId;
-} else if (emptyRepoJob?.id != null) {
-  createData.emptyRepoJobId = emptyRepoJob.id;
-}
+        if (prev.emptyRepoJobId != null) {
+          createData.emptyRepoJobId = prev.emptyRepoJobId;
+        } else if (emptyRepoJob?.id != null) {
+          createData.emptyRepoJobId = emptyRepoJob.id;
+        }
 
 
 
@@ -293,7 +300,7 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
 
   async updateMovement(id: number, data: Partial<MovementHistory>) {
     const updatedData: any = { ...data };
-    if (data.date) updatedData.date = new Date(data.date);
+    if (data.date) updatedData.date = new Date(data.date); // ✅ Already handles date
 
     Object.keys(updatedData).forEach((key) => {
       if (updatedData[key] === undefined) delete updatedData[key];
@@ -313,6 +320,7 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
     remarks?: string,
     maintenanceStatus?: string,
     vesselName?: string,
+    date?: string,
   ) {
     const previous = await this.prisma.movementHistory.findUnique({
       where: { id: prevId },
@@ -368,7 +376,7 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
     const createData: any = {
       inventoryId: previous.inventoryId,
       status: finalStatus,
-      date: new Date(),
+      date: date ? new Date(date) : new Date(),
     };
 
     if (finalPortId !== null) createData.portId = finalPortId;
@@ -385,24 +393,26 @@ async findAllByEmptyRepoJob(emptyRepoJobId: number) {
   }
 
   async findLatestPerContainer() {
-    const latestMovements = await this.prisma.$queryRaw<
-      MovementHistory[]
-    >`SELECT DISTINCT ON ("inventoryId") * 
-       FROM "MovementHistory" 
-       ORDER BY "inventoryId", "date" DESC`;
+   const latestMovements = await this.prisma.$queryRaw<
+  MovementHistory[]
+>`SELECT DISTINCT ON ("inventoryId") *
+   FROM "MovementHistory"
+   ORDER BY "inventoryId", "id" DESC`;
+
 
     const ids = latestMovements.map((m) => m.id);
 
     return this.prisma.movementHistory.findMany({
-      where: { id: { in: ids } },
-      include: {
-        inventory: true,
-        port: true,
-        addressBook: true,
-        shipment: true,
-        emptyRepoJob: true,
-      },
-      orderBy: { date: 'desc' },
-    });
+  where: { id: { in: ids } },
+  include: {
+    inventory: true,
+    port: true,
+    addressBook: true,
+    shipment: true,
+    emptyRepoJob: true,
+  },
+  orderBy: { id: 'desc' }
+});
+
   }
 }

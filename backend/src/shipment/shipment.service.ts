@@ -12,142 +12,145 @@ export class ShipmentService {
   ) {}
 
   async create(data: CreateShipmentDto) {
-    if (!data.polPortId || !data.podPortId) {
-      throw new Error('POL and POD port IDs are required');
+  if (!data.polPortId || !data.podPortId) {
+    throw new Error('POL and POD port IDs are required');
+  }
+
+  const currentYear = new Date().getFullYear().toString().slice(-2); // e.g. "25"
+
+  // ✅ Fetch port codes
+  const [polPort, podPort] = await Promise.all([
+    this.prisma.ports.findUnique({
+      where: { id: data.polPortId },
+      select: { portCode: true },
+    }),
+    this.prisma.ports.findUnique({
+      where: { id: data.podPortId },
+      select: { portCode: true },
+    }),
+  ]);
+
+  const polCode = polPort?.portCode || 'XXX';
+  const podCode = podPort?.portCode || 'XXX';
+
+  const prefix = `RST/${polCode}${podCode}/${currentYear}/`;
+
+  // ✅ Find latest shipment for sequence
+  const latestShipment = await this.prisma.shipment.findFirst({
+    where: {
+      houseBL: { startsWith: prefix },
+    },
+    orderBy: { houseBL: 'desc' },
+  });
+
+  let nextSequence = 1;
+  if (latestShipment?.houseBL) {
+    const parts = latestShipment.houseBL.split('/');
+    const lastNumber = parseInt(parts[3]);
+    if (!isNaN(lastNumber)) {
+      nextSequence = lastNumber + 1;
     }
+  }
 
-    const currentYear = new Date().getFullYear().toString().slice(-2); // e.g. "25"
+  const paddedSequence = String(nextSequence).padStart(5, '0');
+  const generatedHouseBL = `${prefix}${paddedSequence}`;
 
-    // ✅ Fetch port codes
-    const [polPort, podPort] = await Promise.all([
-      this.prisma.ports.findUnique({
-        where: { id: data.polPortId },
-        select: { portCode: true },
-      }),
-      this.prisma.ports.findUnique({
-        where: { id: data.podPortId },
-        select: { portCode: true },
-      }),
-    ]);
+  const { containers, ...rest } = data;
 
-    const polCode = polPort?.portCode || 'XXX';
-    const podCode = podPort?.portCode || 'XXX';
+  // ✅ Parse dates
+  const parseDate = (d: string | Date | null | undefined) =>
+    d && d !== '' ? new Date(d) : null;
 
-    const prefix = `RST/${polCode}${podCode}/${currentYear}/`;
+  // ✅ Use shipment date for movement history
+  const shipmentDate = parseDate(rest.date) || new Date();
 
-    // ✅ Find latest shipment for sequence
-    const latestShipment = await this.prisma.shipment.findFirst({
-      where: {
-        houseBL: { startsWith: prefix },
-      },
-      orderBy: { houseBL: 'desc' },
-    });
+  // ✅ Generate jobNumber before transaction
+  const generatedJobNumber = await this.getNextJobNumber();
 
-    let nextSequence = 1;
-    if (latestShipment?.houseBL) {
-      const parts = latestShipment.houseBL.split('/');
-      const lastNumber = parseInt(parts[3]);
-      if (!isNaN(lastNumber)) {
-        nextSequence = lastNumber + 1;
-      }
-    }
+  return this.prisma.$transaction(async (tx) => {
+    // Build base shipment data
+    const shipmentData: any = {
+      quotationRefNumber: rest.quotationRefNumber ?? null,
+      date: shipmentDate, // Use the parsed shipment date
+      jobNumber: generatedJobNumber,
 
-    const paddedSequence = String(nextSequence).padStart(5, '0');
-    const generatedHouseBL = `${prefix}${paddedSequence}`;
+      refNumber: rest.refNumber ?? '',
+      masterBL: rest.masterBL ?? '',
+      houseBL: generatedHouseBL,
+      shippingTerm: rest.shippingTerm ?? '',
+      polFreeDays: rest.polFreeDays ?? '0',
+      podFreeDays: rest.podFreeDays ?? '0',
+      polDetentionRate: rest.polDetentionRate ?? '0',
+      podDetentionRate: rest.podDetentionRate ?? '0',
+      quantity: rest.quantity ?? '0',
+      vesselName: rest.vesselName ?? '',
+      gsDate: parseDate(rest.gsDate),
+      etaTopod: parseDate(rest.etaTopod),
+      estimateDate: parseDate(rest.estimateDate),
+      sob: parseDate(rest.sob),
+    };
 
-    const { containers, ...rest } = data;
-
-    // ✅ Parse dates
-    const parseDate = (d: string | Date | null | undefined) =>
-      d && d !== '' ? new Date(d) : null;
-
-    // ✅ Generate jobNumber before transaction
-    const generatedJobNumber = await this.getNextJobNumber();
-
-    return this.prisma.$transaction(async (tx) => {
-      // Build base shipment data
-      const shipmentData: any = {
-        quotationRefNumber: rest.quotationRefNumber ?? null,
-        date: parseDate(rest.date),
-        jobNumber: generatedJobNumber,
-
-        refNumber: rest.refNumber ?? '',
-        masterBL: rest.masterBL ?? '',
-        houseBL: generatedHouseBL,
-        shippingTerm: rest.shippingTerm ?? '',
-        polFreeDays: rest.polFreeDays ?? '0',
-        podFreeDays: rest.podFreeDays ?? '0',
-        polDetentionRate: rest.polDetentionRate ?? '0',
-        podDetentionRate: rest.podDetentionRate ?? '0',
-        quantity: rest.quantity ?? '0',
-        vesselName: rest.vesselName ?? '',
-        gsDate: parseDate(rest.gsDate),
-        etaTopod: parseDate(rest.etaTopod),
-        estimateDate: parseDate(rest.estimateDate),
-        sob: parseDate(rest.sob),
+    // ✅ Map FK IDs into Prisma relations
+    if (rest.custAddressBookId) {
+      shipmentData.customerAddressBook = {
+        connect: { id: rest.custAddressBookId },
       };
+    }
+    if (rest.consigneeAddressBookId) {
+      shipmentData.consigneeAddressBook = {
+        connect: { id: rest.consigneeAddressBookId },
+      };
+    }
+    if (rest.shipperAddressBookId) {
+      shipmentData.shipperAddressBook = {
+        connect: { id: rest.shipperAddressBookId },
+      };
+    }
+    if (rest.expHandlingAgentAddressBookId) {
+      shipmentData.expHandlingAgentAddressBook = {
+        connect: { id: rest.expHandlingAgentAddressBookId },
+      };
+    }
+    if (rest.impHandlingAgentAddressBookId) {
+      shipmentData.impHandlingAgentAddressBook = {
+        connect: { id: rest.impHandlingAgentAddressBookId },
+      };
+    }
+    if (rest.emptyReturnDepotAddressBookId) {
+      shipmentData.emptyReturnDepotAddressBook = {
+        connect: { id: rest.emptyReturnDepotAddressBookId },
+      };
+    }
+    if (rest.carrierAddressBookId) {
+      shipmentData.carrierAddressBook = {
+        connect: { id: rest.carrierAddressBookId },
+      };
+    }
+    if (rest.productId) {
+      shipmentData.product = {
+        connect: { id: rest.productId },
+      };
+    }
+    if (rest.polPortId) {
+      shipmentData.polPort = {
+        connect: { id: rest.polPortId },
+      };
+    }
+    if (rest.podPortId) {
+      shipmentData.podPort = {
+        connect: { id: rest.podPortId },
+      };
+    }
+    if (rest.transhipmentPortId) {
+      shipmentData.transhipmentPort = {
+        connect: { id: rest.transhipmentPortId },
+      };
+    }
 
-      // ✅ Map FK IDs into Prisma relations
-      if (rest.custAddressBookId) {
-        shipmentData.customerAddressBook = {
-          connect: { id: rest.custAddressBookId },
-        };
-      }
-      if (rest.consigneeAddressBookId) {
-        shipmentData.consigneeAddressBook = {
-          connect: { id: rest.consigneeAddressBookId },
-        };
-      }
-      if (rest.shipperAddressBookId) {
-        shipmentData.shipperAddressBook = {
-          connect: { id: rest.shipperAddressBookId },
-        };
-      }
-      if (rest.expHandlingAgentAddressBookId) {
-        shipmentData.expHandlingAgentAddressBook = {
-          connect: { id: rest.expHandlingAgentAddressBookId },
-        };
-      }
-      if (rest.impHandlingAgentAddressBookId) {
-        shipmentData.impHandlingAgentAddressBook = {
-          connect: { id: rest.impHandlingAgentAddressBookId },
-        };
-      }
-      if (rest.emptyReturnDepotAddressBookId) {
-        shipmentData.emptyReturnDepotAddressBook = {
-          connect: { id: rest.emptyReturnDepotAddressBookId },
-        };
-      }
-      if (rest.carrierAddressBookId) {
-        shipmentData.carrierAddressBook = {
-          connect: { id: rest.carrierAddressBookId },
-        };
-      }
-      if (rest.productId) {
-        shipmentData.product = {
-          connect: { id: rest.productId },
-        };
-      }
-      if (rest.polPortId) {
-        shipmentData.polPort = {
-          connect: { id: rest.polPortId },
-        };
-      }
-      if (rest.podPortId) {
-        shipmentData.podPort = {
-          connect: { id: rest.podPortId },
-        };
-      }
-      if (rest.transhipmentPortId) {
-        shipmentData.transhipmentPort = {
-          connect: { id: rest.transhipmentPortId },
-        };
-      }
-
-      // ✅ Create shipment
-      const createdShipment = await tx.shipment.create({
-        data: shipmentData,
-      });
+    // ✅ Create shipment
+    const createdShipment = await tx.shipment.create({
+      data: shipmentData,
+    });
 
     // ✅ Handle containers if provided
     if (containers?.length) {
@@ -174,45 +177,37 @@ export class ShipmentService {
         if (!inventory) continue;
 
         // Close any previous AVAILABLE movement
-       await tx.movementHistory.updateMany({
-  where: { inventoryId: inventory.id, status: 'AVAILABLE' },
-  data: {
-    remarks: `Container allocated to shipment ${createdShipment.jobNumber}`,
-  },
-});
+        await tx.movementHistory.updateMany({
+          where: { inventoryId: inventory.id, status: 'AVAILABLE' },
+          data: {
+            remarks: `Container allocated to shipment ${createdShipment.jobNumber}`,
+          },
+        });
 
+        // 1️⃣ Get container's latest movement (correct current depot + port)
+        const lastMovement = await tx.movementHistory.findFirst({
+          where: { inventoryId: inventory.id },
+          orderBy: { date: 'desc' },
+        });
 
+        // 2️⃣ Determine actual current depot and port
+        const currentDepotId = lastMovement?.addressBookId ?? null;
+        const currentPortId = lastMovement?.portId ?? createdShipment.polPortId ?? null;
 
-// 1️⃣ Get container’s latest movement (correct current depot + port)
-const lastMovement = await tx.movementHistory.findFirst({
-  where: { inventoryId: inventory.id },
-  orderBy: { date: 'desc' },
-});
-
-// 2️⃣ Determine actual current depot and port
-const currentDepotId =
-  lastMovement?.addressBookId ?? null;
-
-const currentPortId =
-  lastMovement?.portId ?? createdShipment.polPortId ?? null;
-
-// 3️⃣ Create new ALLOTTED movement for the shipment
-await tx.movementHistory.create({
-  data: {
-    inventoryId: inventory.id,
-    portId: currentPortId,
-    addressBookId: currentDepotId,
-    shipmentId: createdShipment.id,
-    emptyRepoJobId: null,
-    status: 'ALLOTTED',
-    date: new Date(),
-    jobNumber: createdShipment.jobNumber,
-    remarks: `Shipment created - ${createdShipment.jobNumber}`,
-  },
-});
-
-
-
+        // 3️⃣ Create new ALLOTTED movement for the shipment - USE SHIPMENT DATE
+        await tx.movementHistory.create({
+          data: {
+            inventoryId: inventory.id,
+            portId: currentPortId,
+            addressBookId: currentDepotId,
+            shipmentId: createdShipment.id,
+            emptyRepoJobId: null,
+            status: 'ALLOTTED',
+            date: shipmentDate, // ✅ Use shipment date instead of new Date()
+            jobNumber: createdShipment.jobNumber,
+            remarks: `Shipment created - ${createdShipment.jobNumber}`,
+          },
+        });
 
         console.log(
           `✅ Movement recorded for ${container.containerNumber}: Port ${createdShipment.polPortId}, Depot ${createdShipment.emptyReturnDepotAddressBookId}`
@@ -236,7 +231,6 @@ await tx.movementHistory.create({
     return createdShipment;
   });
 }
-
 
   async getNextJobNumber(): Promise<string> {
     const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
@@ -419,51 +413,55 @@ await tx.movementHistory.create({
  async update(id: number, data: UpdateShipmentDto) {
   const { containers, ...shipmentData } = data;
 
-  // Fetch current jobNumber for remarks
+  // Fetch current shipment job number + existing date
   const currentShipment = await this.prisma.shipment.findUnique({
     where: { id },
-    select: { jobNumber: true },
+    select: { jobNumber: true, date: true },
   });
-  const jobNumber = currentShipment?.jobNumber || 'UNKNOWN';
+
+  const jobNumber = currentShipment?.jobNumber || "UNKNOWN";
+
+  // Use shipment date (or old shipment date if unchanged)
+  const shipmentDate = shipmentData.date
+    ? new Date(shipmentData.date)
+    : currentShipment?.date || new Date();
 
   return this.prisma.$transaction(async (tx) => {
-    // 1️⃣ Existing containers on shipment
+    // 1️⃣ Get containers already assigned to this shipment
     const existingContainers = await tx.shipmentContainer.findMany({
       where: { shipmentId: id },
     });
 
     const existingInventoryIds = existingContainers
       .map((c) => c.inventoryId)
-      .filter((id): id is number => !!id);
+      .filter((oid): oid is number => !!oid);
 
     const newInventoryIds = (containers || [])
       .map((c) => c.inventoryId)
-      .filter((id): id is number => !!id);
+      .filter((nid): nid is number => !!nid);
 
-    // 2️⃣ Containers REMOVED from shipment
+    // 2️⃣ Determine removed containers
     const removedInventoryIds = existingInventoryIds.filter(
-      (oldId) => !newInventoryIds.includes(oldId),
+      (oldId) => !newInventoryIds.includes(oldId)
     );
 
-    // 3️⃣ Handle removed containers
+    // 3️⃣ Handle REMOVED containers (mark as AVAILABLE again)
     for (const inventoryId of removedInventoryIds) {
-      // Container becomes AVAILABLE again at its last known depot
-
       const lastMovement = await tx.movementHistory.findFirst({
         where: { inventoryId },
-        orderBy: { date: 'desc' },
+        orderBy: { date: "desc" },
       });
 
-      const currentDepotId = lastMovement?.addressBookId ?? null;
-      const currentPortId = lastMovement?.portId ?? null;
+      const lastDepotId = lastMovement?.addressBookId ?? null;
+      const lastPortId = lastMovement?.portId ?? null;
 
       await tx.movementHistory.create({
         data: {
           inventoryId,
-          portId: currentPortId,
-          addressBookId: currentDepotId,
-          status: 'AVAILABLE',
-          date: new Date(),
+          portId: lastPortId,
+          addressBookId: lastDepotId,
+          status: "AVAILABLE",
+          date: shipmentDate,
           remarks: `Removed from shipment - ${jobNumber}`,
           shipmentId: null,
           emptyRepoJobId: null,
@@ -471,76 +469,72 @@ await tx.movementHistory.create({
       });
     }
 
-    // 4️⃣ Update shipment
+    // 4️⃣ Update the shipment itself
     const updatedShipment = await tx.shipment.update({
       where: { id },
       data: {
         ...shipmentData,
         date: shipmentData.date ? new Date(shipmentData.date) : undefined,
         gsDate: shipmentData.gsDate ? new Date(shipmentData.gsDate) : undefined,
-        etaTopod: shipmentData.etaTopod
-          ? new Date(shipmentData.etaTopod)
-          : undefined,
-        estimateDate: shipmentData.estimateDate
-          ? new Date(shipmentData.estimateDate)
-          : undefined,
+        etaTopod: shipmentData.etaTopod ? new Date(shipmentData.etaTopod) : undefined,
+        estimateDate: shipmentData.estimateDate ? new Date(shipmentData.estimateDate) : undefined,
         sob: shipmentData.sob ? new Date(shipmentData.sob) : null,
       },
     });
 
-    // 5️⃣ Delete old containers
-    await tx.shipmentContainer.deleteMany({ where: { shipmentId: id } });
+    // 5️⃣ Determine NEW containers (not previously assigned)
+    const newContainers = (containers || []).filter(
+      (c) => c.inventoryId && !existingInventoryIds.includes(c.inventoryId)
+    );
 
-    // 6️⃣ Add new containers
-    if (containers && containers.length > 0) {
+    // 6️⃣ Insert ONLY new containers into shipmentContainer
+    if (newContainers.length > 0) {
       await tx.shipmentContainer.createMany({
-        data: containers.map((c) => ({
+        data: newContainers.map((c) => ({
           containerNumber: c.containerNumber,
           capacity: c.capacity,
           tare: c.tare,
           portId: c.portId ?? undefined,
           depotName: c.depotName ?? undefined,
-          inventoryId: c.inventoryId ?? undefined,
+          inventoryId: c.inventoryId,
           shipmentId: id,
         })),
       });
+    }
 
-      // 7️⃣ Create ALLOTTED movements for new containers
-      for (const container of containers) {
-        if (!container.inventoryId) continue;
+    // 7️⃣ Create ALLOTTED movement history ONLY for new containers
+    for (const container of newContainers) {
+      if (!container.inventoryId) continue; // skip invalid
 
-        const inventoryId = container.inventoryId;
+      const inventoryId = Number(container.inventoryId); // 👈 FIX TYPE ERROR
 
-        // Get CURRENT depot/port from latest movement
-        const lastMovement = await tx.movementHistory.findFirst({
-          where: { inventoryId },
-          orderBy: { date: 'desc' },
-        });
+      const lastMovement = await tx.movementHistory.findFirst({
+        where: { inventoryId },
+        orderBy: { date: "desc" },
+      });
 
-        const currentDepotId = lastMovement?.addressBookId ?? null;
-        const currentPortId =
-          lastMovement?.portId ??
-          shipmentData.polPortId ??
-          null;
+      const currentDepotId = lastMovement?.addressBookId ?? null;
+      const currentPortId =
+        lastMovement?.portId ?? shipmentData.polPortId ?? null;
 
-        await tx.movementHistory.create({
-          data: {
-            inventoryId,
-            portId: currentPortId,
-            addressBookId: currentDepotId,
-            status: 'ALLOTTED',
-            date: new Date(),
-            remarks: `Shipment updated - ${jobNumber}`,
-            shipmentId: id,
-            emptyRepoJobId: null,
-          },
-        });
-      }
+      await tx.movementHistory.create({
+        data: {
+          inventoryId,                   // number, safe
+          portId: currentPortId ?? null,
+          addressBookId: currentDepotId ?? null,
+          status: "ALLOTTED",
+          date: shipmentDate,            // use shipment date
+          remarks: `Shipment updated - ${jobNumber}`,
+          shipmentId: id,
+          emptyRepoJobId: null,
+        },
+      });
     }
 
     return updatedShipment;
   });
 }
+
 
   async getBlAssignments(
     shipmentId: number,

@@ -73,6 +73,7 @@ const MovementHistoryTable = () => {
   const [carriers, setCarriers] = useState<any[]>([]);
   const [movementPermissions, setMovementPermissions] = useState<any>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [minDates, setMinDates] = useState<{ [key: number]: string }>({});
 
 
   // Pagination state
@@ -217,10 +218,6 @@ const MovementHistoryTable = () => {
     }
   }, [newStatus, selectedIds]);
 
-
-
-
-
   const openEditDateModal = (row: MovementRow) => {
     setEditingRow(row);
     setEditDate(row.date.slice(0, 10));
@@ -297,6 +294,7 @@ const MovementHistoryTable = () => {
     }
   };
 
+    // Update the fetchData function to set minDates
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -306,14 +304,22 @@ const MovementHistoryTable = () => {
           axios.get("http://localhost:8000/ports")
         ]);
 
-        // Sort by date in descending order (latest first)
-        const sortedData = movementRes.data.sort((a: any, b: any) => {
-          const dateA = new Date(a.date || a.createdAt || 0);
-          const dateB = new Date(b.date || b.createdAt || 0);
-          return dateB.getTime() - dateA.getTime();
-        });
+        // Sort by ID (latest movement first)
+const sortedData = movementRes.data.sort(
+  (a: any, b: any) => b.id - a.id
+);
 
-        // 🔄 Refresh latestReturnLocation - Only update for EMPTY RETURNED status
+
+        // 🔄 Set minimum dates for validation
+        const newMinDates: { [key: number]: string } = {};
+        sortedData.forEach((row: any) => {
+          if (row.inventory?.id && row.date) {
+            newMinDates[row.inventory.id] = row.date.slice(0, 10); // YYYY-MM-DD format
+          }
+        });
+        setMinDates(newMinDates);
+
+
      // 🔄 Refresh latestReturnLocation - Only update for EMPTY RETURNED status
 const latestMap: { [key: number]: { depotName: string; portName: string } } = { ...latestReturnLocation };
 
@@ -366,8 +372,6 @@ setLatestReturnLocation(latestMap);
       row.shipment?.jobNumber?.toLowerCase().includes(jobSearch.toLowerCase()) ||
       row.emptyRepoJob?.jobNumber?.toLowerCase().includes(jobSearch.toLowerCase()) ||
       row.jobNumber?.toLowerCase().includes(jobSearch.toLowerCase());
-
-
     const statusMatch = !statusFilter || row.status === statusFilter;
     const portMatch = !portFilter || row.port?.portName === portFilter;
     const locationMatch = !locationFilter || row.addressBook?.companyName === locationFilter;
@@ -459,6 +463,7 @@ setLatestReturnLocation(latestMap);
     );
   };
 
+ // Update handleUpdateStatusClick to reset date to current date
   const handleUpdateStatusClick = () => {
     const selectedRows = data.filter((row) => selectedIds.includes(row.id));
     const currentStatuses = [...new Set(selectedRows.map((r) => r.status))];
@@ -505,6 +510,8 @@ setLatestReturnLocation(latestMap);
     setNewStatus("");
     setJobNumberForUpdate(jobNumber);
     setRemarks("");
+    setVesselName("");
+    
     setModalOpen(true);
   };
 
@@ -533,13 +540,35 @@ setLatestReturnLocation(latestMap);
     }
   };
 
+ // Update handleBulkUpdate with date validation
   const handleBulkUpdate = async () => {
-
-    if (isUpdatingStatus) return; // ⛔ prevent double execution
-  setIsUpdatingStatus(true);
-
+    if (isUpdatingStatus) return;
+    
+    // ✅ Validate that newStatus is selected
     if (!newStatus) {
       alert("Please select a new status.");
+      return;
+    }
+
+    // ✅ Validate date for all selected containers
+    const selectedRows = data.filter((row) => selectedIds.includes(row.id));
+    let isValidDate = true;
+    
+    for (const row of selectedRows) {
+      const containerId = row.inventory?.id;
+      if (containerId && minDates[containerId]) {
+        const minDate = new Date(minDates[containerId]);
+        const selectedDate = new Date(movementDate);
+        
+        if (selectedDate < minDate) {
+          isValidDate = false;
+          alert(`Date must be the same or later than the last status date for container ${row.inventory?.containerNumber}. Minimum allowed date: ${minDate.toLocaleDateString("en-GB")}`);
+          break;
+        }
+      }
+    }
+    
+    if (!isValidDate) {
       return;
     }
 
@@ -587,7 +616,6 @@ setLatestReturnLocation(latestMap);
           addressBookId = null;
           break;
 
-
         case "SOB":
           portId = source?.podPortId || source?.polPortId;
           addressBookId = selectedCarrierId || source?.carrierAddressBookId || null;
@@ -603,7 +631,6 @@ setLatestReturnLocation(latestMap);
             addressBookId = null;
           }
           break;
-
 
         case "EMPTY RETURNED":
           portId = source?.podPortId;
@@ -621,8 +648,6 @@ setLatestReturnLocation(latestMap);
             }
           }
           break;
-
-
 
         case "AVAILABLE":
         case "UNAVAILABLE":
@@ -675,7 +700,6 @@ setLatestReturnLocation(latestMap);
         payload.maintenanceStatus = maintenanceStatus;
       }
 
-
       if (portId !== undefined) payload.portId = portId;
       if (addressBookId !== undefined) payload.addressBookId = addressBookId;
       console.log("Payload being sent:", payload);
@@ -691,8 +715,11 @@ setLatestReturnLocation(latestMap);
       setSelectedCarrierId(null);
       setVesselName("");
 
+    
+
+
       const res = await axios.get("http://localhost:8000/movement-history/latest");
-      setData(res.data);
+setData(res.data.sort((a: any, b: any) => b.id - a.id));
 
       // 🔄 Refresh latestReturnLocation
       const latestMap: { [key: number]: { depotName: string; portName: string } } = {};
@@ -731,7 +758,7 @@ setLatestReturnLocation(latestMap);
       setEditingRow(null);
 
       const res = await axios.get("http://localhost:8000/movement-history/latest");
-      setData(res.data);
+setData(res.data.sort((a: any, b: any) => b.id - a.id));
     } catch (err: any) {
       console.error("Date update failed:", err);
       alert("Failed to update date.");
@@ -1324,38 +1351,17 @@ const formatDateToDDMMYY = (isoDate: string) => {
                 </div>
               )}
 
-              <div className="space-y-2">
+<div className="space-y-2">
   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-    Date (DD/MM/YY)
+    Date *
   </label>
+
   <Input
-    type="text"
-    value={movementDate ? formatDateToDDMMYY(movementDate) : ""}
-    onChange={(e) => {
-      const value = e.target.value;
-      // Allow only numbers and slashes
-      const cleaned = value.replace(/[^\d/]/g, '');
-      
-      // Auto-format as user types
-      let formatted = cleaned;
-      if (cleaned.length > 2 && cleaned.length <= 4) {
-        formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2);
-      } else if (cleaned.length > 4) {
-        formatted = cleaned.slice(0, 2) + '/' + cleaned.slice(2, 4) + '/' + cleaned.slice(4, 6);
-      }
-      
-      // Update state with ISO format for storage
-      if (formatted.length === 8) { // DD/MM/YY
-        const [day, month, year] = formatted.split('/');
-        const fullYear = `20${year}`; // Assuming 20xx
-        const isoDate = `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        setMovementDate(isoDate);
-      } else {
-        setMovementDate(formatted);
-      }
-    }}
-    placeholder="DD/MM/YY"
+    type="date"
+    value={movementDate}
+    onChange={(e) => setMovementDate(e.target.value)}
     className="w-full"
+    required
   />
 </div>
 
@@ -1382,16 +1388,16 @@ const formatDateToDDMMYY = (isoDate: string) => {
               >
                 Cancel
               </Button>
-             <Button
-  onClick={handleBulkUpdate}
-  disabled={isUpdatingStatus}
-  className={`${isUpdatingStatus
-      ? "bg-gray-400 cursor-not-allowed"
-      : "bg-orange-600 hover:bg-orange-700 cursor-pointer"
-    } text-white`}
->
-  {isUpdatingStatus ? "Processing..." : "Confirm"}
-</Button>
+          <Button
+                onClick={handleBulkUpdate}
+                disabled={isUpdatingStatus || !newStatus} // ✅ Disable if no status selected
+                className={`${(isUpdatingStatus || !newStatus)
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-orange-600 hover:bg-orange-700 cursor-pointer"
+                } text-white`}
+              >
+                {isUpdatingStatus ? "Processing..." : "Confirm"}
+              </Button>
 
             </div>
           </Card>

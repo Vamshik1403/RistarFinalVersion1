@@ -50,6 +50,7 @@ export class MovementHistoryController {
       remarks?: string;
       maintenanceStatus?: string;
       vesselName?: string;
+      date?: string;
     },
   ) {
     console.log('🚀 Received payload:', body);
@@ -61,6 +62,7 @@ export class MovementHistoryController {
       remarks,
       maintenanceStatus,
       vesselName,
+      date,
     } = body;
 
     const results = await Promise.all(
@@ -73,6 +75,7 @@ export class MovementHistoryController {
           remarks?.trim() || undefined,
           maintenanceStatus ?? undefined,
           vesselName?.trim() || undefined,
+          date ,
         ),
       ),
     );
@@ -103,6 +106,7 @@ async bulkUpdate(@Body() dto: any) {
     dto.maintenanceStatus,
     dto.vesselName,
     dto.addressBookIdFromClient || dto.addressBookId || null, // ✅ pass depot id
+    dto.date || null, // ✅ pass date if provided
   );
 }
 

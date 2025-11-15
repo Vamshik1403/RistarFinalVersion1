@@ -1043,6 +1043,7 @@ const formatDateInput = (value: string) => {
 };
 
 
+// Replace the CustomDatePicker component with this simplified version
 const CustomDatePicker = ({
   id,
   value,
@@ -1052,52 +1053,35 @@ const CustomDatePicker = ({
   className,
   validationError,
 }: any) => {
-  const [internalValue, setInternalValue] = useState("");
-
-  useEffect(() => {
-    if (value) {
-      const formatted = formatDateInput(value);
-      setInternalValue(formatted);
-    } else {
-      setInternalValue("");
-    }
-  }, [value]);
-
-  const handleDateSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const isoValue = e.target.value;
-    const formatted = dayjs(isoValue).format("DD/MM/YY");
-    setInternalValue(formatted);
     onChange({
-      target: { value: formatted },
+      target: { value: isoValue }, // Send ISO format directly to form
     });
   };
 
+  // Convert existing date to YYYY-MM-DD format for the input
+  const inputValue = value 
+    ? dayjs(value, ["DD/MM/YY", "DD/MM/YYYY", "YYYY-MM-DD"]).format("YYYY-MM-DD")
+    : "";
+
   return (
     <div className="relative">
-      {/* Browser date picker — only one calendar UI */}
       <input
         id={id}
         type="date"
-        value={
-          internalValue
-            ? dayjs(internalValue, ["DD/MM/YY", "DD/MM/YYYY"]).format("YYYY-MM-DD")
-            : ""
-        }
-        onChange={handleDateSelect}
+        value={inputValue}
+        onChange={handleDateChange}
         onBlur={onBlur}
-        placeholder={placeholder || "DD/MM/YY"}
+        placeholder={placeholder || "Select date"}
         className={className}
       />
-
-      {/* Just the small Lucide calendar icon for aesthetics */}
-
       {validationError && (
         <p className="text-red-500 text-xs mt-1">{validationError}</p>
       )}
     </div>
   );
 };
-
 
   return (
     <>
@@ -1125,32 +1109,23 @@ const CustomDatePicker = ({
               </div>
               <div className="bg-white dark:bg-neutral-900 p-4 rounded space-y-4 border border-neutral-200 dark:border-neutral-700">
                 <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-               <div>
+              <div>
   <Label
     htmlFor="date"
     className="block text-sm text-gray-900 dark:text-neutral-200 mb-1"
   >
-    Date (DD/MM/YY) <span className="text-red-500">*</span>
+    Date <span className="text-red-500">*</span>
   </Label>
   <CustomDatePicker
     id="date"
     value={form.date || ""}
-    onChange={(e:any) => {
-      const formattedValue = formatDateInput(e.target.value);
-      if (formattedValue !== null) {
-        setForm({ ...form, date: formattedValue });
-      }
+    onChange={(e: any) => {
+      setForm({ ...form, date: e.target.value }); // Store as ISO format
       if (validationErrors.date) {
-        setValidationErrors(prev => ({...prev, date: ""}));
+        setValidationErrors(prev => ({ ...prev, date: "" }));
       }
     }}
-    onBlur={(e:any) => {
-      const formattedValue = formatDateInput(e.target.value);
-      if (formattedValue !== null) {
-        setForm({ ...form, date: formattedValue });
-      }
-    }}
-    placeholder="DD/MM/YY"
+    placeholder="Select date"
     className="w-full p-2.5 bg-white text-gray-900 dark:bg-neutral-800 dark:text-white rounded border border-neutral-200 dark:border-neutral-700"
     validationError={validationErrors.date}
   />

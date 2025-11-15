@@ -48,6 +48,5 @@ export class BulkUpdateMovementDto {
   addressBookIdFromClient?: number;
   
   @IsOptional()
-  @IsISO8601()
   date?: string;
 }
