@@ -187,7 +187,7 @@ export class ShipmentService {
         // 1️⃣ Get container's latest movement (correct current depot + port)
         const lastMovement = await tx.movementHistory.findFirst({
           where: { inventoryId: inventory.id },
-          orderBy: { date: 'desc' },
+orderBy: { id: 'desc' }
         });
 
         // 2️⃣ Determine actual current depot and port
@@ -310,25 +310,51 @@ export class ShipmentService {
         const inventoryId = container.inventoryId;
         if (!inventoryId) continue;
 
+        // ✅ Get the latest movement history entry to get the CURRENT location (where container actually is)
+        // Get all movements and find the one with the most recent date that has location info
+        const allMovements = await tx.movementHistory.findMany({
+          where: { inventoryId },
+          orderBy: { date: "desc" },
+        });
+
+        // Priority 1: Find the most recent movement that is NOT "AVAILABLE" and has location info
+        // This ensures we get the actual current location (e.g., from EMPTY RETURNED)
+        let lastMovementWithLocation = allMovements.find(
+          (m) => m.status !== "AVAILABLE" && m.portId !== null && m.addressBookId !== null
+        );
+
+        // Priority 2: If no non-AVAILABLE movement found, use the most recent movement with location info
+        if (!lastMovementWithLocation) {
+          lastMovementWithLocation = allMovements.find(
+            (m) => m.portId !== null && m.addressBookId !== null
+          );
+        }
+
+        // ✅ Fallback to leasing info if no movement history exists or no movement has location
         const leasingInfo = await tx.leasingInfo.findFirst({
           where: { inventoryId },
           orderBy: { createdAt: 'desc' },
         });
 
-        // Skip containers with incomplete leasing info
-        if (!leasingInfo || !leasingInfo.onHireDepotaddressbookId) {
+        // Determine the current port and depot
+        // Priority: 1) Latest non-AVAILABLE movement with location, 2) Latest movement with location, 3) Leasing info, 4) null
+        const currentPortId = lastMovementWithLocation?.portId ?? leasingInfo?.portId ?? null;
+        const currentDepotId = lastMovementWithLocation?.addressBookId ?? leasingInfo?.onHireDepotaddressbookId ?? null;
+
+        // Skip if we don't have location information
+        if (!currentPortId || !currentDepotId) {
           console.warn(
-            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+            `Skipping movement history for inventoryId ${inventoryId} - no location information available`,
           );
           continue;
         }
 
-        // 4️⃣ Create movement history entry — AVAILABLE at shipment’s POL
+        // 4️⃣ Create movement history entry — AVAILABLE at current location
         await tx.movementHistory.create({
           data: {
             inventoryId,
-            portId: shipment.polPortId ?? leasingInfo.portId ?? null, // ✅ Prefer POL from shipment
-            addressBookId: leasingInfo.onHireDepotaddressbookId ?? null,
+            portId: currentPortId,
+            addressBookId: currentDepotId,
             status: 'AVAILABLE',
             date: new Date(),
             remarks: `Shipment cancelled - ${shipment.jobNumber}`,
@@ -348,7 +374,7 @@ export class ShipmentService {
       where: { id },
       include: {
         movementHistory: {
-          orderBy: { date: 'desc' },
+orderBy: { id: 'desc' },
           take: 1,
           select: {
             status: true,
@@ -447,19 +473,50 @@ export class ShipmentService {
 
     // 3️⃣ Handle REMOVED containers (mark as AVAILABLE again)
     for (const inventoryId of removedInventoryIds) {
-      const lastMovement = await tx.movementHistory.findFirst({
+      // ✅ Get the latest movement history entry to get the CURRENT location (where container actually is)
+      // Get all movements and find the one with the most recent date that has location info
+      const allMovements = await tx.movementHistory.findMany({
         where: { inventoryId },
         orderBy: { date: "desc" },
       });
 
-      const lastDepotId = lastMovement?.addressBookId ?? null;
-      const lastPortId = lastMovement?.portId ?? null;
+      // Priority 1: Find the most recent movement that is NOT "AVAILABLE" and has location info
+      // This ensures we get the actual current location (e.g., from EMPTY RETURNED)
+      let lastMovementWithLocation = allMovements.find(
+        (m) => m.status !== "AVAILABLE" && m.portId !== null && m.addressBookId !== null
+      );
+
+      // Priority 2: If no non-AVAILABLE movement found, use the most recent movement with location info
+      if (!lastMovementWithLocation) {
+        lastMovementWithLocation = allMovements.find(
+          (m) => m.portId !== null && m.addressBookId !== null
+        );
+      }
+
+      // ✅ Fallback to leasing info if no movement history exists or no movement has location
+      const leasingInfo = await tx.leasingInfo.findFirst({
+        where: { inventoryId },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      // Determine the current port and depot
+      // Priority: 1) Latest non-AVAILABLE movement with location, 2) Latest movement with location, 3) Leasing info, 4) null
+      const currentPortId = lastMovementWithLocation?.portId ?? leasingInfo?.portId ?? null;
+      const currentDepotId = lastMovementWithLocation?.addressBookId ?? leasingInfo?.onHireDepotaddressbookId ?? null;
+
+      // Skip if we don't have location information
+      if (!currentPortId || !currentDepotId) {
+        console.warn(
+          `Skipping movement history for inventoryId ${inventoryId} - no location information available`,
+        );
+        continue;
+      }
 
       await tx.movementHistory.create({
         data: {
           inventoryId,
-          portId: lastPortId,
-          addressBookId: lastDepotId,
+          portId: currentPortId,
+          addressBookId: currentDepotId,
           status: "AVAILABLE",
           date: shipmentDate,
           remarks: `Removed from shipment - ${jobNumber}`,
@@ -618,19 +675,41 @@ export class ShipmentService {
         const inventoryId = container.inventoryId;
         if (!inventoryId) continue;
 
+        // ✅ Get the latest movement history entry to get the CURRENT location (where container actually is)
+        // Get all movements and find the one with the most recent date that has location info
+        const allMovements = await tx.movementHistory.findMany({
+          where: { inventoryId },
+          orderBy: { date: "desc" },
+        });
+
+        // Priority 1: Find the most recent movement that is NOT "AVAILABLE" and has location info
+        // This ensures we get the actual current location (e.g., from EMPTY RETURNED)
+        let lastMovementWithLocation = allMovements.find(
+          (m) => m.status !== "AVAILABLE" && m.portId !== null && m.addressBookId !== null
+        );
+
+        // Priority 2: If no non-AVAILABLE movement found, use the most recent movement with location info
+        if (!lastMovementWithLocation) {
+          lastMovementWithLocation = allMovements.find(
+            (m) => m.portId !== null && m.addressBookId !== null
+          );
+        }
+
+        // ✅ Fallback to leasing info if no movement history exists or no movement has location
         const leasingInfo = await tx.leasingInfo.findFirst({
           where: { inventoryId },
           orderBy: { createdAt: 'desc' },
         });
 
-        // Skip containers with incomplete leasing info instead of throwing error
-        if (
-          !leasingInfo ||
-          !leasingInfo.portId ||
-          !leasingInfo.onHireDepotaddressbookId
-        ) {
+        // Determine the current port and depot
+        // Priority: 1) Latest non-AVAILABLE movement with location, 2) Latest movement with location, 3) Leasing info, 4) null
+        const currentPortId = lastMovementWithLocation?.portId ?? leasingInfo?.portId ?? null;
+        const currentDepotId = lastMovementWithLocation?.addressBookId ?? leasingInfo?.onHireDepotaddressbookId ?? null;
+
+        // Skip if we don't have location information
+        if (!currentPortId || !currentDepotId) {
           console.warn(
-            `Skipping movement history for inventoryId ${inventoryId} - incomplete leasing info`,
+            `Skipping movement history for inventoryId ${inventoryId} - no location information available`,
           );
           continue;
         }
@@ -638,11 +717,11 @@ export class ShipmentService {
         await tx.movementHistory.create({
           data: {
             inventoryId,
-            portId: leasingInfo.portId,
-            addressBookId: leasingInfo.onHireDepotaddressbookId,
+            portId: currentPortId,
+            addressBookId: currentDepotId,
             status: 'AVAILABLE',
             date: new Date(),
-            remarks: `Shipment cancelled - ${shipment.jobNumber}`,
+            remarks: `Removed from shipment - ${shipment.jobNumber}`,
             shipmentId: shipment.id,
             emptyRepoJobId: null,
           },

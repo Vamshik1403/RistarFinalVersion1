@@ -104,7 +104,7 @@ export class EmptyRepoJobService {
             // Find latest movement entry to get current depot and port
             const lastMovement = await tx.movementHistory.findFirst({
               where: { inventoryId: inventory.id },
-              orderBy: { date: 'desc' },
+orderBy: { id: 'desc' }
             });
 
             // Determine correct source port and depot
