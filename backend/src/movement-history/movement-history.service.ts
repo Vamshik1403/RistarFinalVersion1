@@ -207,6 +207,30 @@ orderBy: { id: "desc" }
     };
   }
 
+  async getByContainer(containerNumber: string) {
+  return this.prisma.movementHistory.findMany({
+    where: {
+      inventory: {
+        containerNumber: {
+          equals: containerNumber,
+          mode: "insensitive",
+        },
+      },
+    },
+    include: {
+      inventory: true,
+      port: true,
+      addressBook: true,
+      shipment: true,
+      emptyRepoJob: true,
+    },
+    orderBy: {
+      id: "desc",
+    },
+  });
+}
+
+
   async bulkUpdateStatus(
     ids: number[],
     newStatus: string,

@@ -290,6 +290,10 @@ const AddQuotationModal = ({
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+const [highlightIndex, setHighlightIndex] = useState<number>(-1);
+const customerInputRef = useRef<HTMLInputElement>(null);
+
+
 
 
 
@@ -434,6 +438,48 @@ const AddQuotationModal = ({
 
     fetchCustomers();
   }, []);
+
+  const handleCustomerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  if (!showSuggestions) return;
+
+  const filtered = customerSuggestions.filter((c) =>
+    c.companyName.toLowerCase().includes(form.customerName.toLowerCase())
+  );
+
+  if (filtered.length === 0) return;
+
+  // ↓ Move Down
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setHighlightIndex((prev) =>
+      prev < filtered.length - 1 ? prev + 1 : 0
+    );
+  }
+
+  // ↑ Move Up
+  if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setHighlightIndex((prev) =>
+      prev > 0 ? prev - 1 : filtered.length - 1
+    );
+  }
+
+  // ENTER → SELECT highlighted item
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (highlightIndex >= 0 && filtered[highlightIndex]) {
+      const selected = filtered[highlightIndex];
+      setForm((prev: any) => ({
+        ...prev,
+        customerName: selected.companyName,
+        customerId: selected.id,
+      }));
+      setShowSuggestions(false);
+      setHighlightIndex(-1);
+    }
+  }
+};
+
 
   useEffect(() => {
     const today = new Date();
@@ -1241,49 +1287,58 @@ const AddQuotationModal = ({
                 <Label htmlFor="customerName" className="block text-sm text-gray-900 dark:text-white mb-1">
                   Customer Name <span className="text-red-500">*</span>
                 </Label>
-                <Input
-                  type="text"
-                  value={form.customerName || ""}
-                  onChange={(e) => {
-                    setForm((prev: any) => ({
-                      ...prev,
-                      customerName: e.target.value,
-                      customerId: null,
-                    }));
-                    setShowSuggestions(true);
-                    if (validationErrors.customerId) {
-                      setValidationErrors(prev => ({ ...prev, customerId: "" }));
-                    }
-                  }}
-                  onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                  id="customerName"
-                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-                  placeholder="Start typing customer name..."
-                />
+               <Input
+  type="text"
+  value={form.customerName || ""}
+  ref={customerInputRef}
+  onKeyDown={(e) => handleCustomerKeyDown(e)}
+  onChange={(e) => {
+    setForm((prev: any) => ({
+      ...prev,
+      customerName: e.target.value,
+      customerId: null,
+    }));
+    setShowSuggestions(true);
+
+    if (validationErrors.customerId) {
+      setValidationErrors(prev => ({ ...prev, customerId: "" }));
+    }
+  }}
+  onFocus={() => setShowSuggestions(true)}
+  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+  id="customerName"
+  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+  placeholder="Start typing customer name..."
+/>
+
                 {showSuggestions && form.customerName && (
                   <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                    {customerSuggestions
+{customerSuggestions
                       .filter((c) =>
                         c.companyName
                           .toLowerCase()
                           .includes(form.customerName.toLowerCase())
                       )
-                      .map((company) => (
-                        <li
-                          key={company.id}
-                          onMouseDown={() => {
-                            setForm((prev: any) => ({
-                              ...prev,
-                              customerName: company.companyName,
-                              customerId: company.id,
-                            }));
-                            setShowSuggestions(false);
-                          }}
-                          className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
-                        >
-                          {company.companyName}
-                        </li>
+                      .map((company, index) => (
+                       <li
+  key={company.id}
+  onMouseDown={() => {
+    setForm((prev: any) => ({
+      ...prev,
+      customerName: company.companyName,
+      customerId: company.id,
+    }));
+    setShowSuggestions(false);
+  }}
+  className={`px-3 py-1 cursor-pointer text-sm
+    ${highlightIndex === index 
+      ? "bg-blue-600 text-white" 
+      : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+  `}
+>
+  {company.companyName}
+</li>
+
                       ))}
                     {customerSuggestions.filter((c) =>
                       c.companyName
@@ -1666,7 +1721,7 @@ const AddQuotationModal = ({
               {/* Exp. Depot Name */}
               <div>
                 <Label htmlFor="expDepotId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Exp. Depot Name
+                  Exp. Depot Name <span className="text-red-500">*</span>
                 </Label>
                 <Select onValueChange={(value) => {
                   const selectedId = Number(value);
@@ -1695,7 +1750,7 @@ const AddQuotationModal = ({
               {/* Empty Return Depot */}
               <div>
                 <Label htmlFor="emptyReturnDepot" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Empty Return Depot
+                  Empty Return Depot <span className="text-red-500">*</span>
                 </Label>
 
                 <Select onValueChange={(value) => {
@@ -1725,7 +1780,7 @@ const AddQuotationModal = ({
               {/* Exp. H. Agent Name */}
               <div>
                 <Label htmlFor="expHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Exp. H. Agent Name
+                  Exp. H. Agent Name  <span className="text-red-500">*</span>
                 </Label>
                 <Select onValueChange={(value) => {
                   const selectedId = Number(value);
@@ -1754,7 +1809,7 @@ const AddQuotationModal = ({
               {/* Imp. H. Agent Name */}
               <div>
                 <Label htmlFor="impHAgentId" className="block text-sm text-gray-900 dark:text-white mb-1">
-                  Imp. H. Agent Name
+                  Imp. H. Agent Name  <span className="text-red-500">*</span>
                 </Label>
                 <Select onValueChange={(value) => {
                   const selectedId = Number(value);

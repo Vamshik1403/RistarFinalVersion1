@@ -30,6 +30,6 @@ async function bootstrap() {
   // 🔑 Register the context interceptor globally (required for audit logs)
   app.useGlobalInterceptors(new ContextInterceptor());
 
-  await app.listen(8000);
+await app.listen(8000, '0.0.0.0');
 }
 bootstrap();

@@ -15,7 +15,7 @@ import { AuthGuard } from '@nestjs/passport';
 export class MovementHistoryController {
   constructor(
     private readonly movementHistoryService: MovementHistoryService,
-  ) {}
+  ) { }
 
   @Get('except-available')
   findAllExceptAvailable() {
@@ -36,6 +36,13 @@ export class MovementHistoryController {
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.movementHistoryService.findOne(id);
   }
+
+ @Get("by-container/:containerNumber")
+async getByContainer(@Param("containerNumber") containerNumber: string) {
+  return this.movementHistoryService.getByContainer(containerNumber);
+}
+
+
 
   @UseGuards(AuthGuard('jwt'))
   @Post('bulk-create')
@@ -75,7 +82,7 @@ export class MovementHistoryController {
           remarks?.trim() || undefined,
           maintenanceStatus ?? undefined,
           vesselName?.trim() || undefined,
-          date ,
+          date,
         ),
       ),
     );
@@ -84,31 +91,31 @@ export class MovementHistoryController {
   }
 
   @Get('by-shipment/:id')
-async getByShipment(@Param('id', ParseIntPipe) id: number) {
-  return this.movementHistoryService.findAllByShipment(id);
-}
+  async getByShipment(@Param('id', ParseIntPipe) id: number) {
+    return this.movementHistoryService.findAllByShipment(id);
+  }
 
-@Get('by-empty-repo-job/:id')
-async getByEmptyRepoJob(@Param('id', ParseIntPipe) id: number) {
-  return this.movementHistoryService.findAllByEmptyRepoJob(id);
-}
+  @Get('by-empty-repo-job/:id')
+  async getByEmptyRepoJob(@Param('id', ParseIntPipe) id: number) {
+    return this.movementHistoryService.findAllByEmptyRepoJob(id);
+  }
 
 
 
   @UseGuards(AuthGuard('jwt'))
-@Post('bulk-update')
-async bulkUpdate(@Body() dto: any) {
-  return this.movementHistoryService.bulkUpdateStatus(
-    dto.ids,
-    dto.newStatus,
-    dto.jobNumber,
-    dto.remarks,
-    dto.maintenanceStatus,
-    dto.vesselName,
-    dto.addressBookIdFromClient || dto.addressBookId || null, // ✅ pass depot id
-    dto.date || null, // ✅ pass date if provided
-  );
-}
+  @Post('bulk-update')
+  async bulkUpdate(@Body() dto: any) {
+    return this.movementHistoryService.bulkUpdateStatus(
+      dto.ids,
+      dto.newStatus,
+      dto.jobNumber,
+      dto.remarks,
+      dto.maintenanceStatus,
+      dto.vesselName,
+      dto.addressBookIdFromClient || dto.addressBookId || null, // ✅ pass depot id
+      dto.date || null, // ✅ pass date if provided
+    );
+  }
 
 
 

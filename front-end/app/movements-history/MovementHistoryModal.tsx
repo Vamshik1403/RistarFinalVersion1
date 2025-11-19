@@ -38,27 +38,22 @@ const MovementHistoryModal: React.FC<Props> = ({
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchHistory = async () => {
-    setLoading(true);
-    try {
-      const res = await axios.get(`http://localhost:8000/movement-history`);
-      const all = res.data || [];
+ const fetchHistory = async () => {
+  setLoading(true);
 
-      const filtered = all.filter(
-        (entry: HistoryEntry) =>
-          entry.inventory?.containerNumber?.toLowerCase() ===
-          containerNumber.toLowerCase()
-      );
+  try {
+    const res = await axios.get(
+      `http://localhost:8000/movement-history/by-container/${containerNumber}`
+    );
 
-      // ✅ Sort by ID (latest status first)
-      const sorted = filtered.sort((a: any, b: any) => b.id - a.id);
+    setHistory(res.data || []);
+  } catch (err) {
+    console.error("Error fetching movement history:", err);
+  }
 
-      setHistory(sorted);
-    } catch (err) {
-      console.error("Error fetching movement history:", err);
-    }
-    setLoading(false);
-  };
+  setLoading(false);
+};
+
 
 
   useEffect(() => {
