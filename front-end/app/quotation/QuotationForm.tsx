@@ -290,10 +290,100 @@ const AddQuotationModal = ({
   const [showValidationAlert, setShowValidationAlert] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-const [highlightIndex, setHighlightIndex] = useState<number>(-1);
-const customerInputRef = useRef<HTMLInputElement>(null);
+  const [highlightIndex, setHighlightIndex] = useState<number>(-1);
+  const [highlightProduct, setHighlightProduct] = useState(-1);
+  const [highlightPOL, setHighlightPOL] = useState(-1);
+  const [highlightPOD, setHighlightPOD] = useState(-1);
+  const productInputRef = useRef<HTMLInputElement>(null);
+  const portLoadingInputRef = useRef<HTMLInputElement>(null);
+  const portDischargeInputRef = useRef<HTMLInputElement>(null);
 
+  const customerInputRef = useRef<HTMLInputElement>(null);
 
+  const handleNav = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    list: any[],
+    highlight: number,
+    setHighlight: Function,
+    onSelect: Function
+  ) => {
+    if (list.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight(highlight < list.length - 1 ? highlight + 1 : 0);
+    }
+
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight(highlight > 0 ? highlight - 1 : list.length - 1);
+    }
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlight >= 0 && list[highlight]) {
+        onSelect(list[highlight]);
+      }
+    }
+  };
+
+  const handleProductKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const filtered = productSuggestions;
+    handleNav(
+      e,
+      filtered,
+      highlightProduct,
+      setHighlightProduct,
+      (product: any) => {
+        setForm((prev: any) => ({
+          ...prev,
+          productName: `${product.productId} - ${product.productName} - ${product.productType}`,
+          productId: product.id,
+          productCategory: product.containerCategory,
+          productType: product.containerType,
+          productClass: product.classType,
+        }));
+        setShowProductDropdown(false);
+        setHighlightProduct(-1);
+      }
+    );
+  };
+  const handleLoadingPortKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const filtered = portSuggestions;
+    handleNav(
+      e,
+      filtered,
+      highlightPOL,
+      setHighlightPOL,
+      (port: any) => {
+        setForm((prev: any) => ({
+          ...prev,
+          portOfLoading: port.portName,
+          portOfLoadingId: port.id,
+        }));
+        setShowPortDropdown(false);
+        setHighlightPOL(-1);
+      }
+    );
+  };
+  const handleDischargePortKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const filtered = portSuggestions;
+    handleNav(
+      e,
+      filtered,
+      highlightPOD,
+      setHighlightPOD,
+      (port: any) => {
+        setForm((prev: any) => ({
+          ...prev,
+          portOfDischarge: port.portName,
+          portOfDischargeId: port.id,
+        }));
+        setShowDischargeDropdown(false);
+        setHighlightPOD(-1);
+      }
+    );
+  };
 
 
 
@@ -440,45 +530,45 @@ const customerInputRef = useRef<HTMLInputElement>(null);
   }, []);
 
   const handleCustomerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-  if (!showSuggestions) return;
+    if (!showSuggestions) return;
 
-  const filtered = customerSuggestions.filter((c) =>
-    c.companyName.toLowerCase().includes(form.customerName.toLowerCase())
-  );
-
-  if (filtered.length === 0) return;
-
-  // ↓ Move Down
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    setHighlightIndex((prev) =>
-      prev < filtered.length - 1 ? prev + 1 : 0
+    const filtered = customerSuggestions.filter((c) =>
+      c.companyName.toLowerCase().includes(form.customerName.toLowerCase())
     );
-  }
 
-  // ↑ Move Up
-  if (e.key === "ArrowUp") {
-    e.preventDefault();
-    setHighlightIndex((prev) =>
-      prev > 0 ? prev - 1 : filtered.length - 1
-    );
-  }
+    if (filtered.length === 0) return;
 
-  // ENTER → SELECT highlighted item
-  if (e.key === "Enter") {
-    e.preventDefault();
-    if (highlightIndex >= 0 && filtered[highlightIndex]) {
-      const selected = filtered[highlightIndex];
-      setForm((prev: any) => ({
-        ...prev,
-        customerName: selected.companyName,
-        customerId: selected.id,
-      }));
-      setShowSuggestions(false);
-      setHighlightIndex(-1);
+    // ↓ Move Down
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlightIndex((prev) =>
+        prev < filtered.length - 1 ? prev + 1 : 0
+      );
     }
-  }
-};
+
+    // ↑ Move Up
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlightIndex((prev) =>
+        prev > 0 ? prev - 1 : filtered.length - 1
+      );
+    }
+
+    // ENTER → SELECT highlighted item
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (highlightIndex >= 0 && filtered[highlightIndex]) {
+        const selected = filtered[highlightIndex];
+        setForm((prev: any) => ({
+          ...prev,
+          customerName: selected.companyName,
+          customerId: selected.id,
+        }));
+        setShowSuggestions(false);
+        setHighlightIndex(-1);
+      }
+    }
+  };
 
 
   useEffect(() => {
@@ -1132,8 +1222,8 @@ const customerInputRef = useRef<HTMLInputElement>(null);
   // Professional Top Alert Component
   const ProfessionalTopAlert = () => (
     <div className={`fixed top-4 left-1/2 transform -translate-x-1/2 z-[60] transition-all duration-500 ease-out ${showValidationAlert
-        ? 'translate-y-0 opacity-100 scale-100'
-        : '-translate-y-full opacity-0 scale-95'
+      ? 'translate-y-0 opacity-100 scale-100'
+      : '-translate-y-full opacity-0 scale-95'
       }`}>
       <div className="bg-gradient-to-r from-red-500 to-red-600 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-3 min-w-[400px] border border-red-400">
         <div className="flex-shrink-0">
@@ -1287,57 +1377,57 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                 <Label htmlFor="customerName" className="block text-sm text-gray-900 dark:text-white mb-1">
                   Customer Name <span className="text-red-500">*</span>
                 </Label>
-               <Input
-  type="text"
-  value={form.customerName || ""}
-  ref={customerInputRef}
-  onKeyDown={(e) => handleCustomerKeyDown(e)}
-  onChange={(e) => {
-    setForm((prev: any) => ({
-      ...prev,
-      customerName: e.target.value,
-      customerId: null,
-    }));
-    setShowSuggestions(true);
+                <Input
+                  type="text"
+                  value={form.customerName || ""}
+                  ref={customerInputRef}
+                  onKeyDown={(e) => handleCustomerKeyDown(e)}
+                  onChange={(e) => {
+                    setForm((prev: any) => ({
+                      ...prev,
+                      customerName: e.target.value,
+                      customerId: null,
+                    }));
+                    setShowSuggestions(true);
 
-    if (validationErrors.customerId) {
-      setValidationErrors(prev => ({ ...prev, customerId: "" }));
-    }
-  }}
-  onFocus={() => setShowSuggestions(true)}
-  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-  id="customerName"
-  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
-  placeholder="Start typing customer name..."
-/>
+                    if (validationErrors.customerId) {
+                      setValidationErrors(prev => ({ ...prev, customerId: "" }));
+                    }
+                  }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                  id="customerName"
+                  className="w-full p-2 bg-white dark:bg-neutral-900 text-gray-900 dark:text-white rounded border border-neutral-200 dark:border-neutral-800"
+                  placeholder="Start typing customer name..."
+                />
 
                 {showSuggestions && form.customerName && (
                   <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-{customerSuggestions
+                    {customerSuggestions
                       .filter((c) =>
                         c.companyName
                           .toLowerCase()
                           .includes(form.customerName.toLowerCase())
                       )
                       .map((company, index) => (
-                       <li
-  key={company.id}
-  onMouseDown={() => {
-    setForm((prev: any) => ({
-      ...prev,
-      customerName: company.companyName,
-      customerId: company.id,
-    }));
-    setShowSuggestions(false);
-  }}
-  className={`px-3 py-1 cursor-pointer text-sm
-    ${highlightIndex === index 
-      ? "bg-blue-600 text-white" 
-      : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+                        <li
+                          key={company.id}
+                          onMouseDown={() => {
+                            setForm((prev: any) => ({
+                              ...prev,
+                              customerName: company.companyName,
+                              customerId: company.id,
+                            }));
+                            setShowSuggestions(false);
+                          }}
+                          className={`px-3 py-1 cursor-pointer text-sm
+    ${highlightIndex === index
+                              ? "bg-blue-600 text-white"
+                              : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
   `}
->
-  {company.companyName}
-</li>
+                        >
+                          {company.companyName}
+                        </li>
 
                       ))}
                     {customerSuggestions.filter((c) =>
@@ -1411,7 +1501,9 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                 </Label>
                 <Input
                   type="text"
+                  ref={productInputRef}
                   value={form.productName || ""}
+                  onKeyDown={handleProductKeyDown}
                   onChange={(e) => {
                     const value = e.target.value;
                     setForm((prev: any) => ({
@@ -1421,7 +1513,7 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                     }));
 
                     if (validationErrors.productId) {
-                      setValidationErrors(prev => ({ ...prev, productId: "" }));
+                      setValidationErrors((p) => ({ ...p, productId: "" }));
                     }
 
                     if (value.length > 1) {
@@ -1431,16 +1523,15 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                       setShowProductDropdown(false);
                       setProductSuggestions([]);
                     }
+                    setHighlightProduct(-1);
                   }}
                   onFocus={() => {
-                    if (form.productName?.length > 1) {
+                    if ((form.productName || "").length > 1) {
                       fetchProducts(form.productName);
                       setShowProductDropdown(true);
                     }
                   }}
-                  onBlur={() => {
-                    setTimeout(() => setShowProductDropdown(false), 100);
-                  }}
+                  onBlur={() => setTimeout(() => setShowProductDropdown(false), 150)}
                   id="productName"
                   className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
                   placeholder="Start typing product name..."
@@ -1448,73 +1539,32 @@ const customerInputRef = useRef<HTMLInputElement>(null);
 
                 {showProductDropdown && productSuggestions.length > 0 && (
                   <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                    {productSuggestions.map((product) => (
+                    {productSuggestions.map((product, index) => (
                       <li
                         key={product.id}
-                        onMouseDown={async () => {
-                          const updatedForm = {
-                            ...form,
+                        onMouseDown={() => {
+                          setForm((prev: any) => ({
+                            ...prev,
                             productName: `${product.productId} - ${product.productName} - ${product.productType}`,
                             productId: product.id,
                             productCategory: product.containerCategory,
                             productType: product.containerType,
                             productClass: product.classType,
-                          };
-
-                          setForm(updatedForm);
+                          }));
                           setShowProductDropdown(false);
-
-                          try {
-                            const res = await fetch(
-                              "http://localhost:8000/container-lease-tariff"
-                            );
-                            const leaseTariffs = await res.json();
-
-                            const matchedLease = leaseTariffs.find(
-                              (lease: any) =>
-                                lease.containerCategory ===
-                                product.containerCategory &&
-                                lease.containerType === product.containerType &&
-                                lease.containerClass === product.classType
-                            );
-
-                            if (matchedLease) {
-                              const exp = parseInt(form.expFreeDays || "0", 10);
-                              const imp = parseInt(form.impFreeDays || "0", 10);
-                              const transit = parseInt(
-                                form.transitDays || "0",
-                                10
-                              );
-                              const rent = parseFloat(
-                                matchedLease.leaseRentPerDay || "0"
-                              );
-
-                              const leasingCost = (exp + imp + transit) * rent;
-
-                              setForm((prev: any) => ({
-                                ...prev,
-                                leasingCost: leasingCost.toFixed(2),
-                              }));
-                            } else {
-                              setForm((prev: any) => ({
-                                ...prev,
-                                leasingCost: "",
-                              }));
-                            }
-                          } catch (error) {
-                            console.error(
-                              "Failed to fetch container lease tariff:",
-                              error
-                            );
-                          }
                         }}
-                        className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                        className={`px-3 py-1 cursor-pointer text-sm 
+          ${highlightProduct === index
+                            ? "bg-blue-600 text-white"
+                            : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+        `}
                       >
                         {`${product.productId} - ${product.productName} - ${product.productType}`}
                       </li>
                     ))}
                   </ul>
                 )}
+
                 {validationErrors.productId && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.productId}</p>
                 )}
@@ -1529,17 +1579,19 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                 </Label>
                 <Input
                   type="text"
+                  ref={portLoadingInputRef}
                   value={form.portOfLoading || ""}
+                  onKeyDown={handleLoadingPortKeyDown}
                   onChange={(e) => {
                     const value = e.target.value;
                     setForm((prev: any) => ({
                       ...prev,
                       portOfLoading: value,
-                      portOfLoadingId: undefined, // reset on change
+                      portOfLoadingId: undefined,
                     }));
 
                     if (validationErrors.portOfLoadingId) {
-                      setValidationErrors(prev => ({ ...prev, portOfLoadingId: "" }));
+                      setValidationErrors((p) => ({ ...p, portOfLoadingId: "" }));
                     }
 
                     if (value.length > 1) {
@@ -1549,16 +1601,15 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                       setShowPortDropdown(false);
                       setPortSuggestions([]);
                     }
+                    setHighlightPOL(-1);
                   }}
                   onFocus={() => {
-                    if (form.portOfLoading?.length > 1) {
+                    if ((form.portOfLoading || "").length > 1) {
                       fetchPorts(form.portOfLoading);
                       setShowPortDropdown(true);
                     }
                   }}
-                  onBlur={() => {
-                    setTimeout(() => setShowPortDropdown(false), 100);
-                  }}
+                  onBlur={() => setTimeout(() => setShowPortDropdown(false), 150)}
                   id="portOfLoading"
                   className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
                   placeholder="Start typing port of loading..."
@@ -1566,7 +1617,7 @@ const customerInputRef = useRef<HTMLInputElement>(null);
 
                 {showPortDropdown && portSuggestions.length > 0 && (
                   <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                    {portSuggestions.map((port) => (
+                    {portSuggestions.map((port, index) => (
                       <li
                         key={port.id}
                         onMouseDown={() => {
@@ -1577,7 +1628,11 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                           }));
                           setShowPortDropdown(false);
                         }}
-                        className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                        className={`px-3 py-1 cursor-pointer text-sm 
+          ${highlightPOL === index
+                            ? "bg-blue-600 text-white"
+                            : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+        `}
                       >
                         {port.portName}
                       </li>
@@ -1596,7 +1651,9 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                 </Label>
                 <Input
                   type="text"
+                  ref={portDischargeInputRef}
                   value={form.portOfDischarge || ""}
+                  onKeyDown={handleDischargePortKeyDown}
                   onChange={(e) => {
                     const value = e.target.value;
                     setForm((prev: any) => ({
@@ -1606,7 +1663,7 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                     }));
 
                     if (validationErrors.portOfDischargeId) {
-                      setValidationErrors(prev => ({ ...prev, portOfDischargeId: "" }));
+                      setValidationErrors((p) => ({ ...p, portOfDischargeId: "" }));
                     }
 
                     if (value.length > 1) {
@@ -1614,25 +1671,24 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                       setShowDischargeDropdown(true);
                     } else {
                       setShowDischargeDropdown(false);
+                      setPortSuggestions([]);
                     }
+                    setHighlightPOD(-1);
                   }}
                   onFocus={() => {
-                    if (form.portOfDischarge?.length > 1) {
+                    if ((form.portOfDischarge || "").length > 1) {
                       fetchPorts(form.portOfDischarge);
                       setShowDischargeDropdown(true);
                     }
                   }}
-                  onBlur={() => {
-                    setTimeout(() => setShowDischargeDropdown(false), 100);
-                  }}
+                  onBlur={() => setTimeout(() => setShowDischargeDropdown(false), 150)}
                   id="portOfDischarge"
                   className="w-full p-2 bg-white text-gray-900 dark:bg-neutral-900 dark:text-white rounded border border-neutral-800"
                   placeholder="Start typing port of discharge..."
                 />
-
                 {showDischargeDropdown && portSuggestions.length > 0 && (
                   <ul className="absolute z-10 w-full bg-white dark:bg-neutral-900 border border-neutral-800 rounded mt-1 max-h-40 overflow-y-auto">
-                    {portSuggestions.map((port) => (
+                    {portSuggestions.map((port, index) => (
                       <li
                         key={port.id}
                         onMouseDown={() => {
@@ -1643,13 +1699,18 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                           }));
                           setShowDischargeDropdown(false);
                         }}
-                        className="px-3 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 cursor-pointer text-sm text-gray-900 dark:text-white"
+                        className={`px-3 py-1 cursor-pointer text-sm 
+          ${highlightPOD === index
+                            ? "bg-blue-600 text-white"
+                            : "hover:bg-neutral-100 dark:hover:bg-neutral-800"}
+        `}
                       >
                         {port.portName}
                       </li>
                     ))}
                   </ul>
                 )}
+
                 {validationErrors.portOfDischargeId && (
                   <p className="text-red-500 text-xs mt-1">{validationErrors.portOfDischargeId}</p>
                 )}
@@ -2223,8 +2284,8 @@ const customerInputRef = useRef<HTMLInputElement>(null);
                 type="submit"
                 disabled={isSubmitting}
                 className={`px-4 py-2 text-white rounded ${isSubmitting
-                    ? "bg-blue-300 cursor-not-allowed"
-                    : "bg-blue-600 hover:bg-blue-500 cursor-pointer"
+                  ? "bg-blue-300 cursor-not-allowed"
+                  : "bg-blue-600 hover:bg-blue-500 cursor-pointer"
                   }`}
               >
                 {isSubmitting ? "Please wait..." : "Submit"}
