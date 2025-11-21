@@ -132,6 +132,8 @@ const isShipmentCancelled = (shipment: any) => {
   }>({});
   const [blFormData, setBlFormData] = useState({
     // Core BillofLading schema fields
+    shippedOnBoardDate: '',
+  dateOfIssue: '',
     shippersName: '',
     shippersAddress: '',
     shippersContactNo: '',
@@ -146,6 +148,7 @@ const isShipmentCancelled = (shipment: any) => {
     notifyPartyAddress: '',
     notifyPartyContactNo: '',
     notifyPartyEmail: '',
+
     notifyPartyInfo: '', // Combined field
     containerNos: '',
     sealNo: '',
@@ -1030,6 +1033,8 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
 
         setBlFormData({
+          shippedOnBoardDate: existingBl.shippedOnBoardDate || '',
+        dateOfIssue: existingBl.dateOfIssue || '',
           shipmentId: shipment.id,
           blType: blType,
           date: existingBl.date || new Date().toISOString().split('T')[0],
@@ -1096,6 +1101,9 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
         // Show empty form for first time using LATEST shipment data
         setBlFormData({
+      shippedOnBoardDate: '',
+        dateOfIssue: '',
+        
           shipmentId: shipment.id,
           blType: blType,
           date: new Date().toISOString().split('T')[0],
@@ -1115,6 +1123,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           notifyPartyContactNo: '',
           notifyPartyEmail: '',
           notifyPartyInfo: '',
+
           containerNos: latestShipment.containers?.map((c: any) => c.containerNumber).join(', ') || '',
           sealNo: '',
           grossWt: '',
@@ -1168,6 +1177,8 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
      
      const blPayload = {
      date: blFormData.date,
+   shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
+      dateOfIssue: blFormData.dateOfIssue, // Add this
      shippersName: blFormData.shippersName,
 
   // 🔹 required flat fields (joined from containers[]) - use semicolon to separate containers, allow commas within fields
@@ -1179,6 +1190,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
   tareWt: blFormData.containers.map(c => c.tareWt).join('; '),
   cbmWt: blFormData.containers.map(c => c.cbmWt).join('; '),
   unit: blFormData.containers.map(c => c.unit || 'KGS').join('; '),
+  
 
   // 🔹 remaining fields from your schema
   shippersAddress: blFormData.shippersAddress,
@@ -1315,6 +1327,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: consistentDate,
+          shippedOnBoardDate: blFormData.shippedOnBoardDate,
         containers: [],
       };
 
@@ -1335,33 +1348,34 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
       const formDate = blFormData.date || new Date().toISOString().split('T')[0];
 
       // Convert form data to match BLFormData interface structurea
-      const pdfData: BLFormData = {
-        shipmentId: blFormData.shipmentId,
-        blType: currentBlType,
-        date: formDate,
-        blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
-        shipper: blFormData.shippersName,
-        consignee: blFormData.consigneeName,
-        notifyParty: blFormData.notifyPartyName,
-        placeOfAcceptance: '',
-        portOfLoading: '',
-        portOfDischarge: '',
-        placeOfDelivery: '',
-        vesselVoyageNo: '',
-        containerInfo: '',
-        marksNumbers: '',
-        descriptionOfGoods: blFormData.billofLadingDetails,
-        grossWeight: blFormData.grossWt,
-        netWeight: blFormData.netWt,
-        shippingMarks: '',
-        freightCharges: blFormData.freightAmount,
-        freightPayableAt: '',
-        numberOfOriginals: '',
-        placeOfIssue: '',
-        dateOfIssue: formDate,
-        marksAndNumbers: blFormData.marksAndNumbers,
-        containers: []
-      };
+  const pdfData: BLFormData = {
+     shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
+  dateOfIssue: blFormData.dateOfIssue, // Add this
+    shipmentId: blFormData.shipmentId,
+    blType: currentBlType,
+    date: formDate,
+    blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
+    shipper: blFormData.shippersName,
+    consignee: blFormData.consigneeName,
+    notifyParty: blFormData.notifyPartyName,
+    placeOfAcceptance: '',
+    portOfLoading: '',
+    portOfDischarge: '',
+    placeOfDelivery: '',
+    vesselVoyageNo: '',
+    containerInfo: '',
+    marksNumbers: '',
+    descriptionOfGoods: blFormData.billofLadingDetails,
+    grossWeight: blFormData.grossWt,
+    netWeight: blFormData.netWt,
+    shippingMarks: '',
+    freightCharges: blFormData.freightAmount,
+    freightPayableAt: '',
+    numberOfOriginals: '',
+    placeOfIssue: '',
+    marksAndNumbers: blFormData.marksAndNumbers,
+    containers: []
+  };
 
       await generateBlPdf(currentBlType, pdfData, blFormData, 0); // 0 = original copy
 
@@ -1513,6 +1527,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        shippedOnBoardDate: existingBl.shippedOnBoardDate || '',
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -1631,6 +1646,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        shippedOnBoardDate: formDate,
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -1749,6 +1765,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: formDate,
+        shippedOnBoardDate: formDate,
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -2747,7 +2764,28 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                 />
               </div>
 
+ <div className="space-y-2">
+      <Label htmlFor="shippedOnBoardDate">SHIPPED ONBOARD Date</Label>
+      <Input
+        id="shippedOnBoardDate"
+        type="date"
+        value={blFormData.shippedOnBoardDate}
+        onChange={(e) => setBlFormData({ ...blFormData, shippedOnBoardDate: e.target.value })}
+        className="bg-white dark:bg-black"
+      />
+    </div>
 
+    {/* Date of Issue */}
+    <div className="space-y-2">
+      <Label htmlFor="dateOfIssue">Date of Issue</Label>
+      <Input
+        id="dateOfIssue"
+        type="date"
+        value={blFormData.dateOfIssue}
+        onChange={(e) => setBlFormData({ ...blFormData, dateOfIssue: e.target.value })}
+        className="bg-white dark:bg-black"
+      />
+    </div>
 
             </div>
             {/* Shipper Information */}
@@ -2884,6 +2922,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                           updatedContainers[index].containerNumber = e.target.value;
                           setBlFormData({
                             ...blFormData,
+                            
                             containers: updatedContainers,
                             containerNos: updatedContainers.map(c => c.containerNumber).join(', ')
                           });

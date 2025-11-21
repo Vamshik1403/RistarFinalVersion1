@@ -36,6 +36,7 @@ export interface BLFormData {
   numberOfOriginals: string;
   placeOfIssue: string;
   dateOfIssue: string;
+  shippedOnBoardDate: string; // Add this line
   marksAndNumbers: string;
   containers: any[];
 }
@@ -215,8 +216,14 @@ export async function generateBlPdf(
     const product = products.find((p: any) => p.id === shipment.productId);
 
     // Format dates - Use the consistent date from formData instead of current date
-    const blDate = dayjs(formData.date).format("DD/MM/YYYY");
-    const shippedOnboardDate = dayjs(shipment.gsDate).format("DD/MM/YYYY");
+   // Format dates - Use manual dates from formData with fallbacks
+const blDate = formData.dateOfIssue 
+  ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
+  : dayjs(formData.date).format("DD/MM/YYYY");
+  
+const shippedOnboardDate = formData.shippedOnBoardDate
+  ? dayjs(formData.shippedOnBoardDate).format("DD/MM/YYYY")
+  : dayjs(shipment.gsDate).format("DD/MM/YYYY");
 
     // Derive ports and labels
     const polName = shipment.polPort?.portName || "";
@@ -948,9 +955,10 @@ const contentHeight = pageHeight - marginY * 2;
       // Use houseBL as the main BL number if available, otherwise use generated BL number
       const blNumber =
         houseBLValue || blFormData?.blNumber || `RST/ NSACMB /25/00179`;
-      const dateOfIssue = blFormData?.dateOfIssue || blDate;
-      const vesselName =
-        blFormData?.vesselNo || shipment?.vesselName || "MV. EVER LYRIC 068E";
+const dateOfIssue = formData.dateOfIssue 
+  ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
+  : blDate;
+        const vesselName = blFormData?.vesselNo || shipment?.vesselName || "MV. EVER LYRIC 068E";
 
       doc.text(`BL NO.`, page2MarginX + 5, page2MarginY + 40);
       doc.text(`: ${blNumber}`, page2MarginX + 70, page2MarginY + 40);
@@ -1517,10 +1525,11 @@ if (hasValidValues) {
 }
 
 // Add "Shipped on Board" section just above freight text
+// Add "Shipped on Board" section just above freight text
 doc.setFont("arial", "bold");
 doc.setFontSize(9);
 doc.text("SHIPPED ONBOARD :", marginX + 110, addY);
-doc.text(blDate, marginX + 110 + 40, addY); // Date aligned to the right of "Shipped on Board"
+doc.text(shippedOnboardDate, marginX + 110 + 40, addY); // Use the manual shipped on board date
 addY += 8;
 
 // Freight text
@@ -1822,8 +1831,8 @@ if (detentionText) {
     doc.line(colNUM_X, bottomBoxTop + 18, colRightEnd, bottomBoxTop + 18);
 
     // Place and date of issue - right aligned with extra padding from border
-    doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
-
+// Place and date of issue - right aligned with extra padding from border
+doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
     // Terms block moved below the bottom grid (new section)
     // Using fixed terms box height calculated earlier
     // Draw the top separator only under Delivery Agent + Freight sections (exclude rightmost section)

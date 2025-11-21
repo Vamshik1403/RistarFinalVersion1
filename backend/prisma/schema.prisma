@@ -587,6 +587,8 @@ model Permission {
 
 model BillofLading {
   id                     Int       @id @default(autoincrement())
+   shippedOnBoardDate       String? // ADD THIS FIELD
+  dateOfIssue              String? // ADD THIS FIELD
   consigneeName          String?
   consigneeAddress       String?
   consigneeContactNo     String?

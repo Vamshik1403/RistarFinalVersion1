@@ -15,6 +15,14 @@ export class CreateBillOfLadingDto {
 
   @IsOptional()
   @IsString()
+    shippedOnBoardDate?: string;
+
+  @IsOptional()
+  @IsString()
+  dateOfIssue?: string;
+
+  @IsOptional()
+  @IsString()
   shippersContactNo?: string;
 
   @IsOptional()

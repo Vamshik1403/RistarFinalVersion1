@@ -29,18 +29,18 @@ export class BillOfLadingService {
       const currentDate = new Date();
 
       if (existingBl) {
-        // Update existing BL
         const updateData: any = {
-          ...blData,
+          ...blData, // This already contains the string dates
           updatedAt: currentDate,
         };
 
-        // Set hasDraftBlGenerated to true if not already set
+        // NO DATE CONVERSION NEEDED - Prisma expects strings
+        // The dates from frontend are already strings like "2025-11-21"
+
         if (!existingBl.hasDraftBlGenerated) {
           updateData.hasDraftBlGenerated = true;
         }
 
-        // Set firstGenerationDate if not already set
         if (!existingBl.firstGenerationDate) {
           updateData.firstGenerationDate = currentDate;
         }
@@ -51,13 +51,18 @@ export class BillOfLadingService {
         });
       } else {
         // Create new BL with generation flags
+        const createData: any = {
+          ...blData, // This already contains the string dates
+          shipmentId,
+          hasDraftBlGenerated: true,
+          firstGenerationDate: currentDate,
+        };
+
+        // NO DATE CONVERSION NEEDED - Keep dates as strings
+        // The dates from frontend should be in string format like "2025-11-21"
+
         return await this.prisma.billofLading.create({
-          data: {
-            ...blData,
-            shipmentId,
-            hasDraftBlGenerated: true,
-            firstGenerationDate: currentDate,
-          },
+          data: createData,
         });
       }
     } catch (error) {
@@ -68,13 +73,11 @@ export class BillOfLadingService {
 
   async markOriginalBLGenerated(shipmentId: number) {
     try {
-      // Check if BL already exists for this shipment
       const existingBl = await this.prisma.billofLading.findFirst({
         where: { shipmentId: shipmentId },
       });
 
       if (existingBl) {
-        // Update existing BL to mark original BL as generated
         return await this.prisma.billofLading.update({
           where: { id: existingBl.id },
           data: {
@@ -93,13 +96,11 @@ export class BillOfLadingService {
 
   async markNonNegotiableBLGenerated(shipmentId: number) {
     try {
-      // Check if BL already exists for this shipment
       const existingBl = await this.prisma.billofLading.findFirst({
         where: { shipmentId: shipmentId },
       });
 
       if (existingBl) {
-        // Update existing BL to mark non-negotiable BL as generated
         return await this.prisma.billofLading.update({
           where: { id: existingBl.id },
           data: {
@@ -118,13 +119,11 @@ export class BillOfLadingService {
 
   async markRfsBLGenerated(shipmentId: number) {
     try {
-      // Check if BL already exists for this shipment
       const existingBl = await this.prisma.billofLading.findFirst({
         where: { shipmentId: shipmentId },
       });
 
       if (existingBl) {
-        // Update existing BL to mark RFS BL as generated
         return await this.prisma.billofLading.update({
           where: { id: existingBl.id },
           data: {
@@ -176,9 +175,10 @@ export class BillOfLadingService {
     }
 
     try {
+      // NO DATE CONVERSION NEEDED - Prisma expects strings
       return await this.prisma.billofLading.update({
         where: { id },
-        data: updateBillOfLadingDto,
+        data: updateBillOfLadingDto, // This already contains string dates
       });
     } catch (error) {
       console.error('❌ Failed to update bill of lading:', error);

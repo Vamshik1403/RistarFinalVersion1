@@ -74,6 +74,8 @@ const MovementHistoryTable = () => {
   const [movementPermissions, setMovementPermissions] = useState<any>(null);
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [minDates, setMinDates] = useState<{ [key: number]: string }>({});
+const [containerList, setContainerList] = useState<string[]>([]);
+
 
 
   // Pagination state
@@ -367,7 +369,14 @@ setLatestReturnLocation(latestMap);
   }, []);
 
   const filteredData = data.filter((row) => {
-    const containerMatch = row.inventory?.containerNumber?.toLowerCase().includes(containerSearch.toLowerCase());
+const containerMatch = 
+  (containerSearch &&
+   row.inventory?.containerNumber?.toLowerCase().includes(containerSearch.toLowerCase()))
+  ||
+  (containerList.length > 1 &&
+   containerList.some(num =>
+     row.inventory?.containerNumber?.toLowerCase() === num.toLowerCase()
+   ));
     const jobMatch =
       row.shipment?.jobNumber?.toLowerCase().includes(jobSearch.toLowerCase()) ||
       row.emptyRepoJob?.jobNumber?.toLowerCase().includes(jobSearch.toLowerCase()) ||
@@ -375,7 +384,11 @@ setLatestReturnLocation(latestMap);
     const statusMatch = !statusFilter || row.status === statusFilter;
     const portMatch = !portFilter || row.port?.portName === portFilter;
     const locationMatch = !locationFilter || row.addressBook?.companyName === locationFilter;
-    return (!containerSearch || containerMatch) && (!jobSearch || jobMatch) && statusMatch && portMatch && locationMatch;
+    const containerActive =
+  containerSearch.length > 0 || containerList.length > 0;
+
+return (!containerActive || containerMatch) &&
+ (!jobSearch || jobMatch) && statusMatch && portMatch && locationMatch;
   });
 
   // Check if all filtered records have the same job number
@@ -846,13 +859,36 @@ const formatDateToDDMMYY = (isoDate: string) => {
 
 
       <div className="flex flex-wrap items-center gap-4 mb-6">
-        <Input
-          type="text"
-          placeholder="Search Container No."
-          value={containerSearch}
-          onChange={(e) => setContainerSearch(e.target.value)}
-          className="flex-1 min-w-[220px] border-neutral-200 dark:border-neutral-700 outline-neutral-900 dark:outline-neutral-700"
-        />
+  <textarea
+  placeholder="Search Container No. (single or multiple)"
+  className="flex-1 min-w-[220px] h-10 p-2 text-sm
+             border border-neutral-300 dark:border-neutral-700 rounded-md
+             bg-white dark:bg-neutral-900 text-black dark:text-white
+             outline-neutral-900 dark:outline-neutral-700
+             resize-vertical overflow-y-auto"
+
+
+  onChange={(e) => {
+    const raw = e.target.value.trim();
+    if (!raw) {
+      setContainerSearch("");
+      setContainerList([]);
+      return;
+    }
+
+    // Split by line break, spaces, commas
+    const list = raw.split(/[\n\r\s,]+/).filter(Boolean);
+
+    if (list.length === 1) {
+      setContainerSearch(list[0]);  // single search mode
+      setContainerList([]);
+    } else {
+      setContainerSearch("");       // disable single mode
+      setContainerList(list);      // enable bulk mode
+    }
+  }}
+></textarea>
+
         <Input
           type="text"
           placeholder="Search Shipping Job No."
