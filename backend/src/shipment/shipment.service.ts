@@ -52,8 +52,10 @@ export class ShipmentService {
     }
   }
 
-  const paddedSequence = String(nextSequence).padStart(5, '0');
-  const generatedHouseBL = `${prefix}${paddedSequence}`;
+
+  const runningNumber = (10000 + nextSequence).toString().padStart(5, "0");
+const generatedHouseBL = `${prefix}${runningNumber}`;
+
 
   const { containers, ...rest } = data;
 
@@ -233,32 +235,33 @@ orderBy: { id: 'desc' }
 }
 
   async getNextJobNumber(): Promise<string> {
-    const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
-    const prefix = `${currentYear}/`;
+  const currentYear = new Date().getFullYear().toString().slice(-2); // "25"
+  const prefix = `${currentYear}/1`; // e.g. "25/1"
 
-    const latestShipment = await this.prisma.shipment.findFirst({
-      where: {
-        jobNumber: {
-          startsWith: prefix,
-        },
+  const latestShipment = await this.prisma.shipment.findFirst({
+    where: {
+      jobNumber: {
+        startsWith: prefix,
       },
-      orderBy: {
-        jobNumber: 'desc',
-      },
-    });
+    },
+    orderBy: {
+      jobNumber: 'desc',
+    },
+  });
 
-    let nextSequence = 1;
-    if (latestShipment?.jobNumber) {
-      const parts = latestShipment.jobNumber.split('/');
-      const lastNumber = parseInt(parts[1]);
-      if (!isNaN(lastNumber)) {
-        nextSequence = lastNumber + 1;
-      }
+  let nextSequence = 1;
+  if (latestShipment?.jobNumber) {
+    const lastFourDigits = latestShipment.jobNumber.slice(-4);
+    const lastNumber = parseInt(lastFourDigits);
+    if (!isNaN(lastNumber)) {
+      nextSequence = lastNumber + 1;
     }
-
-    const paddedSequence = String(nextSequence).padStart(5, '0');
-    return `${prefix}${paddedSequence}`; // e.g., "25/00003"
   }
+
+  const paddedSequence = String(nextSequence).padStart(4, '0');
+  return `${prefix}${paddedSequence}`;
+}
+
 
   findAll() {
     return this.prisma.shipment.findMany({

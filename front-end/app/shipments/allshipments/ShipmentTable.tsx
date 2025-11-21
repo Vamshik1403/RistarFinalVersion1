@@ -69,7 +69,7 @@ const AllShipmentsPage = () => {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [containerSearch, setContainerSearch] = useState('');
   const [blGroups, setBlGroups] = useState<string[][]>([]);
-  
+
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -111,14 +111,14 @@ const AllShipmentsPage = () => {
   const [blJustSaved, setBlJustSaved] = useState(false);
   const [blGenerationStatus, setBlGenerationStatus] = useState<{ [key: number]: { hasDraftBlGenerated: boolean, hasOriginalBLGenerated: boolean, hasNonNegotiableBlGenerated: boolean, hasRfsBlGenerated: boolean, firstGenerationDate: string | null } }>({});
   const [croGenerationStatus, setCroGenerationStatus] = useState<{ [key: number]: { hasCroGenerated: boolean, firstCroGenerationDate: string | null } }>({});
-const [showCancelModal, setShowCancelModal] = useState(false);
-const [cancelReason, setCancelReason] = useState('');
-const [shipmentToCancel, setShipmentToCancel] = useState<number | null>(null);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [shipmentToCancel, setShipmentToCancel] = useState<number | null>(null);
 
-// Helper function to check if shipment is cancelled
-const isShipmentCancelled = (shipment: any) => {
-  return shipment.remark?.includes('[CANCELLED');
-};
+  // Helper function to check if shipment is cancelled
+  const isShipmentCancelled = (shipment: any) => {
+    return shipment.remark?.includes('[CANCELLED');
+  };
 
   // Add state to track copy downloads for each shipment and BL type
   const [blCopyDownloadStatus, setBlCopyDownloadStatus] = useState<{
@@ -133,7 +133,7 @@ const isShipmentCancelled = (shipment: any) => {
   const [blFormData, setBlFormData] = useState({
     // Core BillofLading schema fields
     shippedOnBoardDate: '',
-  dateOfIssue: '',
+    dateOfIssue: '',
     shippersName: '',
     shippersAddress: '',
     shippersContactNo: '',
@@ -169,7 +169,7 @@ const isShipmentCancelled = (shipment: any) => {
     deliveryAgentInfo: '', // Combined field
     freightAmount: '',
     // Empty charges and fees field by default
-    chargesAndFees: '',
+chargesAndFees: 'FREE 14 DAYS AT DESTINATION PORT THEREAFTER AT USD 45/DAY/TANK',
     // Empty marks and numbers field by default
     marksAndNumbers: '',
     // Fields fetched from shipment
@@ -355,7 +355,7 @@ const isShipmentCancelled = (shipment: any) => {
     }
   };
 
- 
+
 
 
 
@@ -439,9 +439,9 @@ const isShipmentCancelled = (shipment: any) => {
       const res = await axios.get('http://localhost:8000/shipment');
 
       // Sort by ID in descending order (newest entries first)
-const sortedData = res.data.sort((a: any, b: any) => {
-  return (b.id || 0) - (a.id || 0);
-});
+      const sortedData = res.data.sort((a: any, b: any) => {
+        return (b.id || 0) - (a.id || 0);
+      });
 
       // Debug: Log the raw data first, then sorted data
       console.log('Raw shipments data:', res.data.map((s: any) => ({
@@ -615,43 +615,43 @@ const sortedData = res.data.sort((a: any, b: any) => {
       .catch(err => console.error('Failed to fetch movements', err));
   }, []);
 
-const handleDelete = async (id: number) => {
-  // Instead of deleting, show cancellation modal
-  setShipmentToCancel(id);
-  setCancelReason('');
-  setShowCancelModal(true);
-};
-
-// Add this new function to handle cancellation confirmation
-const handleConfirmCancel = async () => {
-  if (!shipmentToCancel || !cancelReason.trim()) {
-    alert('Please provide a cancellation reason.');
-    return;
-  }
-
-  try {
-    // Call API to mark shipment as cancelled with reason
-    await apiFetch(`http://localhost:8000/shipment/${shipmentToCancel}/cancel`, {
-      method: 'PATCH',
-      body: {
-        cancellationReason: cancelReason.trim(),
-      },
-    });
-    
-    // Refresh the shipments list
-    await fetchShipments();
-    
-    // Close modal and reset state
-    setShowCancelModal(false);
-    setShipmentToCancel(null);
+  const handleDelete = async (id: number) => {
+    // Instead of deleting, show cancellation modal
+    setShipmentToCancel(id);
     setCancelReason('');
-    
-    alert('Shipment has been cancelled successfully.');
-  } catch (err) {
-    console.error('Failed to cancel shipment', err);
-    alert('Error cancelling shipment. Please try again.');
-  }
-};
+    setShowCancelModal(true);
+  };
+
+  // Add this new function to handle cancellation confirmation
+  const handleConfirmCancel = async () => {
+    if (!shipmentToCancel || !cancelReason.trim()) {
+      alert('Please provide a cancellation reason.');
+      return;
+    }
+
+    try {
+      // Call API to mark shipment as cancelled with reason
+      await apiFetch(`http://localhost:8000/shipment/${shipmentToCancel}/cancel`, {
+        method: 'PATCH',
+        body: {
+          cancellationReason: cancelReason.trim(),
+        },
+      });
+
+      // Refresh the shipments list
+      await fetchShipments();
+
+      // Close modal and reset state
+      setShowCancelModal(false);
+      setShipmentToCancel(null);
+      setCancelReason('');
+
+      alert('Shipment has been cancelled successfully.');
+    } catch (err) {
+      console.error('Failed to cancel shipment', err);
+      alert('Error cancelling shipment. Please try again.');
+    }
+  };
 
   const handleEdit = async (shipment: any) => {
     // Pre-fetch required data for proper display names
@@ -1005,36 +1005,36 @@ const handleConfirmCancel = async () => {
         }));
 
 
-// Helper function to get values for a container, handling single container with multiple values
-const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
-  if (!fieldValue) return defaultValue;
-  const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
-  
-  // If there's only one container, and the field itself contains semicolons,
-  // it means multiple values for that single container.
-  // In this case, return the entire field value for the first (and only) container.
-  if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
-    return fieldValue;
-  }
-  // Otherwise, return the value corresponding to the current container's index
-  return values[index] || defaultValue;
-};
+        // Helper function to get values for a container, handling single container with multiple values
+        const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
+          if (!fieldValue) return defaultValue;
+          const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
 
-const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
-  containerNumber: container.containerNumber || '',
-  sealNumber: getValuesForContainer(existingBl.sealNo, index),
-  grossWt: getValuesForContainer(existingBl.grossWt, index),
-  netWt: getValuesForContainer(existingBl.netWt, index),
-  unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
-  tareWt: getValuesForContainer(existingBl.tareWt, index),
-  cbmWt: getValuesForContainer(existingBl.cbmWt, index),
-  shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
-})) || [];
+          // If there's only one container, and the field itself contains semicolons,
+          // it means multiple values for that single container.
+          // In this case, return the entire field value for the first (and only) container.
+          if (latestShipment.containers?.length === 1 && values.length > 1 && index === 0) {
+            return fieldValue;
+          }
+          // Otherwise, return the value corresponding to the current container's index
+          return values[index] || defaultValue;
+        };
+
+        const currentContainers = latestShipment.containers?.map((container: any, index: number) => ({
+          containerNumber: container.containerNumber || '',
+          sealNumber: getValuesForContainer(existingBl.sealNo, index),
+          grossWt: getValuesForContainer(existingBl.grossWt, index),
+          netWt: getValuesForContainer(existingBl.netWt, index),
+          unit: getValuesForContainer(existingBl.unit, index, 'KGS'),
+          tareWt: getValuesForContainer(existingBl.tareWt, index),
+          cbmWt: getValuesForContainer(existingBl.cbmWt, index),
+          shippersealNo: getValuesForContainer(existingBl.shippersealNo, index)
+        })) || [];
 
 
         setBlFormData({
           shippedOnBoardDate: existingBl.shippedOnBoardDate || '',
-        dateOfIssue: existingBl.dateOfIssue || '',
+          dateOfIssue: existingBl.dateOfIssue || '',
           shipmentId: shipment.id,
           blType: blType,
           date: existingBl.date || new Date().toISOString().split('T')[0],
@@ -1073,7 +1073,8 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
           deliveryAgentInfo: existingBl.deliveryAgentInfo || '',
           freightAmount: existingBl.freightAmount || '',
           // Charges and fees field with existing value or empty
-          chargesAndFees: existingBl.chargesAndFees || '',
+chargesAndFees: existingBl.chargesAndFees ||
+  'FREE 14 DAYS AT DESTINATION PORT THEREAFTER AT USD 45/DAY/TANK',
           // Marks and numbers field with existing value or empty
           marksAndNumbers: existingBl.marksAndNumbers || '',
           // Always use LATEST shipment data for ports and vessel
@@ -1101,9 +1102,9 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
         // Show empty form for first time using LATEST shipment data
         setBlFormData({
-      shippedOnBoardDate: '',
-        dateOfIssue: '',
-        
+          shippedOnBoardDate: '',
+          dateOfIssue: '',
+
           shipmentId: shipment.id,
           blType: blType,
           date: new Date().toISOString().split('T')[0],
@@ -1171,66 +1172,66 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
   const handleSaveBlData = async () => {
     try {
-     // Debug: Log container data before saving
-     console.log('Saving BL data - Containers:', blFormData.containers);
-     console.log('Shipper seal values:', blFormData.containers.map(c => c.shippersealNo));
-     
-     const blPayload = {
-     date: blFormData.date,
-   shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
-      dateOfIssue: blFormData.dateOfIssue, // Add this
-     shippersName: blFormData.shippersName,
+      // Debug: Log container data before saving
+      console.log('Saving BL data - Containers:', blFormData.containers);
+      console.log('Shipper seal values:', blFormData.containers.map(c => c.shippersealNo));
 
-  // 🔹 required flat fields (joined from containers[]) - use semicolon to separate containers, allow commas within fields
-  containerNos: blFormData.containers.map(c => c.containerNumber).join('; '),
-  sealNo: blFormData.containers.map(c => c.sealNumber).join('; '),
-  shippersealNo: blFormData.containers.map(c => c.shippersealNo || '').join('; '),
-  grossWt: blFormData.containers.map(c => c.grossWt).join('; '),
-  netWt: blFormData.containers.map(c => c.netWt).join('; '),
-  tareWt: blFormData.containers.map(c => c.tareWt).join('; '),
-  cbmWt: blFormData.containers.map(c => c.cbmWt).join('; '),
-  unit: blFormData.containers.map(c => c.unit || 'KGS').join('; '),
-  
+      const blPayload = {
+        date: blFormData.date,
+        shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
+        dateOfIssue: blFormData.dateOfIssue, // Add this
+        shippersName: blFormData.shippersName,
 
-  // 🔹 remaining fields from your schema
-  shippersAddress: blFormData.shippersAddress,
-  shippersContactNo: blFormData.shippersContactNo,
-  shippersEmail: blFormData.shippersEmail,
-  shipperInfo: blFormData.shipperInfo,
+        // 🔹 required flat fields (joined from containers[]) - use semicolon to separate containers, allow commas within fields
+        containerNos: blFormData.containers.map(c => c.containerNumber).join('; '),
+        sealNo: blFormData.containers.map(c => c.sealNumber).join('; '),
+        shippersealNo: blFormData.containers.map(c => c.shippersealNo || '').join('; '),
+        grossWt: blFormData.containers.map(c => c.grossWt).join('; '),
+        netWt: blFormData.containers.map(c => c.netWt).join('; '),
+        tareWt: blFormData.containers.map(c => c.tareWt).join('; '),
+        cbmWt: blFormData.containers.map(c => c.cbmWt).join('; '),
+        unit: blFormData.containers.map(c => c.unit || 'KGS').join('; '),
 
-  consigneeName: blFormData.consigneeName,
-  consigneeAddress: blFormData.consigneeAddress,
-  consigneeContactNo: blFormData.consigneeContactNo,
-  consigneeEmail: blFormData.consigneeEmail,
-  consigneeInfo: blFormData.consigneeInfo,
 
-  notifyPartyName: blFormData.notifyPartyName,
-  notifyPartyAddress: blFormData.notifyPartyAddress,
-  notifyPartyContactNo: blFormData.notifyPartyContactNo,
-  notifyPartyEmail: blFormData.notifyPartyEmail,
-  notifyPartyInfo: blFormData.notifyPartyInfo,
+        // 🔹 remaining fields from your schema
+        shippersAddress: blFormData.shippersAddress,
+        shippersContactNo: blFormData.shippersContactNo,
+        shippersEmail: blFormData.shippersEmail,
+        shipperInfo: blFormData.shipperInfo,
 
-  billofLadingDetails: blFormData.billofLadingDetails,
-  freightPayableAt: blFormData.freightPayableAt,
+        consigneeName: blFormData.consigneeName,
+        consigneeAddress: blFormData.consigneeAddress,
+        consigneeContactNo: blFormData.consigneeContactNo,
+        consigneeEmail: blFormData.consigneeEmail,
+        consigneeInfo: blFormData.consigneeInfo,
 
-  deliveryAgentName: blFormData.deliveryAgentName,
-  deliveryAgentAddress: blFormData.deliveryAgentAddress,
-  Vat: blFormData.Vat,
-  deliveryAgentContactNo: blFormData.deliveryAgentContactNo,
-  deliveryAgentEmail: blFormData.deliveryAgentEmail,
-  deliveryAgentInfo: blFormData.deliveryAgentInfo,
+        notifyPartyName: blFormData.notifyPartyName,
+        notifyPartyAddress: blFormData.notifyPartyAddress,
+        notifyPartyContactNo: blFormData.notifyPartyContactNo,
+        notifyPartyEmail: blFormData.notifyPartyEmail,
+        notifyPartyInfo: blFormData.notifyPartyInfo,
 
-  freightAmount: blFormData.freightAmount,
-  portOfLoading: blFormData.portOfLoading,
-  portOfDischarge: blFormData.portOfDischarge,
-  vesselNo: blFormData.vesselNo,
-  chargesAndFees: blFormData.chargesAndFees,
-  marksAndNumbers: blFormData.marksAndNumbers,
+        billofLadingDetails: blFormData.billofLadingDetails,
+        freightPayableAt: blFormData.freightPayableAt,
 
-  shipmentId: blFormData.shipmentId,
-  hasDraftBlGenerated: true,
-  firstGenerationDate: new Date()
-};
+        deliveryAgentName: blFormData.deliveryAgentName,
+        deliveryAgentAddress: blFormData.deliveryAgentAddress,
+        Vat: blFormData.Vat,
+        deliveryAgentContactNo: blFormData.deliveryAgentContactNo,
+        deliveryAgentEmail: blFormData.deliveryAgentEmail,
+        deliveryAgentInfo: blFormData.deliveryAgentInfo,
+
+        freightAmount: blFormData.freightAmount,
+        portOfLoading: blFormData.portOfLoading,
+        portOfDischarge: blFormData.portOfDischarge,
+        vesselNo: blFormData.vesselNo,
+        chargesAndFees: blFormData.chargesAndFees,
+        marksAndNumbers: blFormData.marksAndNumbers,
+
+        shipmentId: blFormData.shipmentId,
+        hasDraftBlGenerated: true,
+        firstGenerationDate: new Date()
+      };
 
 
       // Create/Update on backend — no PDF generation here
@@ -1327,7 +1328,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
         numberOfOriginals: '',
         placeOfIssue: '',
         dateOfIssue: consistentDate,
-          shippedOnBoardDate: blFormData.shippedOnBoardDate,
+        shippedOnBoardDate: blFormData.shippedOnBoardDate,
         containers: [],
       };
 
@@ -1348,34 +1349,34 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
       const formDate = blFormData.date || new Date().toISOString().split('T')[0];
 
       // Convert form data to match BLFormData interface structurea
-  const pdfData: BLFormData = {
-     shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
-  dateOfIssue: blFormData.dateOfIssue, // Add this
-    shipmentId: blFormData.shipmentId,
-    blType: currentBlType,
-    date: formDate,
-    blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
-    shipper: blFormData.shippersName,
-    consignee: blFormData.consigneeName,
-    notifyParty: blFormData.notifyPartyName,
-    placeOfAcceptance: '',
-    portOfLoading: '',
-    portOfDischarge: '',
-    placeOfDelivery: '',
-    vesselVoyageNo: '',
-    containerInfo: '',
-    marksNumbers: '',
-    descriptionOfGoods: blFormData.billofLadingDetails,
-    grossWeight: blFormData.grossWt,
-    netWeight: blFormData.netWt,
-    shippingMarks: '',
-    freightCharges: blFormData.freightAmount,
-    freightPayableAt: '',
-    numberOfOriginals: '',
-    placeOfIssue: '',
-    marksAndNumbers: blFormData.marksAndNumbers,
-    containers: []
-  };
+      const pdfData: BLFormData = {
+        shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
+        dateOfIssue: blFormData.dateOfIssue, // Add this
+        shipmentId: blFormData.shipmentId,
+        blType: currentBlType,
+        date: formDate,
+        blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
+        shipper: blFormData.shippersName,
+        consignee: blFormData.consigneeName,
+        notifyParty: blFormData.notifyPartyName,
+        placeOfAcceptance: '',
+        portOfLoading: '',
+        portOfDischarge: '',
+        placeOfDelivery: '',
+        vesselVoyageNo: '',
+        containerInfo: '',
+        marksNumbers: '',
+        descriptionOfGoods: blFormData.billofLadingDetails,
+        grossWeight: blFormData.grossWt,
+        netWeight: blFormData.netWt,
+        shippingMarks: '',
+        freightCharges: blFormData.freightAmount,
+        freightPayableAt: '',
+        numberOfOriginals: '',
+        placeOfIssue: '',
+        marksAndNumbers: blFormData.marksAndNumbers,
+        containers: []
+      };
 
       await generateBlPdf(currentBlType, pdfData, blFormData, 0); // 0 = original copy
 
@@ -1477,7 +1478,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
       const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
         if (!fieldValue) return defaultValue;
         const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
-        
+
         // If there's only one container, and the field itself contains semicolons,
         // it means multiple values for that single container.
         // In this case, return the entire field value for the first (and only) container.
@@ -1596,7 +1597,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
       const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
         if (!fieldValue) return defaultValue;
         const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
-        
+
         // If there's only one container, and the field itself contains semicolons,
         // it means multiple values for that single container.
         // In this case, return the entire field value for the first (and only) container.
@@ -1715,7 +1716,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
       const getValuesForContainer = (fieldValue: string | undefined, index: number, defaultValue: string = '') => {
         if (!fieldValue) return defaultValue;
         const values = fieldValue.split(';').map(s => s.trim()); // Use semicolon to separate containers
-        
+
         // If there's only one container, and the field itself contains semicolons,
         // it means multiple values for that single container.
         // In this case, return the entire field value for the first (and only) container.
@@ -2039,246 +2040,189 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
 
               return (
                 <>
-                 {shipments.length === 0 ? (
-  <TableRow>
-    <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
-      No shipments found.
-    </TableCell>
-  </TableRow>
-) : (
-  paginatedShipments.map((shipment: any) => (
-    <TableRow
-      key={shipment.id}
-      className={
-        isShipmentCancelled(shipment) 
-          ? "line-through text-gray-500 bg-gray-100 dark:bg-gray-800 border-l-4 border-l-red-500" 
-          : "text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900"
-      }
-    >
-      <TableCell className={isShipmentCancelled(shipment) ? "font-medium text-gray-500" : "font-medium"}>
-        {shipment.jobNumber}
-        {isShipmentCancelled(shipment) && (
-          <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
-            Cancelled
-          </span>
-        )}
-      </TableCell>
-     <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-  {new Date(shipment.date).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit"
-  })}
-</TableCell>
-
-      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-        {shipment.customerAddressBook?.companyName || '-'}
-      </TableCell>
-      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-        {shipment.shipperAddressBook?.companyName || '-'}
-      </TableCell>
-      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-        {shipment.product?.productName || '-'}
-      </TableCell>
-      <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
-        {shipment.polPort?.portName || '-'} → {shipment.podPort?.portName || '-'}
-      </TableCell>
-      <TableCell className="space-x-2">
-        <Button
-          onClick={() => handleView(shipment)}
-          title="View Details"
-          variant="ghost"
-          size="icon"
-          className={
-            isShipmentCancelled(shipment)
-              ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
-              : "h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
-          }
-        >
-          <Eye size={16} />
-        </Button>
-        <Button
-          onClick={() => handleEdit(shipment)}
-          title="Edit"
-          variant="ghost"
-          size="icon"
-          className={
-            isShipmentCancelled(shipment)
-              ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
-              : "h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
-          }
-          disabled={isShipmentCancelled(shipment)}
-        >
-          <Pencil size={16} />
-        </Button>
-        <Button
-          onClick={() => handleDelete(shipment.id)}
-          title={isShipmentCancelled(shipment) ? "Already Cancelled" : "Cancel Shipment"}
-          variant="ghost"
-          size="icon"
-          className={
-            isShipmentCancelled(shipment)
-              ? "h-8 w-8 text-gray-400 cursor-not-allowed"
-              : "h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
-          }
-          disabled={isShipmentCancelled(shipment)}
-        >
-          <Trash2 size={16} />
-        </Button>
-        {/* Rest of your dropdown menu code remains the same */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className={
-                isShipmentCancelled(shipment)
-                  ? "h-8 w-8 text-gray-400 cursor-not-allowed"
-                  : "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
-              }
-              title={isShipmentCancelled(shipment) ? "Options disabled for cancelled shipment" : "More options"}
-              disabled={isShipmentCancelled(shipment)}
-            >
-              <MoreVertical size={16} />
-            </Button>
-          </DropdownMenuTrigger>
-      
-                        <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
-  <DialogContent className="max-w-md">
-    <DialogHeader>
-      <DialogTitle>Cancel Shipment</DialogTitle>
-    </DialogHeader>
-    
-    <div className="space-y-4 py-4">
-      <div className="space-y-2">
-        <Label htmlFor="cancelReason">Reason for Cancellation *</Label>
-        <Textarea
-          id="cancelReason"
-          value={cancelReason}
-          onChange={(e) => setCancelReason(e.target.value)}
-          placeholder="Please provide the reason for cancelling this shipment..."
-          className="min-h-[100px] resize-vertical bg-white dark:bg-black"
-          rows={4}
-        />
-      </div>
-      
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-        <p className="text-sm text-yellow-800 dark:text-yellow-200">
-          <strong>Note:</strong> This will mark the shipment as cancelled but keep the record in the system. The cancellation reason will be stored in the remarks.
-        </p>
-      </div>
-    </div>
-    
-    <DialogFooter className="space-x-2">
-      <Button 
-        variant="outline" 
-        onClick={() => {
-          setShowCancelModal(false);
-          setShipmentToCancel(null);
-          setCancelReason('');
-        }}
-        className="cursor-pointer"
-      >
-        Cancel
-      </Button>
-      <Button 
-        onClick={handleConfirmCancel}
-        className="cursor-pointer bg-red-600 hover:bg-red-700"
-        disabled={!cancelReason.trim()}
-      >
-        Confirm Cancellation
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-                        <DropdownMenuContent align="end" className="min-w-[240px]">
-                          {/* CRO Options */}
-                          <DropdownMenuItem className='cursor-pointer flex items-center justify-between py-2'>
-                            <span onClick={() => handleOpenCroModal(shipment)} className="flex-1 hover:text-blue-600">
-                              Generate CRO
+                  {shipments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-neutral-400 py-6 bg-white dark:bg-black">
+                        No shipments found.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedShipments.map((shipment: any) => (
+                      <TableRow
+                        key={shipment.id}
+                        className={
+                          isShipmentCancelled(shipment)
+                            ? "line-through text-gray-500 bg-gray-100 dark:bg-gray-800 border-l-4 border-l-red-500"
+                            : "text-black dark:text-white border-b border-neutral-200 dark:border-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-900"
+                        }
+                      >
+                        <TableCell className={isShipmentCancelled(shipment) ? "font-medium text-gray-500" : "font-medium"}>
+                          {shipment.jobNumber}
+                          {isShipmentCancelled(shipment) && (
+                            <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200">
+                              Cancelled
                             </span>
-                            {croGenerationStatus[shipment.id]?.hasCroGenerated && (
-                              <div className="ml-4 border-l border-gray-200 pl-3">
-                                <Download
-                                  size={16}
-                                  className="text-green-600 hover:text-green-700 cursor-pointer"
-                                  onClick={(e: React.MouseEvent) => {
-                                    e.stopPropagation();
-                                    e.preventDefault();
-                                    handleDirectCroDownload(shipment.id);
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </DropdownMenuItem>
+                          )}
+                        </TableCell>
+                        <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+                          {new Date(shipment.date).toLocaleDateString("en-GB", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit"
+                          })}
+                        </TableCell>
 
-
-
-
-
-                          {/* Draft BL Options */}
-                          <DropdownMenuItem
-                            className="cursor-pointer flex items-center justify-between py-2"
-                            onClick={() => handleOpenBlModal(shipment, 'draft')}
+                        <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+                          {shipment.customerAddressBook?.companyName || '-'}
+                        </TableCell>
+                        <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+                          {shipment.shipperAddressBook?.companyName || '-'}
+                        </TableCell>
+                        <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+                          {shipment.product?.productName || '-'}
+                        </TableCell>
+                        <TableCell className={isShipmentCancelled(shipment) ? "text-gray-500" : ""}>
+                          {shipment.polPort?.portName || '-'} → {shipment.podPort?.portName || '-'}
+                        </TableCell>
+                        <TableCell className="space-x-2">
+                          <Button
+                            onClick={() => handleView(shipment)}
+                            title="View Details"
+                            variant="ghost"
+                            size="icon"
+                            className={
+                              isShipmentCancelled(shipment)
+                                ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+                                : "h-8 w-8 text-purple-400 hover:text-purple-300 hover:bg-purple-900/40 cursor-pointer dark:hover:bg-purple-900/40"
+                            }
                           >
-                            <span className="flex-1 hover:text-blue-600">Generate Draft BL</span>
-                            {blGenerationStatus[shipment.id]?.hasDraftBlGenerated && (
-                              <div className="ml-4 border-l border-gray-200 pl-3">
-                                <Download
-                                  size={16}
-                                  className="text-green-600 hover:text-green-700 cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDirectBlDownload(shipment.id, 'draft');
-                                  }}
-                                />
-                              </div>
-                            )}
-                          </DropdownMenuItem>
-
-                          {/* Assigned BL downloads — Draft */}
-                          <AssignedBlDownloads
-                            shipmentId={shipment.id}
-                            blType="draft"
-                            label="Draft"
-                            onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'draft', i)}
-                          />
-
-                          {/* Original and Seaway BL Options - only after draft has been generated */}
-                          {blGenerationStatus[shipment.id]?.hasDraftBlGenerated && (
-                            <>
-                              <DropdownMenuItem
-                                className="cursor-pointer flex items-center justify-between py-2"
-                                onClick={() => handleOpenBlModal(shipment, 'original')}
+                            <Eye size={16} />
+                          </Button>
+                          <Button
+                            onClick={() => handleEdit(shipment)}
+                            title="Edit"
+                            variant="ghost"
+                            size="icon"
+                            className={
+                              isShipmentCancelled(shipment)
+                                ? "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+                                : "h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-900/40 cursor-pointer dark:hover:bg-blue-900/40"
+                            }
+                            disabled={isShipmentCancelled(shipment)}
+                          >
+                            <Pencil size={16} />
+                          </Button>
+                          <Button
+                            onClick={() => handleDelete(shipment.id)}
+                            title={isShipmentCancelled(shipment) ? "Already Cancelled" : "Cancel Shipment"}
+                            variant="ghost"
+                            size="icon"
+                            className={
+                              isShipmentCancelled(shipment)
+                                ? "h-8 w-8 text-gray-400 cursor-not-allowed"
+                                : "h-8 w-8 text-red-400 hover:text-red-300 hover:bg-red-900/40 cursor-pointer dark:hover:bg-red-900/40"
+                            }
+                            disabled={isShipmentCancelled(shipment)}
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                          {/* Rest of your dropdown menu code remains the same */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={
+                                  isShipmentCancelled(shipment)
+                                    ? "h-8 w-8 text-gray-400 cursor-not-allowed"
+                                    : "h-8 w-8 text-gray-400 hover:text-gray-300 hover:bg-gray-900/40 cursor-pointer dark:hover:bg-gray-900/40"
+                                }
+                                title={isShipmentCancelled(shipment) ? "Options disabled for cancelled shipment" : "More options"}
+                                disabled={isShipmentCancelled(shipment)}
                               >
-                                <span className="flex-1 hover:text-blue-600">Generate Original BL</span>
-                                {blGenerationStatus[shipment.id]?.hasOriginalBLGenerated && (
+                                <MoreVertical size={16} />
+                              </Button>
+                            </DropdownMenuTrigger>
+
+                            <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+                              <DialogContent className="max-w-md">
+                                <DialogHeader>
+                                  <DialogTitle>Cancel Shipment</DialogTitle>
+                                </DialogHeader>
+
+                                <div className="space-y-4 py-4">
+                                  <div className="space-y-2">
+                                    <Label htmlFor="cancelReason">Reason for Cancellation *</Label>
+                                    <Textarea
+                                      id="cancelReason"
+                                      value={cancelReason}
+                                      onChange={(e) => setCancelReason(e.target.value)}
+                                      placeholder="Please provide the reason for cancelling this shipment..."
+                                      className="min-h-[100px] resize-vertical bg-white dark:bg-black"
+                                      rows={4}
+                                    />
+                                  </div>
+
+                                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                      <strong>Note:</strong> This will mark the shipment as cancelled but keep the record in the system. The cancellation reason will be stored in the remarks.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <DialogFooter className="space-x-2">
+                                  <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                      setShowCancelModal(false);
+                                      setShipmentToCancel(null);
+                                      setCancelReason('');
+                                    }}
+                                    className="cursor-pointer"
+                                  >
+                                    Cancel
+                                  </Button>
+                                  <Button
+                                    onClick={handleConfirmCancel}
+                                    className="cursor-pointer bg-red-600 hover:bg-red-700"
+                                    disabled={!cancelReason.trim()}
+                                  >
+                                    Confirm Cancellation
+                                  </Button>
+                                </DialogFooter>
+                              </DialogContent>
+                            </Dialog>
+                            <DropdownMenuContent align="end" className="min-w-[240px]">
+                              {/* CRO Options */}
+                              <DropdownMenuItem className='cursor-pointer flex items-center justify-between py-2'>
+                                <span onClick={() => handleOpenCroModal(shipment)} className="flex-1 hover:text-blue-600">
+                                  Generate CRO
+                                </span>
+                                {croGenerationStatus[shipment.id]?.hasCroGenerated && (
                                   <div className="ml-4 border-l border-gray-200 pl-3">
                                     <Download
                                       size={16}
                                       className="text-green-600 hover:text-green-700 cursor-pointer"
-                                      onClick={(e) => {
+                                      onClick={(e: React.MouseEvent) => {
                                         e.stopPropagation();
-                                        handleDirectBlDownload(shipment.id, 'original');
+                                        e.preventDefault();
+                                        handleDirectCroDownload(shipment.id);
                                       }}
                                     />
                                   </div>
                                 )}
                               </DropdownMenuItem>
 
-                              {/* Assigned BL downloads — Original */}
-                              <AssignedBlDownloads
-                                shipmentId={shipment.id}
-                                blType="original"
-                                label="Original"
-                                onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'original', i)}
-                              />
 
+
+
+
+                              {/* Draft BL Options */}
                               <DropdownMenuItem
                                 className="cursor-pointer flex items-center justify-between py-2"
-                                onClick={() => handleOpenBlModal(shipment, 'seaway')}
+                                onClick={() => handleOpenBlModal(shipment, 'draft')}
                               >
-                                <span className="flex-1 hover:text-blue-600">Generate Seaway BL</span>
+                                <span className="flex-1 hover:text-blue-600">Generate Draft BL</span>
                                 {blGenerationStatus[shipment.id]?.hasDraftBlGenerated && (
                                   <div className="ml-4 border-l border-gray-200 pl-3">
                                     <Download
@@ -2286,113 +2230,170 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                                       className="text-green-600 hover:text-green-700 cursor-pointer"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleDirectBlDownload(shipment.id, 'seaway');
+                                        handleDirectBlDownload(shipment.id, 'draft');
                                       }}
                                     />
                                   </div>
                                 )}
                               </DropdownMenuItem>
 
-                              {/* Assigned BL downloads — Seaway */}
+                              {/* Assigned BL downloads — Draft */}
                               <AssignedBlDownloads
                                 shipmentId={shipment.id}
-                                blType="seaway"
-                                label="Seaway"
-                                onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'seaway', i)}
+                                blType="draft"
+                                label="Draft"
+                                onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'draft', i)}
                               />
 
-                              {/* Non Negotiable BL Options */}
-                              <DropdownMenuItem
-                                className="cursor-pointer flex items-center justify-between py-2"
-                                onClick={() => handleOpenBlModal(shipment, 'non-negotiable')}
-                              >
-                                <span className="flex-1 hover:text-blue-600">Generate Non Negotiable BL</span>
-                                {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
-                                  <div className="ml-4 border-l border-gray-200 pl-3">
-                                    <Download
-                                      size={16}
-                                      className="text-green-600 hover:text-green-700 cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDirectBlDownload(shipment.id, 'non-negotiable');
-                                      }}
-                                    />
-                                  </div>
-                                )}
-                              </DropdownMenuItem>
+                              {/* Original and Seaway BL Options - only after draft has been generated */}
+                              {blGenerationStatus[shipment.id]?.hasDraftBlGenerated && (
+                                <>
+                                  <DropdownMenuItem
+                                    className="cursor-pointer flex items-center justify-between py-2"
+                                    onClick={() => handleOpenBlModal(shipment, 'original')}
+                                  >
+                                    <span className="flex-1 hover:text-blue-600">Generate Original BL</span>
+                                    {blGenerationStatus[shipment.id]?.hasOriginalBLGenerated && (
+                                      <div className="ml-4 border-l border-gray-200 pl-3">
+                                        <Download
+                                          size={16}
+                                          className="text-green-600 hover:text-green-700 cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDirectBlDownload(shipment.id, 'original');
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </DropdownMenuItem>
 
-                              {/* RFS BL Options */}
-                              <DropdownMenuItem
-                                className="cursor-pointer flex items-center justify-between py-2"
-                                onClick={() => handleOpenBlModal(shipment, 'rfs')}
-                              >
-                                <span className="flex-1 hover:text-blue-600">Generate RFS BL</span>
-                                {blGenerationStatus[shipment.id]?.hasRfsBlGenerated && (
-                                  <div className="ml-4 border-l border-gray-200 pl-3">
-                                    <Download
-                                      size={16}
-                                      className="text-green-600 hover:text-green-700 cursor-pointer"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleDirectBlDownload(shipment.id, 'rfs');
-                                      }}
-                                    />
-                                  </div>
-                                )}
-                              </DropdownMenuItem>
+                                  {/* Assigned BL downloads — Original */}
+                                  <AssignedBlDownloads
+                                    shipmentId={shipment.id}
+                                    blType="original"
+                                    label="Original"
+                                    onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'original', i)}
+                                  />
 
-                              {/* Assigned BL downloads — Non Negotiable */}
-                              <AssignedBlDownloads
-                                shipmentId={shipment.id}
-                                blType="non-negotiable"
-                                label="Non Negotiable"
-                                onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'non-negotiable', i)}
-                              />
-                            </>
-                          )}
+                                  <DropdownMenuItem
+                                    className="cursor-pointer flex items-center justify-between py-2"
+                                    onClick={() => handleOpenBlModal(shipment, 'seaway')}
+                                  >
+                                    <span className="flex-1 hover:text-blue-600">Generate Seaway BL</span>
+                                    {blGenerationStatus[shipment.id]?.hasDraftBlGenerated && (
+                                      <div className="ml-4 border-l border-gray-200 pl-3">
+                                        <Download
+                                          size={16}
+                                          className="text-green-600 hover:text-green-700 cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDirectBlDownload(shipment.id, 'seaway');
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </DropdownMenuItem>
 
-                          {/* Non Negotiable BL Copy Options */}
-                          {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => handleDownload2ndCopyBlPdf(shipment.id, 'non-negotiable')}
-                                className="cursor-pointer text-blue-600"
-                              >
-                                Download Non Negotiable BL 2nd Copy
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDownload3rdCopyBlPdf(shipment.id, 'non-negotiable')}
-                                className="cursor-pointer text-blue-600"
-                              >
-                                Download Non Negotiable BL 3rd Copy
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                                  {/* Assigned BL downloads — Seaway */}
+                                  <AssignedBlDownloads
+                                    shipmentId={shipment.id}
+                                    blType="seaway"
+                                    label="Seaway"
+                                    onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'seaway', i)}
+                                  />
 
-                          {/* Original BL Copy Options */}
-                          {blGenerationStatus[shipment.id]?.hasOriginalBLGenerated && (
-                            <>
-                              <DropdownMenuItem
-                                onClick={() => handleDownload2ndCopyBlPdf(shipment.id, 'original')}
-                                className="cursor-pointer text-blue-600"
-                              >
-                                Download Original BL 2nd Copy
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleDownload3rdCopyBlPdf(shipment.id, 'original')}
-                                className="cursor-pointer text-blue-600"
-                              >
-                                Download Original BL 3rd Copy
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
+                                  {/* Non Negotiable BL Options */}
+                                  <DropdownMenuItem
+                                    className="cursor-pointer flex items-center justify-between py-2"
+                                    onClick={() => handleOpenBlModal(shipment, 'non-negotiable')}
+                                  >
+                                    <span className="flex-1 hover:text-blue-600">Generate Non Negotiable BL</span>
+                                    {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
+                                      <div className="ml-4 border-l border-gray-200 pl-3">
+                                        <Download
+                                          size={16}
+                                          className="text-green-600 hover:text-green-700 cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDirectBlDownload(shipment.id, 'non-negotiable');
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </DropdownMenuItem>
 
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+                                  {/* RFS BL Options */}
+                                  <DropdownMenuItem
+                                    className="cursor-pointer flex items-center justify-between py-2"
+                                    onClick={() => handleOpenBlModal(shipment, 'rfs')}
+                                  >
+                                    <span className="flex-1 hover:text-blue-600">Generate RFS BL</span>
+                                    {blGenerationStatus[shipment.id]?.hasRfsBlGenerated && (
+                                      <div className="ml-4 border-l border-gray-200 pl-3">
+                                        <Download
+                                          size={16}
+                                          className="text-green-600 hover:text-green-700 cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDirectBlDownload(shipment.id, 'rfs');
+                                          }}
+                                        />
+                                      </div>
+                                    )}
+                                  </DropdownMenuItem>
+
+                                  {/* Assigned BL downloads — Non Negotiable */}
+                                  <AssignedBlDownloads
+                                    shipmentId={shipment.id}
+                                    blType="non-negotiable"
+                                    label="Non Negotiable"
+                                    onClickDownload={(i) => handleDownloadAssignedBl(shipment.id, 'non-negotiable', i)}
+                                  />
+                                </>
+                              )}
+
+                              {/* Non Negotiable BL Copy Options */}
+                              {blGenerationStatus[shipment.id]?.hasNonNegotiableBlGenerated && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDownload2ndCopyBlPdf(shipment.id, 'non-negotiable')}
+                                    className="cursor-pointer text-blue-600"
+                                  >
+                                    Download Non Negotiable BL 2nd Copy
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDownload3rdCopyBlPdf(shipment.id, 'non-negotiable')}
+                                    className="cursor-pointer text-blue-600"
+                                  >
+                                    Download Non Negotiable BL 3rd Copy
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+
+                              {/* Original BL Copy Options */}
+                              {blGenerationStatus[shipment.id]?.hasOriginalBLGenerated && (
+                                <>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDownload2ndCopyBlPdf(shipment.id, 'original')}
+                                    className="cursor-pointer text-blue-600"
+                                  >
+                                    Download Original BL 2nd Copy
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onClick={() => handleDownload3rdCopyBlPdf(shipment.id, 'original')}
+                                    className="cursor-pointer text-blue-600"
+                                  >
+                                    Download Original BL 3rd Copy
+                                  </DropdownMenuItem>
+                                </>
+                              )}
+                            </DropdownMenuContent>
+
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </>
               );
             })()}
@@ -2429,7 +2430,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
               >
                 Previous
               </Button>
-              
+
               <div className="flex items-center space-x-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum;
@@ -2442,7 +2443,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                   } else {
                     pageNum = currentPage - 2 + i;
                   }
-                  
+
                   return (
                     <Button
                       key={pageNum}
@@ -2460,7 +2461,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                   );
                 })}
               </div>
-              
+
               <Button
                 variant="outline"
                 size="sm"
@@ -2764,28 +2765,28 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                 />
               </div>
 
- <div className="space-y-2">
-      <Label htmlFor="shippedOnBoardDate">SHIPPED ONBOARD Date</Label>
-      <Input
-        id="shippedOnBoardDate"
-        type="date"
-        value={blFormData.shippedOnBoardDate}
-        onChange={(e) => setBlFormData({ ...blFormData, shippedOnBoardDate: e.target.value })}
-        className="bg-white dark:bg-black"
-      />
-    </div>
+              <div className="space-y-2">
+                <Label htmlFor="shippedOnBoardDate">SHIPPED ONBOARD Date</Label>
+                <Input
+                  id="shippedOnBoardDate"
+                  type="date"
+                  value={blFormData.shippedOnBoardDate}
+                  onChange={(e) => setBlFormData({ ...blFormData, shippedOnBoardDate: e.target.value })}
+                  className="bg-white dark:bg-black"
+                />
+              </div>
 
-    {/* Date of Issue */}
-    <div className="space-y-2">
-      <Label htmlFor="dateOfIssue">Date of Issue</Label>
-      <Input
-        id="dateOfIssue"
-        type="date"
-        value={blFormData.dateOfIssue}
-        onChange={(e) => setBlFormData({ ...blFormData, dateOfIssue: e.target.value })}
-        className="bg-white dark:bg-black"
-      />
-    </div>
+              {/* Date of Issue */}
+              <div className="space-y-2">
+                <Label htmlFor="dateOfIssue">Date of Issue</Label>
+                <Input
+                  id="dateOfIssue"
+                  type="date"
+                  value={blFormData.dateOfIssue}
+                  onChange={(e) => setBlFormData({ ...blFormData, dateOfIssue: e.target.value })}
+                  className="bg-white dark:bg-black"
+                />
+              </div>
 
             </div>
             {/* Shipper Information */}
@@ -2922,7 +2923,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                           updatedContainers[index].containerNumber = e.target.value;
                           setBlFormData({
                             ...blFormData,
-                            
+
                             containers: updatedContainers,
                             containerNos: updatedContainers.map(c => c.containerNumber).join(', ')
                           });
@@ -2933,7 +2934,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                       />
                     </div>
 
-                       {/* Unit Dropdown */}
+                    {/* Unit Dropdown */}
                     <div className="space-y-2">
                       <Label htmlFor={`unit_${index}`}>
                         {index === 0 ? 'Unit' : `Unit ${index + 1}`}
@@ -3005,7 +3006,7 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                       />
                     </div>
 
-                      {/* Tare Weight */}
+                    {/* Tare Weight */}
                     <div className="space-y-2">
                       <Label htmlFor={`tareWt_${index}`}>
                         {index === 0 ? 'Tare Weight' : `Tare Wt ${index + 1}`}
@@ -3013,13 +3014,13 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                       <Input
                         id={`tareWt_${index}`}
                         value={container.tareWt || ''}
-                      onChange={(e) => {
-  const updatedContainers = [...blFormData.containers];
-  updatedContainers[index].tareWt = e.target.value;
-  setBlFormData({
-    ...blFormData,
-    containers: updatedContainers
-  });
+                        onChange={(e) => {
+                          const updatedContainers = [...blFormData.containers];
+                          updatedContainers[index].tareWt = e.target.value;
+                          setBlFormData({
+                            ...blFormData,
+                            containers: updatedContainers
+                          });
 
                         }}
 
@@ -3051,8 +3052,8 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                       />
                     </div>
 
-                 
-                  
+
+
                     {/* CBM Weight */}
                     <div className="space-y-2">
                       <Label htmlFor={`cbmWt_${index}`}>
@@ -3062,14 +3063,14 @@ const currentContainers = latestShipment.containers?.map((container: any, index:
                         id={`cbmWt_${index}`}
                         value={container.cbmWt || ''}
                         // CBM Weight
-onChange={(e) => {
-  const updatedContainers = [...blFormData.containers];
-  updatedContainers[index].cbmWt = e.target.value;
-  setBlFormData({
-    ...blFormData,
-    containers: updatedContainers
-  });
-}}
+                        onChange={(e) => {
+                          const updatedContainers = [...blFormData.containers];
+                          updatedContainers[index].cbmWt = e.target.value;
+                          setBlFormData({
+                            ...blFormData,
+                            containers: updatedContainers
+                          });
+                        }}
 
                         placeholder="CBM weight"
                         className="bg-white dark:bg-black"
@@ -3084,14 +3085,14 @@ onChange={(e) => {
                       <Input
                         id={`shippersealNo_${index}`}
                         value={container.shippersealNo || ''}
-                      onChange={(e) => {
-  const updatedContainers = [...blFormData.containers];
-  updatedContainers[index].shippersealNo = e.target.value;
-  setBlFormData({
-    ...blFormData,
-    containers: updatedContainers
-  });
-}}
+                        onChange={(e) => {
+                          const updatedContainers = [...blFormData.containers];
+                          updatedContainers[index].shippersealNo = e.target.value;
+                          setBlFormData({
+                            ...blFormData,
+                            containers: updatedContainers
+                          });
+                        }}
 
                         placeholder="Enter shipper seal (e.g., 2000 or 2000,3000)"
                         className="bg-white dark:bg-black"
