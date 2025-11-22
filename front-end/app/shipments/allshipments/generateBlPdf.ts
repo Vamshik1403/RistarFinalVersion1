@@ -215,17 +215,41 @@ export async function generateBlPdf(
     // Get product information
     const product = products.find((p: any) => p.id === shipment.productId);
 
-    // Format dates - Use the consistent date from formData instead of current date
-   // Format dates - Use manual dates from formData with fallbacks
-const blDate = formData.dateOfIssue 
-  ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
-  : dayjs(formData.date).format("DD/MM/YYYY");
-  
-const shippedOnboardDate = formData.shippedOnBoardDate
-  ? dayjs(formData.shippedOnBoardDate).format("DD/MM/YYYY")
-  : dayjs(shipment.gsDate).format("DD/MM/YYYY");
+  // Format dates - Use manual dates from formData with fallbacks
+let blDate;
+let shippedOnboardDate;
+let dateOfIssue;
 
-    // Derive ports and labels
+// Draft → always N/A
+if (blType === "draft") {
+  blDate = "N/A";
+  shippedOnboardDate = "N/A";
+  dateOfIssue = "N/A";
+} else {
+  // NON-draft BL - more explicit validation
+  blDate =
+    formData.date && formData.date.trim() !== "" && dayjs(formData.date).isValid()
+      ? dayjs(formData.date).format("DD/MM/YYYY")
+      : "N/A";
+
+  shippedOnboardDate =
+    formData.shippedOnBoardDate && formData.shippedOnBoardDate.trim() !== "" && dayjs(formData.shippedOnBoardDate).isValid()
+      ? dayjs(formData.shippedOnBoardDate).format("DD/MM/YYYY")
+      : "N/A";
+
+  dateOfIssue =
+    formData.dateOfIssue && formData.dateOfIssue.trim() !== "" && dayjs(formData.dateOfIssue).isValid()
+      ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
+      : "N/A";
+}
+
+// Assign back
+formData.date = blDate;
+formData.shippedOnBoardDate = shippedOnboardDate;
+formData.dateOfIssue = dateOfIssue;
+
+
+// Derive ports and labels
     const polName = shipment.polPort?.portName || "";
     const podName = shipment.podPort?.portName || "";
 
@@ -955,15 +979,14 @@ const contentHeight = pageHeight - marginY * 2;
       // Use houseBL as the main BL number if available, otherwise use generated BL number
       const blNumber =
         houseBLValue || blFormData?.blNumber || `RST/ NSACMB /25/00179`;
-const dateOfIssue = formData.dateOfIssue 
-  ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
-  : blDate;
+// Format dates - Use manual dates from formData with fallbacks
+
         const vesselName = blFormData?.vesselNo || shipment?.vesselName || "MV. EVER LYRIC 068E";
 
       doc.text(`BL NO.`, page2MarginX + 5, page2MarginY + 40);
       doc.text(`: ${blNumber}`, page2MarginX + 70, page2MarginY + 40);
-      doc.text(`DATE OF ISSUE`, page2MarginX + 130, page2MarginY + 40);
-      doc.text(`: ${dateOfIssue}`, page2MarginX + 180, page2MarginY + 40);
+     doc.text(`DATE OF ISSUE`, page2MarginX + 130, page2MarginY + 40);
+doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); // Use formData.dateOfIssue instead of dateOfIssue
 
       doc.text(`VESSEL NAME / VOYAGE NO`, page2MarginX + 5, page2MarginY + 50);
       doc.text(`: ${vesselName}`, page2MarginX + 70, page2MarginY + 50);
@@ -1525,7 +1548,6 @@ if (hasValidValues) {
 }
 
 // Add "Shipped on Board" section just above freight text
-// Add "Shipped on Board" section just above freight text
 doc.setFont("arial", "bold");
 doc.setFontSize(9);
 doc.text("SHIPPED ONBOARD :", marginX + 110, addY);
@@ -1538,82 +1560,75 @@ doc.setFontSize(9);
 doc.text(freightText, marginX + 110, addY);
 addY += 8;
 
-// Dynamic free days text
-const freeDaysText = freeDays
-  ? `FREE ${freeDays} DAYS AT DESTINATION PORT THERE AFTER AT`
-  : "";
-if (freeDaysText) {
-  doc.text(freeDaysText, marginX + 110, addY);
-  addY += 8; // Increased from 5 to 8 for better spacing
+
+
+
+   // -----------------------------------------
+// CHARGES & FEES SECTION (CLEAN + NO BOLD)
+// -----------------------------------------
+
+// Remove bold entirely
+doc.setFont("arial", "normal");
+
+// Dynamic font size based on container count
+const chargesFontSize = actualContainerCount > 3 ? 9 : 8;
+doc.setFontSize(chargesFontSize);
+
+let chargeLines: string[] = [];
+
+// If textarea has input
+if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+  
+  // 1) Split input by line breaks
+  let chargesLines = blFormData.chargesAndFees
+    .split("\n")
+    .filter((line: string) => line.trim());
+
+  // 2) Auto-split lines that have “USD …” on same line
+  let finalCharges: string[] = [];
+
+  chargesLines.forEach((line: string) => {
+    if (line.includes("USD") && !line.trim().startsWith("USD")) {
+      // Example: "FREE 22 DAYS ... USD 85/DAY/TANK"
+      const parts = line.split("USD");
+
+      finalCharges.push(parts[0].trim());            // FIRST LINE
+      finalCharges.push(`USD ${parts[1].trim()}`);   // SECOND LINE
+    } else {
+      finalCharges.push(line.trim());
+    }
+  });
+
+  chargeLines.push(...finalCharges);
+
+} else {
+  // Empty textarea → show nothing
+  chargeLines = [];
 }
 
-// Dynamic detention rate text
-const detentionText = detentionRate ? `USD ${detentionRate} /DAY/TANK` : "";
-if (detentionText) {
-  doc.text(detentionText, marginX + 110, addY);
-  // Dynamic spacing based on container count - reduced spacing for 4+ containers to create room for charges
-  const detentionSpacing = actualContainerCount > 3 ? 8 : 15; // Reduced spacing for 4+ containers to create room
-  addY += detentionSpacing;
-}
+// -----------------------------------------
+// RENDER CHARGES LINES
+// -----------------------------------------
+chargeLines.forEach((t: string) => {
+  const normalized = normalizePdfText(t);
 
-    // Charge lines with better formatting - Use single charges field or default format
-    doc.setFont("arial", "bold");
-    // Dynamic font size based on container count - reduced font size for 4+ containers
-    const chargesFontSize = actualContainerCount > 3 ? 9 : 8; // Reduced font size for 4+ containers from 10 to 9
-    doc.setFontSize(chargesFontSize);
+  // Reset character spacing (fixes jsPDF spacing bugs)
+  if ((doc as any).setCharSpace) {
+    (doc as any).setCharSpace(0);
+  }
 
-    let chargeLines: string[] = [];
+  // Draw text line
+  doc.text(normalized, marginX + 110, addY);
 
-    if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
-      // If chargesAndFees field has content, use it directly
-      chargeLines = [
-        "SHIPPING LINE /SHIPPING LINE AGENTS ARE ELIGIBLE UNDER THIS B/L TERMS, TO",
+  // Vertical spacing between lines
+  const spacing = actualContainerCount > 3 ? 6 : 7;
+  addY += spacing;
+});
 
-        "COLLECT CHARGES SUCH AS",
-      ];
+// Extra spacing to avoid overlap
+addY += actualContainerCount > 3 ? 10 : 8;
 
-      // Split chargesAndFees by line breaks and add each line separately
-      const chargesLines = blFormData.chargesAndFees
-        .split("\n")
-        .filter((line: string) => line.trim());
-      chargeLines.push(...chargesLines);
-    } else {
-      // If empty, don't show any charges (as requested)
-      chargeLines = [];
-    }
-
-    chargeLines.forEach((t: string) => {
-      const normalized = normalizePdfText(t);
-      // Ensure character spacing is reset to prevent spacing artifacts
-      if ((doc as any).setCharSpace) {
-        (doc as any).setCharSpace(0);
-      }
-
-      // For charges and fees, render each line directly without wrapping to preserve line breaks
-      if (t.includes("SHIPPING LINE") || t.includes("COLLECT CHARGES")) {
-        // These are the header lines, render them as is
-        doc.text(normalized, marginX + 110, addY);
-        // Increased spacing to prevent overlap with borderlines
-        const headerSpacing = actualContainerCount > 3 ? 6 : 7; // Increased spacing to prevent overlap
-        addY += headerSpacing;
-      } else {
-        // These are the charges lines from textarea, render each line separately
-        doc.text(normalized, marginX + 110, addY);
-        // Increased spacing to prevent overlap with borderlines
-        const chargeSpacing = actualContainerCount > 3 ? 6 : 7; // Increased spacing to prevent overlap
-        addY += chargeSpacing;
-      }
-
-    });
-
-    // Add extra spacing after charges section to prevent overlap with borderline
-    if (actualContainerCount > 3) {
-      addY += 10; // Increased buffer space to prevent overlap with borderline
-    } else {
-      addY += 8; // Add buffer space for all container counts to prevent overlap
-    }
-
-    rowEndY = Math.max(rowEndY, addY);
+rowEndY = Math.max(rowEndY, addY);
 
     // // Shift the right-side Gross/Net weight further right to avoid collision with product text
     // if (grossKgsLong) doc.text(`GROSS WT. ${grossKgsLong}`, 220, firstRowTextY + 6);
@@ -1832,8 +1847,8 @@ if (detentionText) {
 
     // Place and date of issue - right aligned with extra padding from border
 // Place and date of issue - right aligned with extra padding from border
-doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
-    // Terms block moved below the bottom grid (new section)
+// Place and date of issue - right aligned with extra padding from border
+doc.text(formData.dateOfIssue, rightSectionRight, bottomBoxTop + 16, { align: "right" });    // Terms block moved below the bottom grid (new section)
     // Using fixed terms box height calculated earlier
     // Draw the top separator only under Delivery Agent + Freight sections (exclude rightmost section)
     doc.line(marginX, termsBoxTop, colNUM_X, termsBoxTop);
@@ -1949,6 +1964,10 @@ doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
     const copySuffix =
       copyNumber === 0 ? "" : copyNumber === 1 ? "_2nd_Copy" : "_3rd_Copy";
 
+      const rawShipmentNo = shipment.jobNumber || shipment.shipmentNumber || "UNKNOWN";
+const sanitizedShipmentNo = rawShipmentNo.replace(/\//g, "_");
+
+
     // Get port codes from shipment data for dynamic filename
     const polPortCode = shipment.polPort?.portCode || "NSA";
     const podPortCode = shipment.podPort?.portCode || "JEV";
@@ -1962,19 +1981,19 @@ doc.text(blDate, rightSectionRight, bottomBoxTop + 16, { align: "right" });
 
     switch (blType) {
       case "original":
-        fileName = `RST_${portCode}_25_00001_Original_BL${copySuffix}.pdf`;
+fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
       case "draft":
-        fileName = `RST_${portCode}_25_00001_Draft_BL${copySuffix}.pdf`;
+fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
       case "seaway":
-        fileName = `RST_${portCode}_25_00001_Seaway_BL${copySuffix}.pdf`;
+fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
       case "non-negotiable":
-        fileName = `RST_${portCode}_25_00001_Non_Negotiable_BL${copySuffix}.pdf`;
+fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
       case "rfs":
-        fileName = `RST_${portCode}_25_00001_RFS_BL${copySuffix}.pdf`;
+fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
     }
 

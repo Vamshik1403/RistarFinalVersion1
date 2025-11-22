@@ -744,7 +744,7 @@ chargesAndFees: 'FREE 14 DAYS AT DESTINATION PORT THEREAFTER AT USD 45/DAY/TANK'
       id: shipment.id,
       status: true,
       quotationRefNo: shipment.quotationRefNumber || '',
-      date: shipment.date ? new Date(shipment.date).toISOString().split('T')[0] : '',
+      date: shipment.date ? "N/A" : '', // Placeholder, actual date handled below
       jobNumber: shipment.jobNumber || '',
       referenceNumber: shipment.refNumber || '',
       masterBL: shipment.masterBL || '',
@@ -874,7 +874,7 @@ chargesAndFees: 'FREE 14 DAYS AT DESTINATION PORT THEREAFTER AT USD 45/DAY/TANK'
       // Pre-fill form data with current shipment data
       setCroFormData({
         shipmentId: shipment.id,
-        date: '', // Will be filled by user as needed
+        date: 'N/A', // Will be filled by user as needed
         houseBL: shipment.houseBL || shipment.masterBL || '',
         shipperRefNo: shipment.refNumber || '',
         shipper: shipper?.companyName || '',
@@ -1037,7 +1037,7 @@ chargesAndFees: 'FREE 14 DAYS AT DESTINATION PORT THEREAFTER AT USD 45/DAY/TANK'
           dateOfIssue: existingBl.dateOfIssue || '',
           shipmentId: shipment.id,
           blType: blType,
-          date: existingBl.date || new Date().toISOString().split('T')[0],
+          date: existingBl.date || "N/A",
           // Fill with existing BL data for other fields
           shippersName: existingBl.shippersName || '',
           shippersAddress: existingBl.shippersAddress || '',
@@ -1107,8 +1107,11 @@ chargesAndFees: existingBl.chargesAndFees ||
 
           shipmentId: shipment.id,
           blType: blType,
-          date: new Date().toISOString().split('T')[0],
-          // Empty form fields
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
+              // Empty form fields
           shippersName: '',
           shippersAddress: '',
           shippersContactNo: '',
@@ -1230,7 +1233,7 @@ chargesAndFees: existingBl.chargesAndFees ||
 
         shipmentId: blFormData.shipmentId,
         hasDraftBlGenerated: true,
-        firstGenerationDate: new Date()
+firstGenerationDate: null,
       };
 
 
@@ -1249,7 +1252,7 @@ chargesAndFees: existingBl.chargesAndFees ||
           hasOriginalBLGenerated: savedBl.hasOriginalBLGenerated || false,
           hasNonNegotiableBlGenerated: savedBl.hasNonNegotiableBlGenerated || false,
           hasRfsBlGenerated: savedBl.hasRfsBlGenerated || false,
-          firstGenerationDate: savedBl.firstGenerationDate || new Date().toISOString(),
+          firstGenerationDate: savedBl.firstGenerationDate || "N/A",
         },
       }));
 
@@ -1300,14 +1303,11 @@ chargesAndFees: existingBl.chargesAndFees ||
       };
 
       const generationStatus = blGenerationStatus[shipmentId];
-      const consistentDate = generationStatus?.firstGenerationDate
-        ? new Date(generationStatus.firstGenerationDate).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0];
-
+    
       const pdfData = {
         shipmentId,
         blType,
-        date: consistentDate,
+  date: blFormData.date && blFormData.date.trim() !== "" ? blFormData.date : "N/A",
         blNumber: `${blType.toUpperCase()}-${Date.now()}-${index + 1}`,
         shipper: blFormData.shippersName,
         consignee: blFormData.consigneeName,
@@ -1327,9 +1327,15 @@ chargesAndFees: existingBl.chargesAndFees ||
         freightPayableAt: blFormData.freightPayableAt,
         numberOfOriginals: '',
         placeOfIssue: '',
-        dateOfIssue: consistentDate,
-        shippedOnBoardDate: blFormData.shippedOnBoardDate,
-        containers: [],
+ dateOfIssue:
+    blFormData.dateOfIssue && blFormData.dateOfIssue.trim() !== ""
+      ? blFormData.dateOfIssue
+      : "N/A",
+ shippedOnBoardDate:
+    blFormData.shippedOnBoardDate && blFormData.shippedOnBoardDate.trim() !== ""
+      ? blFormData.shippedOnBoardDate
+      : "N/A",
+       containers: [],
       };
 
       await generateBlPdf(blType, pdfData as any, perBlOverride as any, 0);
@@ -1346,37 +1352,37 @@ chargesAndFees: existingBl.chargesAndFees ||
   const handleDownloadBlPdf = async () => {
     try {
       // Use the date from the form (user can edit this)
-      const formDate = blFormData.date || new Date().toISOString().split('T')[0];
 
       // Convert form data to match BLFormData interface structurea
-      const pdfData: BLFormData = {
-        shippedOnBoardDate: blFormData.shippedOnBoardDate, // Add this
-        dateOfIssue: blFormData.dateOfIssue, // Add this
-        shipmentId: blFormData.shipmentId,
-        blType: currentBlType,
-        date: formDate,
-        blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
-        shipper: blFormData.shippersName,
-        consignee: blFormData.consigneeName,
-        notifyParty: blFormData.notifyPartyName,
-        placeOfAcceptance: '',
-        portOfLoading: '',
-        portOfDischarge: '',
-        placeOfDelivery: '',
-        vesselVoyageNo: '',
-        containerInfo: '',
-        marksNumbers: '',
-        descriptionOfGoods: blFormData.billofLadingDetails,
-        grossWeight: blFormData.grossWt,
-        netWeight: blFormData.netWt,
-        shippingMarks: '',
-        freightCharges: blFormData.freightAmount,
-        freightPayableAt: '',
-        numberOfOriginals: '',
-        placeOfIssue: '',
-        marksAndNumbers: blFormData.marksAndNumbers,
-        containers: []
-      };
+   // Build BL data using the same structure as BL form modal
+const pdfData: BLFormData = {
+  date: blFormData.date && blFormData.date.trim() !== "" ? blFormData.date : "N/A",
+  dateOfIssue: blFormData.dateOfIssue && blFormData.dateOfIssue.trim() !== "" ? blFormData.dateOfIssue : "N/A",
+  shippedOnBoardDate: blFormData.shippedOnBoardDate && blFormData.shippedOnBoardDate.trim() !== "" ? blFormData.shippedOnBoardDate : "N/A",
+  shipmentId: blFormData.shipmentId,
+  blType: currentBlType,
+  blNumber: `${currentBlType.toUpperCase()}-${Date.now()}`,
+  shipper: blFormData.shippersName,
+  consignee: blFormData.consigneeName,
+  notifyParty: blFormData.notifyPartyName,
+  placeOfAcceptance: '',
+  portOfLoading: '',
+  portOfDischarge: '',
+  placeOfDelivery: '',
+  vesselVoyageNo: '',
+  containerInfo: '',
+  marksNumbers: '',
+  descriptionOfGoods: blFormData.billofLadingDetails,
+  grossWeight: blFormData.grossWt,
+  netWeight: blFormData.netWt,
+  shippingMarks: '',
+  freightCharges: blFormData.freightAmount,
+  freightPayableAt: '',
+  numberOfOriginals: '',
+  placeOfIssue: '',
+  marksAndNumbers: blFormData.marksAndNumbers,
+  containers: []
+};
 
       await generateBlPdf(currentBlType, pdfData, blFormData, 0); // 0 = original copy
 
@@ -1501,13 +1507,16 @@ chargesAndFees: existingBl.chargesAndFees ||
       })) || [];
 
       // Use the saved date from existing BL or current date as fallback
-      const formDate = existingBl.date || new Date().toISOString().split('T')[0];
+const formDate = existingBl.date || ""
 
       // Build BL data using the same structure as BL form modal
       const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
-        date: formDate,
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
         blNumber: `${blType.toUpperCase()}-${Date.now()}`,
         shipper: existingBl.shippersName,
         consignee: existingBl.consigneeName,
@@ -1527,8 +1536,8 @@ chargesAndFees: existingBl.chargesAndFees ||
         freightPayableAt: '',
         numberOfOriginals: '',
         placeOfIssue: '',
-        dateOfIssue: formDate,
-        shippedOnBoardDate: existingBl.shippedOnBoardDate || '',
+dateOfIssue: existingBl.dateOfIssue || 'N/A',
+shippedOnBoardDate: existingBl.shippedOnBoardDate || 'N/A',
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -1537,8 +1546,12 @@ chargesAndFees: existingBl.chargesAndFees ||
       const blFormDataForPdf = {
         ...existingBl,
         shipmentId: shipmentId,
-        date: formDate,
-        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
+    
+    containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
         marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
@@ -1620,14 +1633,18 @@ chargesAndFees: existingBl.chargesAndFees ||
       })) || [];
 
       // Use the saved date from existing BL or current date as fallback
-      const formDate = existingBl.date || new Date().toISOString().split('T')[0];
+const formDate = existingBl.date || "N/A";
 
       // Build BL data using the same structure as BL form modal
       const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
-        date: formDate,
-        blNumber: `${blType.toUpperCase()}-${Date.now()}`,
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
+    
+    blNumber: `${blType.toUpperCase()}-${Date.now()}`,
         shipper: existingBl.shippersName,
         consignee: existingBl.consigneeName,
         notifyParty: existingBl.notifyPartyName,
@@ -1646,8 +1663,8 @@ chargesAndFees: existingBl.chargesAndFees ||
         freightPayableAt: '',
         numberOfOriginals: '',
         placeOfIssue: '',
-        dateOfIssue: formDate,
-        shippedOnBoardDate: formDate,
+      dateOfIssue: existingBl.dateOfIssue || 'N/A',
+shippedOnBoardDate: existingBl.shippedOnBoardDate || 'N/A',
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -1656,8 +1673,12 @@ chargesAndFees: existingBl.chargesAndFees ||
       const blFormDataForPdf = {
         ...existingBl,
         shipmentId: shipmentId,
-        date: formDate,
-        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
+    
+    containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
         marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
@@ -1739,13 +1760,16 @@ chargesAndFees: existingBl.chargesAndFees ||
       })) || [];
 
       // Use the saved date from existing BL or current date as fallback
-      const formDate = existingBl.date || new Date().toISOString().split('T')[0];
+const formDate = existingBl.date || "N/A";
 
       // Build BL data using the same structure as BL form modal
       const pdfData: BLFormData = {
         shipmentId: shipmentId,
         blType: blType,
-        date: formDate,
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
         blNumber: `${blType.toUpperCase()}-${Date.now()}`,
         shipper: existingBl.shippersName,
         consignee: existingBl.consigneeName,
@@ -1765,8 +1789,8 @@ chargesAndFees: existingBl.chargesAndFees ||
         freightPayableAt: '',
         numberOfOriginals: '',
         placeOfIssue: '',
-        dateOfIssue: formDate,
-        shippedOnBoardDate: formDate,
+        dateOfIssue: existingBl.dateOfIssue || 'N/A',
+        shippedOnBoardDate: existingBl.shippedOnBoardDate || 'N/A',
         marksAndNumbers: existingBl.marksAndNumbers || '',
         containers: []
       };
@@ -1775,8 +1799,12 @@ chargesAndFees: existingBl.chargesAndFees ||
       const blFormDataForPdf = {
         ...existingBl,
         shipmentId: shipmentId,
-        date: formDate,
-        containers: currentContainers, // Use processed containers with all details (same as BL form modal)
+date:
+  existingBl.date && existingBl.date.trim() !== ""
+    ? existingBl.date
+    : "N/A",
+    
+    containers: currentContainers, // Use processed containers with all details (same as BL form modal)
         chargesAndFees: existingBl.chargesAndFees || '', // Ensure charges exist
         marksAndNumbers: existingBl.marksAndNumbers || '', // Ensure marks and numbers exist
         billofLadingDetails: existingBl.billofLadingDetails || existingBl.descriptionOfGoods || '', // Map description field
@@ -1804,7 +1832,7 @@ chargesAndFees: existingBl.chargesAndFees ||
           [shipmentId]: {
             ...prev[shipmentId],
             hasOriginalBLGenerated: true,
-            firstGenerationDate: existingBl.firstGenerationDate || new Date().toISOString()
+            firstGenerationDate: existingBl.firstGenerationDate || "N/A"
           }
         }));
       } else if (blType === 'rfs') {
@@ -1813,7 +1841,7 @@ chargesAndFees: existingBl.chargesAndFees ||
           [shipmentId]: {
             ...prev[shipmentId],
             hasRfsBlGenerated: true,
-            firstGenerationDate: existingBl.firstGenerationDate || new Date().toISOString()
+            firstGenerationDate: existingBl.firstGenerationDate || "N/A"
           }
         }));
       }

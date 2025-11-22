@@ -42,7 +42,7 @@ export class BillOfLadingService {
         }
 
         if (!existingBl.firstGenerationDate) {
-          updateData.firstGenerationDate = currentDate;
+updateData.firstGenerationDate = null;
         }
 
         return await this.prisma.billofLading.update({
