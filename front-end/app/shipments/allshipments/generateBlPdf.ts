@@ -26,7 +26,7 @@ export interface BLFormData {
   descriptionOfGoods: string;
   grossWeight: string;
   netWeight: string;
-   unit?: string;
+  unit?: string;
   tareWt?: string;
   cbmWt?: string;
   shippersealNo?: string;
@@ -105,9 +105,9 @@ export async function generateBlPdf(
     }
 
     // Bottom section (delivery agent, freight, etc.): dynamic height based on container count
-    const bottomSectionHeight = containersToShow.length > 3 ? 65 : 
-                                containersToShow.length === 1 ? 60 : 
-                                containersToShow.length === 2 ? 65 : 50; // Increased height for 1 and 2 containers to fix terms cutoff
+    const bottomSectionHeight = containersToShow.length > 3 ? 65 :
+      containersToShow.length === 1 ? 60 :
+        containersToShow.length === 2 ? 65 : 50; // Increased height for 1 and 2 containers to fix terms cutoff
     totalHeight += bottomSectionHeight;
 
     // Terms section height (constant for all container counts - increased for 1 container to prevent cutoff)
@@ -117,7 +117,7 @@ export async function generateBlPdf(
       const chargesLength = blFormData.chargesAndFees.length;
       if (containersToShow.length === 1) {
         termsHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
-    } else {
+      } else {
         termsHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
       }
     } else {
@@ -130,14 +130,14 @@ export async function generateBlPdf(
     }
     totalHeight += termsHeight;
 
-     // Footer text height (For RISTAR LOGISTICS PVT LTD + As Agent for the Carrier) - positioned above terms
-     // totalHeight += 20; // Removed - footer is positioned above terms section
+    // Footer text height (For RISTAR LOGISTICS PVT LTD + As Agent for the Carrier) - positioned above terms
+    // totalHeight += 20; // Removed - footer is positioned above terms section
 
-     // Page number height - positioned below border (increased to prevent cutoff)
-     totalHeight += 10; // Increased from 5 to 10 to prevent page number cutoff
+    // Page number height - positioned below border (increased to prevent cutoff)
+    totalHeight += 10; // Increased from 5 to 10 to prevent page number cutoff
 
-     // Bottom margin - increased to ensure page number visibility
-     totalHeight += 8; // Increased from 5 to 8 for better page number spacing
+    // Bottom margin - increased to ensure page number visibility
+    totalHeight += 8; // Increased from 5 to 8 for better page number spacing
 
     // Minimum height for proper proportions
     return Math.max(totalHeight, 250);
@@ -174,82 +174,82 @@ export async function generateBlPdf(
     // Use BL form data instead of address book lookups - prefer combined fields
     const shipper = blFormData
       ? {
-          combinedInfo: blFormData.shipperInfo,
-          companyName: blFormData.shippersName,
-          address: blFormData.shippersAddress,
-          phone: blFormData.shippersContactNo,
-          email: blFormData.shippersEmail,
-        }
+        combinedInfo: blFormData.shipperInfo,
+        companyName: blFormData.shippersName,
+        address: blFormData.shippersAddress,
+        phone: blFormData.shippersContactNo,
+        email: blFormData.shippersEmail,
+      }
       : {
-          companyName: formData.shipper || "",
-          address: "",
-          phone: "",
-          email: "",
-        };
+        companyName: formData.shipper || "",
+        address: "",
+        phone: "",
+        email: "",
+      };
 
     const consignee = blFormData
       ? {
-          combinedInfo: blFormData.consigneeInfo,
-          companyName: blFormData.consigneeName,
-          address: blFormData.consigneeAddress,
-          phone: blFormData.consigneeContactNo,
-          email: blFormData.consigneeEmail,
-        }
+        combinedInfo: blFormData.consigneeInfo,
+        companyName: blFormData.consigneeName,
+        address: blFormData.consigneeAddress,
+        phone: blFormData.consigneeContactNo,
+        email: blFormData.consigneeEmail,
+      }
       : {
-          companyName: formData.consignee || "",
-          address: "",
-          phone: "",
-          email: "",
-        };
+        companyName: formData.consignee || "",
+        address: "",
+        phone: "",
+        email: "",
+      };
 
     const notifyParty = blFormData
       ? {
-          combinedInfo: blFormData.notifyPartyInfo,
-          companyName: blFormData.notifyPartyName,
-          address: blFormData.notifyPartyAddress,
-          phone: blFormData.notifyPartyContactNo,
-          email: blFormData.notifyPartyEmail,
-        }
+        combinedInfo: blFormData.notifyPartyInfo,
+        companyName: blFormData.notifyPartyName,
+        address: blFormData.notifyPartyAddress,
+        phone: blFormData.notifyPartyContactNo,
+        email: blFormData.notifyPartyEmail,
+      }
       : consignee;
 
     // Get product information
     const product = products.find((p: any) => p.id === shipment.productId);
 
-  // Format dates - Use manual dates from formData with fallbacks
-let blDate;
-let shippedOnboardDate;
-let dateOfIssue;
+    // Format dates - Use manual dates from formData with fallbacks
+    let blDate;
+    let shippedOnboardDate;
+    let dateOfIssue;
 
-// Draft → always N/A
-if (blType === "draft") {
-  blDate = "N/A";
-  shippedOnboardDate = "N/A";
-  dateOfIssue = "N/A";
-} else {
-  // NON-draft BL - more explicit validation
-  blDate =
-    formData.date && formData.date.trim() !== "" && dayjs(formData.date).isValid()
-      ? dayjs(formData.date).format("DD/MM/YYYY")
-      : "N/A";
+    // Draft → always N/A
+    if (blType === "draft") {
+      blDate = "N/A";
+      shippedOnboardDate = "N/A";
+      dateOfIssue = "N/A";
+    } else {
+      // NON-draft BL - more explicit validation
+      blDate =
+        formData.date && formData.date.trim() !== "" && dayjs(formData.date).isValid()
+          ? dayjs(formData.date).format("DD/MM/YYYY")
+          : "N/A";
 
-  shippedOnboardDate =
-    formData.shippedOnBoardDate && formData.shippedOnBoardDate.trim() !== "" && dayjs(formData.shippedOnBoardDate).isValid()
-      ? dayjs(formData.shippedOnBoardDate).format("DD/MM/YYYY")
-      : "N/A";
+      shippedOnboardDate =
+        formData.shippedOnBoardDate && formData.shippedOnBoardDate.trim() !== "" && dayjs(formData.shippedOnBoardDate).isValid()
+          ? dayjs(formData.shippedOnBoardDate).format("DD/MM/YYYY")
+          : "N/A";
 
-  dateOfIssue =
-    formData.dateOfIssue && formData.dateOfIssue.trim() !== "" && dayjs(formData.dateOfIssue).isValid()
-      ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
-      : "N/A";
-}
+      dateOfIssue =
+        formData.dateOfIssue && formData.dateOfIssue.trim() !== "" && dayjs(formData.dateOfIssue).isValid()
+          ? dayjs(formData.dateOfIssue).format("DD/MM/YYYY")
+          : "N/A";
+    }
 
-// Assign back
-formData.date = blDate;
-formData.shippedOnBoardDate = shippedOnboardDate;
-formData.dateOfIssue = dateOfIssue;
+    // Assign back
+    formData.date = blDate;
+    formData.shippedOnBoardDate = shippedOnboardDate;
+    formData.dateOfIssue = dateOfIssue;
 
 
-// Derive ports and labels
+    // Derive ports and labels
     const polName = shipment.polPort?.portName || "";
     const podName = shipment.podPort?.portName || "";
 
@@ -266,17 +266,17 @@ formData.dateOfIssue = dateOfIssue;
     const cbmWeight = blFormData ? blFormData.cbmWt : ""; // NEW
     const unit = blFormData?.unit || "KGS"; // NEW - default to KGS
     const shipperSealNo = blFormData?.shippersealNo || ""; // NEW
-    
+
     // Use delivery agent info from BL form - prefer combined field
     const deliveryAgent = blFormData
       ? {
-          combinedInfo: blFormData.deliveryAgentInfo,
-          name: blFormData.deliveryAgentName,
-          address: blFormData.deliveryAgentAddress,
-          contactNo: blFormData.deliveryAgentContactNo,
-          email: blFormData.deliveryAgentEmail,
-          vat: blFormData.Vat,
-        }
+        combinedInfo: blFormData.deliveryAgentInfo,
+        name: blFormData.deliveryAgentName,
+        address: blFormData.deliveryAgentAddress,
+        contactNo: blFormData.deliveryAgentContactNo,
+        email: blFormData.deliveryAgentEmail,
+        vat: blFormData.Vat,
+      }
       : null;
 
     // Use freight amount from BL form - it's mapped as freightCharges in the pdfData
@@ -302,16 +302,19 @@ formData.dateOfIssue = dateOfIssue;
       (doc as any).setLineHeightFactor(1.05);
     }
 
-  const pageWidth = doc.internal.pageSize.getWidth();
-const pageHeight = doc.internal.pageSize.getHeight();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
 
-// small margins
-const marginX = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
-const marginY = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
 
-// usable area
-const contentWidth = pageWidth - marginX * 2;
-const contentHeight = pageHeight - marginY * 2;
+ 
+
+    // small margins
+    const marginX = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
+    const marginY = 2; // Further reduced from 5 to 2 to move borderline even closer to corners
+
+    // usable area
+    const contentWidth = pageWidth - marginX * 2;
+    const contentHeight = pageHeight - marginY * 2;
 
 
     // Main border (centered) with dynamic height
@@ -321,7 +324,7 @@ const contentHeight = pageHeight - marginY * 2;
     doc.line(marginX, marginY, marginX + contentWidth, marginY); // top
 
     // Track border positions - will be updated after terms section is calculated
-     let bottomBorderY = initialPageHeight - 15; // Default position
+    let bottomBorderY = initialPageHeight - 15; // Default position
     let leftBorderY = bottomBorderY; // Track left border position
     let rightBorderY = bottomBorderY; // Track right border position
     // Vertical borders will be drawn later after calculating correct position
@@ -356,10 +359,10 @@ const contentHeight = pageHeight - marginY * 2;
     const consigneeMaxHeight = 24; // Significantly reduced
     const notifyMaxHeight = 24; // Significantly reduced
 
-     // SHIPPER section - very compact with more padding from top
+    // SHIPPER section - very compact with more padding from top
     doc.setFontSize(11);
     doc.setFont("arial", "bold");
-     doc.text("Shipper", leftX, y + 2); // Added +2 to prevent overlap with borderline while maintaining gap to content
+    doc.text("Shipper", leftX, y + 2); // Added +2 to prevent overlap with borderline while maintaining gap to content
     y += sectionPadding;
 
     const shipperStartY = y;
@@ -382,6 +385,7 @@ const contentHeight = pageHeight - marginY * 2;
             doc.setFont("arial", "bold");
           } else {
             doc.setFont("arial", "normal");
+            
           }
           doc.text(line, leftX, currentFieldY + index * 4);
         }
@@ -979,14 +983,14 @@ const contentHeight = pageHeight - marginY * 2;
       // Use houseBL as the main BL number if available, otherwise use generated BL number
       const blNumber =
         houseBLValue || blFormData?.blNumber || `RST/ NSACMB /25/00179`;
-// Format dates - Use manual dates from formData with fallbacks
+      // Format dates - Use manual dates from formData with fallbacks
 
-        const vesselName = blFormData?.vesselNo || shipment?.vesselName || "MV. EVER LYRIC 068E";
+      const vesselName = blFormData?.vesselNo || shipment?.vesselName || "MV. EVER LYRIC 068E";
 
       doc.text(`BL NO.`, page2MarginX + 5, page2MarginY + 40);
       doc.text(`: ${blNumber}`, page2MarginX + 70, page2MarginY + 40);
-     doc.text(`DATE OF ISSUE`, page2MarginX + 130, page2MarginY + 40);
-doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); // Use formData.dateOfIssue instead of dateOfIssue
+      doc.text(`DATE OF ISSUE`, page2MarginX + 130, page2MarginY + 40);
+      doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); // Use formData.dateOfIssue instead of dateOfIssue
 
       doc.text(`VESSEL NAME / VOYAGE NO`, page2MarginX + 5, page2MarginY + 50);
       doc.text(`: ${vesselName}`, page2MarginX + 70, page2MarginY + 50);
@@ -1020,18 +1024,18 @@ doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); //
 
 
         const getContainerHeight = (container: any) => {
-      let height = 20; // Base height for container number
-      
-      // Add height for each data field that has actual data (reduced from 7 to 5)
-      if (container.sealNumber && container.sealNumber !== "N/A") height += 5;
-      if (container.shippersealNo && container.shippersealNo !== "N/A") height += 5;
-      if (container.grossWt && container.grossWt !== "N/A") height += 5;
-      if (container.netWt && container.netWt !== "N/A") height += 5;
-      if (container.tareWt && container.tareWt !== "N/A") height += 5;
-      if (container.cbmWt && container.cbmWt !== "N/A") height += 5;
-      
-      return Math.max(height, 25); // Minimum height
-    };
+          let height = 20; // Base height for container number
+
+          // Add height for each data field that has actual data (reduced from 7 to 5)
+          if (container.sealNumber && container.sealNumber !== "N/A") height += 5;
+          if (container.shippersealNo && container.shippersealNo !== "N/A") height += 5;
+          if (container.grossWt && container.grossWt !== "N/A") height += 5;
+          if (container.netWt && container.netWt !== "N/A") height += 5;
+          if (container.tareWt && container.tareWt !== "N/A") height += 5;
+          if (container.cbmWt && container.cbmWt !== "N/A") height += 5;
+
+          return Math.max(height, 25); // Minimum height
+        };
 
         let currentContainerY = containerStartY;
 
@@ -1049,358 +1053,353 @@ doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); //
         doc.setFont("arial", "bold");
         doc.setFontSize(10);
 
+
+        containersToShow.forEach((container: any, index: number) => {
+          if (!container.containerNumber) return;
+
+          const containerHeight = getContainerHeight(container);
+          const yPos = currentContainerY;
+
+          // Container number - always show
+          doc.setFont("arial", "normal");
+          doc.setFontSize(11);
+          doc.text(container.containerNumber, containerStartX, yPos);
+
+          let lineOffset = 7;
+
+          // Carrier Seal - only show if data exists and is not "N/A"
+          if (container.sealNumber && container.sealNumber !== "N/A") {
+            const carrierSeals = container.sealNumber
+              ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
+              : "N/A";
+            if (carrierSeals !== "N/A") {
+              doc.setFontSize(9); // Increased from 8 to 9 for better readability
+              doc.text(`CARRIER SEAL: ${carrierSeals}`, containerStartX, yPos + lineOffset);
+              lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+            }
+          }
+
+          // Shipper Seal - add this section
+          if (container.shippersealNo && container.shippersealNo !== "N/A") {
+            const shipperSeals = container.shippersealNo
+              ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
+              : "N/A";
+            if (shipperSeals !== "N/A") {
+              doc.setFontSize(9); // Increased from 8 to 9 for better readability
+              doc.text(`SHIPPER SEAL: ${shipperSeals}`, containerStartX, yPos + lineOffset);
+              lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+            }
+          }
+
+          // Weights - use formatted values that include units
+          // Get the unit for this specific container (handle comma-separated units from multiple containers)
+          const containerUnit = container.unit
+            ? (container.unit.includes(',') ? container.unit.split(',')[0].trim() : container.unit)
+            : unit;
+
+          if (container.grossWt && container.grossWt !== "N/A") {
+            // Handle comma-separated values properly
+            const grossValues = container.grossWt.split(',').map((s: string) => s.trim());
+            const formattedGrossValues = grossValues.map((value: string) => {
+              const grossNum = parseFloat(value);
+              return !isNaN(grossNum) ?
+                `${grossNum} ${containerUnit}` :
+                value;
+            });
+
+            doc.setFontSize(8); // Reduced from 9 to 8
+            doc.text(`GROSS WT: ${formattedGrossValues.join(', ')}`, containerStartX, yPos + lineOffset);
+            lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+          }
+
+          if (container.netWt && container.netWt !== "N/A") {
+            // Handle comma-separated values properly
+            const netValues = container.netWt.split(',').map((s: string) => s.trim());
+            const formattedNetValues = netValues.map((value: string) => {
+              const netNum = parseFloat(value);
+              return !isNaN(netNum) ?
+                `${netNum} ${containerUnit}` :
+                value;
+            });
+
+            doc.setFontSize(8); // Reduced from 9 to 8
+            doc.text(`NET WT: ${formattedNetValues.join(', ')}`, containerStartX, yPos + lineOffset);
+            lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+          }
+
+          if (container.tareWt && container.tareWt !== "N/A") {
+            // Handle comma-separated values properly
+            const tareValues = container.tareWt.split(',').map((s: string) => s.trim());
+            const formattedTareValues = tareValues.map((value: string) => {
+              const tareNum = parseFloat(value);
+              return !isNaN(tareNum) ?
+                `${tareNum} ${containerUnit}` :
+                value;
+            });
+
+            doc.setFontSize(8); // Reduced from 9 to 8
+            doc.text(`TARE WT: ${formattedTareValues.join(', ')}`, containerStartX, yPos + lineOffset);
+            lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+          }
+
+          if (container.cbmWt && container.cbmWt !== "N/A") {
+            // Handle comma-separated values properly
+            const cbmValues = container.cbmWt.split(',').map((s: string) => s.trim());
+            const formattedCbmValues = cbmValues.map((value: string) => {
+              const cbmNum = parseFloat(value);
+              return !isNaN(cbmNum) ?
+                `${cbmNum} CBM` :
+                value;
+            });
+
+            doc.setFontSize(8); // Reduced from 9 to 8
+            doc.text(`CBM: ${formattedCbmValues.join(', ')}`, containerStartX, yPos + lineOffset);
+            lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
+          }
+
+          // Add spacing between containers (reduced from 8 to 5)
+          currentContainerY += containerHeight + 5;
+        });
+
+        containerY = currentContainerY;
+        rowEndY = Math.max(rowEndY, containerY);
+
+      } else {
+        // Table format for more than 3 containers
+        const tableStartY = containerY;
+        const tableWidth = 280; // Reduced table width to add proper margins
+        const tableX = (pageWidth - tableWidth) / 2;
+
+        // Check if any container has CBM values
+        const hasCbmValues = containersToShow.some((container: any) =>
+          container.cbmWt && container.cbmWt !== "N/A" && container.cbmWt.trim() !== ""
+        );
+
+        // Check if any container has TARE WT values
+        const hasTareValues = containersToShow.some((container: any) =>
+          container.tareWt && container.tareWt !== "N/A" && container.tareWt.trim() !== ""
+        );
+
+        // Define column widths - optimized for better space distribution with proper margins
+        // Reordered: Container No, Shipper Seal, Carrier Seal, Gross WT, Net WT, Tare WT, CBM
+        const col1Width = 60; // CONTAINER NO - adjusted for reduced table width
+        const col2Width = 50; // SHIPPER SEAL NO - second position
+        const col3Width = 50; // CARRIER SEAL NO - moved to third position (next to Shipper Seal)
+        const col4Width = 40; // GROSS WT - adjusted for reduced table width
+        const col5Width = 40; // NET WT - adjusted for reduced table width
+        const col6Width = hasTareValues ? 40 : 0; // TARE WT - only if values exist
+        const col7Width = hasCbmValues ? 30 : 0; // CBM - only if values exist
+        const remainingWidth = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width + col6Width + col7Width);
+
+        // Adjust seal columns if there's remaining space
+        const finalCol2Width = col2Width + Math.floor(remainingWidth / 2); // Shipper Seal
+        const finalCol3Width = col3Width + Math.floor(remainingWidth / 2); // Carrier Seal
+
+        // Table header with borders
+        doc.setFont("arial", "bold");
+        doc.setFontSize(9);
+
+        // Draw header background and borders
+        doc.rect(tableX, tableStartY - 2, tableWidth, 12);
+
+        // Header text (centered within each column) - reordered with Carrier Seal next to Shipper Seal
+        const cell1CenterX = tableX + col1Width / 2;
+        const cell2CenterX = tableX + col1Width + finalCol2Width / 2; // Shipper Seal
+        const cell3CenterX = tableX + col1Width + finalCol2Width + finalCol3Width / 2; // Carrier Seal
+        const cell4CenterX = tableX + col1Width + finalCol2Width + finalCol3Width + col4Width / 2; // Gross WT
+        const cell5CenterX = tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width / 2; // Net WT
+        const cell6CenterX = hasTareValues ? tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width / 2 : 0; // Tare WT
+        const cell7CenterX = hasCbmValues ? tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width / 2 : 0; // CBM
+
+        doc.text("CONTAINER NO.", cell1CenterX, tableStartY + 6, { align: "center" });
+        doc.text("SHIPPER SEAL", cell2CenterX, tableStartY + 6, { align: "center" });
+        doc.text("CARRIER SEAL", cell3CenterX, tableStartY + 6, { align: "center" }); // Moved to third position
+        doc.text("GROSS WT", cell4CenterX, tableStartY + 6, { align: "center" });
+        doc.text("NET WT", cell5CenterX, tableStartY + 6, { align: "center" });
+        if (hasTareValues) {
+          doc.text("TARE WT", cell6CenterX, tableStartY + 6, { align: "center" });
+        }
+        if (hasCbmValues) {
+          doc.text("CBM", cell7CenterX, tableStartY + 6, { align: "center" });
+        }
+
+        // Draw vertical lines for header - updated for new column order with Carrier Seal next to Shipper Seal
+        doc.line(tableX + col1Width, tableStartY - 2, tableX + col1Width, tableStartY + 10);
+        doc.line(tableX + col1Width + finalCol2Width, tableStartY - 2, tableX + col1Width + finalCol2Width, tableStartY + 10);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width, tableStartY + 10);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, tableStartY + 10);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, tableStartY + 10);
+        if (hasTareValues) {
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, tableStartY + 10);
+        }
+        if (hasCbmValues) {
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, tableStartY + 10);
+        }
+
+        containerY = tableStartY + 12;
+
         // Variables to calculate totals
         let totalGrossWt = 0;
         let totalNetWt = 0;
-          let totalTareWt = 0; // NEW
-        let totalCbmWt = 0; // NEW
-
-      containersToShow.forEach((container: any, index: number) => {
-  if (!container.containerNumber) return;
-
-  const containerHeight = getContainerHeight(container);
-  const yPos = currentContainerY;
-
-  // Container number - always show
-  doc.setFont("arial", "normal");
-  doc.setFontSize(11);
-  doc.text(container.containerNumber, containerStartX, yPos);
-
-  let lineOffset = 7;
-  
-  // Carrier Seal - only show if data exists and is not "N/A"
-  if (container.sealNumber && container.sealNumber !== "N/A") {
-    const carrierSeals = container.sealNumber 
-      ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
-      : "N/A";
-    if (carrierSeals !== "N/A") {
-       doc.setFontSize(9); // Increased from 8 to 9 for better readability
-      doc.text(`CARRIER SEAL: ${carrierSeals}`, containerStartX, yPos + lineOffset);
-       lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-    }
-  }
-
-  // Shipper Seal - add this section
-  if (container.shippersealNo && container.shippersealNo !== "N/A") {
-    const shipperSeals = container.shippersealNo 
-      ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
-      : "N/A";
-    if (shipperSeals !== "N/A") {
-       doc.setFontSize(9); // Increased from 8 to 9 for better readability
-      doc.text(`SHIPPER SEAL: ${shipperSeals}`, containerStartX, yPos + lineOffset);
-       lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-    }
-  }
-  
-  // Weights - use formatted values that include units
-  // Get the unit for this specific container (handle comma-separated units from multiple containers)
-  const containerUnit = container.unit 
-    ? (container.unit.includes(',') ? container.unit.split(',')[0].trim() : container.unit)
-    : unit;
-  
-  if (container.grossWt && container.grossWt !== "N/A") {
-    // Handle comma-separated values properly
-    const grossValues = container.grossWt.split(',').map((s: string) => s.trim());
-    const formattedGrossValues = grossValues.map((value: string) => {
-      const grossNum = parseFloat(value);
-      return !isNaN(grossNum) ? 
-        `${grossNum} ${containerUnit}` : 
-        value;
-    });
-    
-     doc.setFontSize(8); // Reduced from 9 to 8
-    doc.text(`GROSS WT: ${formattedGrossValues.join(', ')}`, containerStartX, yPos + lineOffset);
-     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-  }
-
-  if (container.netWt && container.netWt !== "N/A") {
-    // Handle comma-separated values properly
-    const netValues = container.netWt.split(',').map((s: string) => s.trim());
-    const formattedNetValues = netValues.map((value: string) => {
-      const netNum = parseFloat(value);
-      return !isNaN(netNum) ? 
-        `${netNum} ${containerUnit}` : 
-        value;
-    });
-    
-     doc.setFontSize(8); // Reduced from 9 to 8
-    doc.text(`NET WT: ${formattedNetValues.join(', ')}`, containerStartX, yPos + lineOffset);
-     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-  }
-
-  if (container.tareWt && container.tareWt !== "N/A") {
-    // Handle comma-separated values properly
-    const tareValues = container.tareWt.split(',').map((s: string) => s.trim());
-    const formattedTareValues = tareValues.map((value: string) => {
-      const tareNum = parseFloat(value);
-      return !isNaN(tareNum) ? 
-        `${tareNum} ${containerUnit}` : 
-        value;
-    });
-    
-     doc.setFontSize(8); // Reduced from 9 to 8
-    doc.text(`TARE WT: ${formattedTareValues.join(', ')}`, containerStartX, yPos + lineOffset);
-     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-  }
-
-  if (container.cbmWt && container.cbmWt !== "N/A") {
-    // Handle comma-separated values properly
-    const cbmValues = container.cbmWt.split(',').map((s: string) => s.trim());
-    const formattedCbmValues = cbmValues.map((value: string) => {
-      const cbmNum = parseFloat(value);
-      return !isNaN(cbmNum) ? 
-        `${cbmNum} CBM` : 
-        value;
-    });
-    
-     doc.setFontSize(8); // Reduced from 9 to 8
-    doc.text(`CBM: ${formattedCbmValues.join(', ')}`, containerStartX, yPos + lineOffset);
-     lineOffset += 6; // Increased from 5 to 6 to accommodate larger font
-  }
-
-  // Add spacing between containers (reduced from 8 to 5)
-  currentContainerY += containerHeight + 5;
-});
-
-    containerY = currentContainerY;
-    rowEndY = Math.max(rowEndY, containerY);
-
-  } else {
-    // Table format for more than 3 containers
-    const tableStartY = containerY;
-    const tableWidth = 280; // Reduced table width to add proper margins
-    const tableX = (pageWidth - tableWidth) / 2;
-    
-    // Check if any container has CBM values
-    const hasCbmValues = containersToShow.some((container: any) => 
-      container.cbmWt && container.cbmWt !== "N/A" && container.cbmWt.trim() !== ""
-    );
-    
-    // Check if any container has TARE WT values
-    const hasTareValues = containersToShow.some((container: any) => 
-      container.tareWt && container.tareWt !== "N/A" && container.tareWt.trim() !== ""
-    );
-    
-    // Define column widths - optimized for better space distribution with proper margins
-    // Reordered: Container No, Shipper Seal, Carrier Seal, Gross WT, Net WT, Tare WT, CBM
-    const col1Width = 60; // CONTAINER NO - adjusted for reduced table width
-    const col2Width = 50; // SHIPPER SEAL NO - second position
-    const col3Width = 50; // CARRIER SEAL NO - moved to third position (next to Shipper Seal)
-    const col4Width = 40; // GROSS WT - adjusted for reduced table width
-    const col5Width = 40; // NET WT - adjusted for reduced table width
-    const col6Width = hasTareValues ? 40 : 0; // TARE WT - only if values exist
-    const col7Width = hasCbmValues ? 30 : 0; // CBM - only if values exist
-    const remainingWidth = tableWidth - (col1Width + col2Width + col3Width + col4Width + col5Width + col6Width + col7Width);
-    
-    // Adjust seal columns if there's remaining space
-    const finalCol2Width = col2Width + Math.floor(remainingWidth / 2); // Shipper Seal
-    const finalCol3Width = col3Width + Math.floor(remainingWidth / 2); // Carrier Seal
-
-    // Table header with borders
-    doc.setFont("arial", "bold");
-    doc.setFontSize(9);
-
-    // Draw header background and borders
-    doc.rect(tableX, tableStartY - 2, tableWidth, 12);
-
-    // Header text (centered within each column) - reordered with Carrier Seal next to Shipper Seal
-    const cell1CenterX = tableX + col1Width / 2;
-    const cell2CenterX = tableX + col1Width + finalCol2Width / 2; // Shipper Seal
-    const cell3CenterX = tableX + col1Width + finalCol2Width + finalCol3Width / 2; // Carrier Seal
-    const cell4CenterX = tableX + col1Width + finalCol2Width + finalCol3Width + col4Width / 2; // Gross WT
-    const cell5CenterX = tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width / 2; // Net WT
-    const cell6CenterX = hasTareValues ? tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width / 2 : 0; // Tare WT
-    const cell7CenterX = hasCbmValues ? tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width / 2 : 0; // CBM
-
-    doc.text("CONTAINER NO.", cell1CenterX, tableStartY + 6, { align: "center" });
-    doc.text("SHIPPER SEAL", cell2CenterX, tableStartY + 6, { align: "center" });
-    doc.text("CARRIER SEAL", cell3CenterX, tableStartY + 6, { align: "center" }); // Moved to third position
-    doc.text("GROSS WT", cell4CenterX, tableStartY + 6, { align: "center" });
-    doc.text("NET WT", cell5CenterX, tableStartY + 6, { align: "center" });
-    if (hasTareValues) {
-      doc.text("TARE WT", cell6CenterX, tableStartY + 6, { align: "center" });
-    }
-    if (hasCbmValues) {
-      doc.text("CBM", cell7CenterX, tableStartY + 6, { align: "center" });
-    }
-
-    // Draw vertical lines for header - updated for new column order with Carrier Seal next to Shipper Seal
-    doc.line(tableX + col1Width, tableStartY - 2, tableX + col1Width, tableStartY + 10);
-    doc.line(tableX + col1Width + finalCol2Width, tableStartY - 2, tableX + col1Width + finalCol2Width, tableStartY + 10);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width, tableStartY + 10);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, tableStartY + 10);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, tableStartY + 10);
-    if (hasTareValues) {
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, tableStartY + 10);
-    }
-    if (hasCbmValues) {
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, tableStartY - 2, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, tableStartY + 10);
-    }
-
-    containerY = tableStartY + 12;
-
-    // Variables to calculate totals
-    let totalGrossWt = 0;
-    let totalNetWt = 0;
-    let totalTareWt = 0;
-    let totalCbmWt = 0;
+        let totalTareWt = 0;
+        let totalCbmWt = 0;
 
         // Container data rows with borders
-    doc.setFont("arial", "normal");
-    doc.setFontSize(9);
+        doc.setFont("arial", "normal");
+        doc.setFontSize(9);
 
-    containersToShow.forEach((container: any, index: number) => {
-      if (!container.containerNumber) return;
+        containersToShow.forEach((container: any, index: number) => {
+          if (!container.containerNumber) return;
 
-      const rowY = containerY;
+          const rowY = containerY;
 
-      // Calculate dynamic row height based on seal text length
-      let rowHeight = 12; // Default row height
-      const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A") 
-        ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
-        : "-";
-      const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A") 
-        ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
-        : "-";
-      
-      // Check if seal text needs wrapping for both columns - updated for new order
-      const maxShipperSealWidth = finalCol2Width - 4; // Shipper Seal in second position
-      const maxCarrierSealWidth = finalCol3Width - 4; // Carrier Seal now in third position
-      const carrierTextWidth = doc.getTextWidth(carrierSeals);
-      const shipperTextWidth = doc.getTextWidth(shipperSeals);
-      
-      if (carrierTextWidth > maxCarrierSealWidth || shipperTextWidth > maxShipperSealWidth) {
-        rowHeight = 16; // Increase row height for wrapped text
-      }
+          // Calculate dynamic row height based on seal text length
+          let rowHeight = 12; // Default row height
+          const carrierSeals = (container.sealNumber && container.sealNumber !== "N/A")
+            ? container.sealNumber.split(',').map((s: string) => s.trim()).join(', ')
+            : "-";
+          const shipperSeals = (container.shippersealNo && container.shippersealNo !== "N/A")
+            ? container.shippersealNo.split(',').map((s: string) => s.trim()).join(', ')
+            : "-";
 
-      // Draw row borders with dynamic height
-      doc.rect(tableX, rowY, tableWidth, rowHeight);
+          // Check if seal text needs wrapping for both columns - updated for new order
+          const maxShipperSealWidth = finalCol2Width - 4; // Shipper Seal in second position
+          const maxCarrierSealWidth = finalCol3Width - 4; // Carrier Seal now in third position
+          const carrierTextWidth = doc.getTextWidth(carrierSeals);
+          const shipperTextWidth = doc.getTextWidth(shipperSeals);
 
-      // Draw vertical lines for data rows with dynamic height - updated for new column order with Carrier Seal next to Shipper Seal
-      doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + finalCol2Width, rowY, tableX + col1Width + finalCol2Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, rowY + rowHeight);
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, rowY + rowHeight);
-      if (hasTareValues) {
-        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, rowY + rowHeight);
-      }
-      if (hasCbmValues) {
-        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, rowY + rowHeight);
-      }
+          if (carrierTextWidth > maxCarrierSealWidth || shipperTextWidth > maxShipperSealWidth) {
+            rowHeight = 16; // Increase row height for wrapped text
+          }
+
+          // Draw row borders with dynamic height
+          doc.rect(tableX, rowY, tableWidth, rowHeight);
+
+          // Draw vertical lines for data rows with dynamic height - updated for new column order with Carrier Seal next to Shipper Seal
+          doc.line(tableX + col1Width, rowY, tableX + col1Width, rowY + rowHeight);
+          doc.line(tableX + col1Width + finalCol2Width, rowY, tableX + col1Width + finalCol2Width, rowY + rowHeight);
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width, rowY + rowHeight);
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, rowY + rowHeight);
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, rowY + rowHeight);
+          if (hasTareValues) {
+            doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, rowY + rowHeight);
+          }
+          if (hasCbmValues) {
+            doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, rowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, rowY + rowHeight);
+          }
 
 
           // Container data (centered in each column)
-      doc.text(container.containerNumber || "N/A", cell1CenterX, rowY + 8, { align: "center" });
+          doc.text(container.containerNumber || "N/A", cell1CenterX, rowY + 8, { align: "center" });
 
-        // Parse and add to totals
-      const grossWtNum = parseFloat(container.grossWt) || 0;
-      const netWtNum = parseFloat(container.netWt) || 0;
-      const tareWtNum = parseFloat(container.tareWt) || 0;
-      const cbmWtNum = parseFloat(container.cbmWt) || 0;
-      
-      totalGrossWt += grossWtNum;
-      totalNetWt += netWtNum;
-      totalTareWt += tareWtNum;
-      totalCbmWt += cbmWtNum;
+          // Parse and add to totals
+          const grossWtNum = parseFloat(container.grossWt) || 0;
+          const netWtNum = parseFloat(container.netWt) || 0;
+          const tareWtNum = parseFloat(container.tareWt) || 0;
+          const cbmWtNum = parseFloat(container.cbmWt) || 0;
+
+          totalGrossWt += grossWtNum;
+          totalNetWt += netWtNum;
+          totalTareWt += tareWtNum;
+          totalCbmWt += cbmWtNum;
 
 
           // Only show values if they exist and are not "N/A"
-      const grossWt = (container.grossWt && container.grossWt !== "N/A") ? container.grossWt : "-";
-      const netWt = (container.netWt && container.netWt !== "N/A") ? container.netWt : "-";
-      const tareWt = (container.tareWt && container.tareWt !== "N/A") ? container.tareWt : "-";
-      const cbmWt = (container.cbmWt && container.cbmWt !== "N/A") ? container.cbmWt : "-";
+          const grossWt = (container.grossWt && container.grossWt !== "N/A") ? container.grossWt : "-";
+          const netWt = (container.netWt && container.netWt !== "N/A") ? container.netWt : "-";
+          const tareWt = (container.tareWt && container.tareWt !== "N/A") ? container.tareWt : "-";
+          const cbmWt = (container.cbmWt && container.cbmWt !== "N/A") ? container.cbmWt : "-";
 
-      // Handle SHIPPER SEAL text wrapping - in second position
-      if (shipperTextWidth > maxShipperSealWidth) {
-        const wrappedShipperText = doc.splitTextToSize(shipperSeals, maxShipperSealWidth);
-        if (wrappedShipperText.length === 1) {
-          doc.text(wrappedShipperText[0], cell2CenterX, rowY + 8, { align: "center" });
-        } else {
-          doc.text(wrappedShipperText[0], cell2CenterX, rowY + 6, { align: "center" });
-          if (wrappedShipperText[1]) {
-            doc.text(wrappedShipperText[1], cell2CenterX, rowY + 10, { align: "center" });
+          // Handle SHIPPER SEAL text wrapping - in second position
+          if (shipperTextWidth > maxShipperSealWidth) {
+            const wrappedShipperText = doc.splitTextToSize(shipperSeals, maxShipperSealWidth);
+            if (wrappedShipperText.length === 1) {
+              doc.text(wrappedShipperText[0], cell2CenterX, rowY + 8, { align: "center" });
+            } else {
+              doc.text(wrappedShipperText[0], cell2CenterX, rowY + 6, { align: "center" });
+              if (wrappedShipperText[1]) {
+                doc.text(wrappedShipperText[1], cell2CenterX, rowY + 10, { align: "center" });
+              }
+            }
+          } else {
+            doc.text(shipperSeals, cell2CenterX, rowY + 8, { align: "center" });
           }
-        }
-      } else {
-        doc.text(shipperSeals, cell2CenterX, rowY + 8, { align: "center" });
-      }
 
-      // Handle CARRIER SEAL text wrapping - now in third position
-      if (carrierTextWidth > maxCarrierSealWidth) {
-        const wrappedCarrierText = doc.splitTextToSize(carrierSeals, maxCarrierSealWidth);
-        if (wrappedCarrierText.length === 1) {
-          doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 8, { align: "center" });
-      } else {
-          doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 6, { align: "center" });
-          if (wrappedCarrierText[1]) {
-            doc.text(wrappedCarrierText[1], cell3CenterX, rowY + 10, { align: "center" });
+          // Handle CARRIER SEAL text wrapping - now in third position
+          if (carrierTextWidth > maxCarrierSealWidth) {
+            const wrappedCarrierText = doc.splitTextToSize(carrierSeals, maxCarrierSealWidth);
+            if (wrappedCarrierText.length === 1) {
+              doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 8, { align: "center" });
+            } else {
+              doc.text(wrappedCarrierText[0], cell3CenterX, rowY + 6, { align: "center" });
+              if (wrappedCarrierText[1]) {
+                doc.text(wrappedCarrierText[1], cell3CenterX, rowY + 10, { align: "center" });
+              }
+            }
+          } else {
+            doc.text(carrierSeals, cell3CenterX, rowY + 8, { align: "center" });
           }
-        }
-      } else {
-        doc.text(carrierSeals, cell3CenterX, rowY + 8, { align: "center" });
-      }
 
-      // Weight and CBM data - shifted positions
-      doc.text(grossWt, cell4CenterX, rowY + 8, { align: "center" });
-      doc.text(netWt, cell5CenterX, rowY + 8, { align: "center" });
-      if (hasTareValues) {
-        doc.text(tareWt, cell6CenterX, rowY + 8, { align: "center" });
-      }
-      if (hasCbmValues) {
-        doc.text(cbmWt, cell7CenterX, rowY + 8, { align: "center" });
-      }
+          // Weight and CBM data - shifted positions
+          doc.text(grossWt, cell4CenterX, rowY + 8, { align: "center" });
+          doc.text(netWt, cell5CenterX, rowY + 8, { align: "center" });
+          if (hasTareValues) {
+            doc.text(tareWt, cell6CenterX, rowY + 8, { align: "center" });
+          }
+          if (hasCbmValues) {
+            doc.text(cbmWt, cell7CenterX, rowY + 8, { align: "center" });
+          }
 
-      containerY += rowHeight; // Use dynamic row height
-    });
+          containerY += rowHeight; // Use dynamic row height
+        });
 
         // Add TOTAL row at the bottom
-    const totalRowY = containerY;
-    doc.rect(tableX, totalRowY, tableWidth, 12);
+        const totalRowY = containerY;
+        doc.rect(tableX, totalRowY, tableWidth, 12);
 
 
-         // Draw vertical lines for total row - updated for new column order with Carrier Seal next to Shipper Seal
-    doc.line(tableX + col1Width, totalRowY, tableX + col1Width, totalRowY + 12);
-    doc.line(tableX + col1Width + finalCol2Width, totalRowY, tableX + col1Width + finalCol2Width, totalRowY + 12);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width, totalRowY + 12);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, totalRowY + 12);
-    doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, totalRowY + 12);
-    if (hasTareValues) {
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, totalRowY + 12);
-    }
-    if (hasCbmValues) {
-      doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, totalRowY + 12);
-    }
+        // Draw vertical lines for total row - updated for new column order with Carrier Seal next to Shipper Seal
+        doc.line(tableX + col1Width, totalRowY, tableX + col1Width, totalRowY + 12);
+        doc.line(tableX + col1Width + finalCol2Width, totalRowY, tableX + col1Width + finalCol2Width, totalRowY + 12);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width, totalRowY + 12);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width, totalRowY + 12);
+        doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width, totalRowY + 12);
+        if (hasTareValues) {
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width, totalRowY + 12);
+        }
+        if (hasCbmValues) {
+          doc.line(tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, totalRowY, tableX + col1Width + finalCol2Width + finalCol3Width + col4Width + col5Width + col6Width + col7Width, totalRowY + 12);
+        }
 
-    doc.setFont("arial", "bold");
-    doc.text(`TOTAL: ${containersToShow.length} CONTAINERS`, cell1CenterX, totalRowY + 8, { align: "center" });
-       // Only show totals for fields that have data - updated for new column order
-    const showGrossTotal = totalGrossWt > 0;
-    const showNetTotal = totalNetWt > 0;
-    const showTareTotal = totalTareWt > 0;
-    const showCbmTotal = totalCbmWt > 0;
+        doc.setFont("arial", "bold");
+        doc.text(`TOTAL: ${containersToShow.length} CONTAINERS`, cell1CenterX, totalRowY + 8, { align: "center" });
+        // Only show totals for fields that have data - updated for new column order
+        const showGrossTotal = totalGrossWt > 0;
+        const showNetTotal = totalNetWt > 0;
+        const showTareTotal = totalTareWt > 0;
+        const showCbmTotal = totalCbmWt > 0;
 
-    // Shipper Seal column should be blank in total row
-    doc.text("", cell2CenterX, totalRowY + 8, { align: "center" });
-    
-    // Carrier Seal column should be blank in total row
-    doc.text("", cell3CenterX, totalRowY + 8, { align: "center" });
-    
-    // Weight and CBM totals in correct positions with units
-    doc.text(showGrossTotal ? `${totalGrossWt.toFixed(2)} KGS` : "-", cell4CenterX, totalRowY + 8, { align: "center" });
-    doc.text(showNetTotal ? `${totalNetWt.toFixed(2)} KGS` : "-", cell5CenterX, totalRowY + 8, { align: "center" });
-    if (hasTareValues) {
-      doc.text(showTareTotal ? `${totalTareWt.toFixed(2)} KGS` : "-", cell6CenterX, totalRowY + 8, { align: "center" });
-    }
-    if (hasCbmValues) {
-      doc.text(showCbmTotal ? `${totalCbmWt.toFixed(3)} CBM` : "-", cell7CenterX, totalRowY + 8, { align: "center" });
-    }
+        // Shipper Seal column should be blank in total row
+        doc.text("", cell2CenterX, totalRowY + 8, { align: "center" });
 
-    containerY += 12;
+        // Carrier Seal column should be blank in total row
+        doc.text("", cell3CenterX, totalRowY + 8, { align: "center" });
+
+        // Weight and CBM totals in correct positions with units
+        doc.text(showGrossTotal ? `${totalGrossWt.toFixed(2)} KGS` : "-", cell4CenterX, totalRowY + 8, { align: "center" });
+        doc.text(showNetTotal ? `${totalNetWt.toFixed(2)} KGS` : "-", cell5CenterX, totalRowY + 8, { align: "center" });
+        if (hasTareValues) {
+          doc.text(showTareTotal ? `${totalTareWt.toFixed(2)} KGS` : "-", cell6CenterX, totalRowY + 8, { align: "center" });
+        }
+        if (hasCbmValues) {
+          doc.text(showCbmTotal ? `${totalCbmWt.toFixed(3)} CBM` : "-", cell7CenterX, totalRowY + 8, { align: "center" });
+        }
+
+        containerY += 12;
       }
     }
 
-    
+
 
     // Container weights are shown individually with each container, no need for overall weights
 
@@ -1469,12 +1468,12 @@ doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); //
       });
     }
 
-     if (unit) {
+    if (unit) {
       doc.setFont("arial", "bold");
       doc.setFontSize(9);
     }
 
-    
+
 
     // Get freight payable option and related port info
     const freightPayableAt = blFormData?.freightPayableAt || "";
@@ -1482,8 +1481,8 @@ doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); //
       freightPayableAt === "prepaid"
         ? '"FREIGHT PREPAID"'
         : freightPayableAt === "postpaid"
-        ? '"FREIGHT POSTPAID"'
-        : '"FREIGHT PREPAID"';
+          ? '"FREIGHT POSTPAID"'
+          : '"FREIGHT PREPAID"';
 
     // Get free days and detention rate from shipment data - Use only POD (destination port) values
     const freeDays = shipment?.podFreeDays || "";
@@ -1491,144 +1490,144 @@ doc.text(`: ${formData.dateOfIssue}`, page2MarginX + 180, page2MarginY + 40); //
 
     // Additional block under description - improved spacing and alignment
     // Additional block under description - improved spacing and alignment
-let addY = firstRowTextY + 50;
+    let addY = firstRowTextY + 50;
 
-// Calculate container totals for display in the right area
-let totalGrossWt = 0;
-let totalNetWt = 0;
-let totalTareWt = 0;
-let totalCbm = 0;
-let hasValidValues = false;
+    // Calculate container totals for display in the right area
+    let totalGrossWt = 0;
+    let totalNetWt = 0;
+    let totalTareWt = 0;
+    let totalCbm = 0;
+    let hasValidValues = false;
 
-// Calculate totals from all containers
-containersToShow.forEach((container: any) => {
-  const grossWt = parseFloat(container.grossWt) || 0;
-  const netWt = parseFloat(container.netWt) || 0;
-  const tareWt = parseFloat(container.tareWt) || 0;
-  const cbm = parseFloat(container.cbmWt) || 0;
-  
-  if (grossWt > 0 || netWt > 0 || tareWt > 0 || cbm > 0) {
-    hasValidValues = true;
-  }
-  
-  totalGrossWt += grossWt;
-  totalNetWt += netWt;
-  totalTareWt += tareWt;
-  totalCbm += cbm;
-});
+    // Calculate totals from all containers
+    containersToShow.forEach((container: any) => {
+      const grossWt = parseFloat(container.grossWt) || 0;
+      const netWt = parseFloat(container.netWt) || 0;
+      const tareWt = parseFloat(container.tareWt) || 0;
+      const cbm = parseFloat(container.cbmWt) || 0;
 
-// Display container weight and CBM information in the right area (marked with red oval in image)
-if (hasValidValues) {
-  const rightAreaX = marginX + 220; // Moved further to the right as requested
-  let rightAreaY = firstRowTextY + 20; // Moved down a bit as requested
-  
-  doc.setFont("arial", "bold");
-  doc.setFontSize(10);
-  
-  // Display container weights and CBM information
-  if (totalGrossWt > 0) {
-    doc.text(`GROSS WT: ${totalGrossWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
-    rightAreaY += 4;
-  }
+      if (grossWt > 0 || netWt > 0 || tareWt > 0 || cbm > 0) {
+        hasValidValues = true;
+      }
 
-  if (totalNetWt > 0) {
-    doc.text(`NET WT: ${totalNetWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
-    rightAreaY += 4;
-  }
-  
-  if (totalTareWt > 0) {
-    doc.text(`TARE WT: ${totalTareWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
-    rightAreaY += 4;
-  }
-  
-  if (totalCbm > 0) {
-    doc.text(`CBM: ${totalCbm.toFixed(3)} CBM`, rightAreaX, rightAreaY);
-    rightAreaY += 4;
-  }
-}
+      totalGrossWt += grossWt;
+      totalNetWt += netWt;
+      totalTareWt += tareWt;
+      totalCbm += cbm;
+    });
 
-// Add "Shipped on Board" section just above freight text
-doc.setFont("arial", "bold");
-doc.setFontSize(9);
-doc.text("SHIPPED ONBOARD :", marginX + 110, addY);
-doc.text(shippedOnboardDate, marginX + 110 + 40, addY); // Use the manual shipped on board date
-addY += 8;
+    // Display container weight and CBM information in the right area (marked with red oval in image)
+    if (hasValidValues) {
+      const rightAreaX = marginX + 220; // Moved further to the right as requested
+      let rightAreaY = firstRowTextY + 20; // Moved down a bit as requested
 
-// Freight text
-doc.setFont("arial", "normal");
-doc.setFontSize(9);
-doc.text(freightText, marginX + 110, addY);
-addY += 8;
+      doc.setFont("arial", "bold");
+      doc.setFontSize(10);
 
+      // Display container weights and CBM information
+      if (totalGrossWt > 0) {
+        doc.text(`GROSS WT: ${totalGrossWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+        rightAreaY += 4;
+      }
 
+      if (totalNetWt > 0) {
+        doc.text(`NET WT: ${totalNetWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+        rightAreaY += 4;
+      }
 
+      if (totalTareWt > 0) {
+        doc.text(`TARE WT: ${totalTareWt.toFixed(3)} KGS`, rightAreaX, rightAreaY);
+        rightAreaY += 4;
+      }
 
-   // -----------------------------------------
-// CHARGES & FEES SECTION (CLEAN + NO BOLD)
-// -----------------------------------------
-
-// Remove bold entirely
-doc.setFont("arial", "normal");
-
-// Dynamic font size based on container count
-const chargesFontSize = actualContainerCount > 3 ? 9 : 8;
-doc.setFontSize(chargesFontSize);
-
-let chargeLines: string[] = [];
-
-// If textarea has input
-if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
-  
-  // 1) Split input by line breaks
-  let chargesLines = blFormData.chargesAndFees
-    .split("\n")
-    .filter((line: string) => line.trim());
-
-  // 2) Auto-split lines that have “USD …” on same line
-  let finalCharges: string[] = [];
-
-  chargesLines.forEach((line: string) => {
-    if (line.includes("USD") && !line.trim().startsWith("USD")) {
-      // Example: "FREE 22 DAYS ... USD 85/DAY/TANK"
-      const parts = line.split("USD");
-
-      finalCharges.push(parts[0].trim());            // FIRST LINE
-      finalCharges.push(`USD ${parts[1].trim()}`);   // SECOND LINE
-    } else {
-      finalCharges.push(line.trim());
+      if (totalCbm > 0) {
+        doc.text(`CBM: ${totalCbm.toFixed(3)} CBM`, rightAreaX, rightAreaY);
+        rightAreaY += 4;
+      }
     }
-  });
 
-  chargeLines.push(...finalCharges);
+    // Add "Shipped on Board" section just above freight text
+    doc.setFont("arial", "bold");
+    doc.setFontSize(9);
+    doc.text("SHIPPED ONBOARD :", marginX + 110, addY);
+    doc.text(shippedOnboardDate, marginX + 110 + 40, addY); // Use the manual shipped on board date
+    addY += 8;
 
-} else {
-  // Empty textarea → show nothing
-  chargeLines = [];
-}
+    // Freight text
+    doc.setFont("arial", "normal");
+    doc.setFontSize(9);
+    doc.text(freightText, marginX + 110, addY);
+    addY += 8;
 
-// -----------------------------------------
-// RENDER CHARGES LINES
-// -----------------------------------------
-chargeLines.forEach((t: string) => {
-  const normalized = normalizePdfText(t);
 
-  // Reset character spacing (fixes jsPDF spacing bugs)
-  if ((doc as any).setCharSpace) {
-    (doc as any).setCharSpace(0);
-  }
 
-  // Draw text line
-  doc.text(normalized, marginX + 110, addY);
 
-  // Vertical spacing between lines
-  const spacing = actualContainerCount > 3 ? 6 : 7;
-  addY += spacing;
-});
+    // -----------------------------------------
+    // CHARGES & FEES SECTION (CLEAN + NO BOLD)
+    // -----------------------------------------
 
-// Extra spacing to avoid overlap
-addY += actualContainerCount > 3 ? 10 : 8;
+    // Remove bold entirely
+    doc.setFont("arial", "normal");
 
-rowEndY = Math.max(rowEndY, addY);
+    // Dynamic font size based on container count
+    const chargesFontSize = actualContainerCount > 3 ? 9 : 8;
+    doc.setFontSize(chargesFontSize);
+
+    let chargeLines: string[] = [];
+
+    // If textarea has input
+    if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+
+      // 1) Split input by line breaks
+      let chargesLines = blFormData.chargesAndFees
+        .split("\n")
+        .filter((line: string) => line.trim());
+
+      // 2) Auto-split lines that have “USD …” on same line
+      let finalCharges: string[] = [];
+
+      chargesLines.forEach((line: string) => {
+        if (line.includes("USD") && !line.trim().startsWith("USD")) {
+          // Example: "FREE 22 DAYS ... USD 85/DAY/TANK"
+          const parts = line.split("USD");
+
+          finalCharges.push(parts[0].trim());            // FIRST LINE
+          finalCharges.push(`USD ${parts[1].trim()}`);   // SECOND LINE
+        } else {
+          finalCharges.push(line.trim());
+        }
+      });
+
+      chargeLines.push(...finalCharges);
+
+    } else {
+      // Empty textarea → show nothing
+      chargeLines = [];
+    }
+
+    // -----------------------------------------
+    // RENDER CHARGES LINES
+    // -----------------------------------------
+    chargeLines.forEach((t: string) => {
+      const normalized = normalizePdfText(t);
+
+      // Reset character spacing (fixes jsPDF spacing bugs)
+      if ((doc as any).setCharSpace) {
+        (doc as any).setCharSpace(0);
+      }
+
+      // Draw text line
+      doc.text(normalized, marginX + 110, addY);
+
+      // Vertical spacing between lines
+      const spacing = actualContainerCount > 3 ? 6 : 7;
+      addY += spacing;
+    });
+
+    // Extra spacing to avoid overlap
+    addY += actualContainerCount > 3 ? 10 : 8;
+
+    rowEndY = Math.max(rowEndY, addY);
 
     // // Shift the right-side Gross/Net weight further right to avoid collision with product text
     // if (grossKgsLong) doc.text(`GROSS WT. ${grossKgsLong}`, 220, firstRowTextY + 6);
@@ -1654,26 +1653,26 @@ rowEndY = Math.max(rowEndY, addY);
 
     // Calculate terms section positioning early for border calculations
     const termsBoxTop = bottomBoxTop + bottomBoxHeight;
-     // Terms box height varies based on container count - increased for 1 container to prevent cutoff
-     let termsBoxHeight;
-     if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
-       // Height varies based on container count - more height for 1 container
-       const chargesLength = blFormData?.chargesAndFees?.length || 0;
-    if (actualContainerCount === 1) {
-         termsBoxHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+    // Terms box height varies based on container count - increased for 1 container to prevent cutoff
+    let termsBoxHeight;
+    if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+      // Height varies based on container count - more height for 1 container
+      const chargesLength = blFormData?.chargesAndFees?.length || 0;
+      if (actualContainerCount === 1) {
+        termsBoxHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+      } else {
+        termsBoxHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
+      }
     } else {
-         termsBoxHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
-       }
-     } else {
-       // Height varies based on container count - more height for 1 container
-       if (actualContainerCount === 1) {
-         termsBoxHeight = 160; // Increased height for 1 container
-       } else {
-         termsBoxHeight = 140; // Standard height for other container counts
-       }
-     }
+      // Height varies based on container count - more height for 1 container
+      if (actualContainerCount === 1) {
+        termsBoxHeight = 160; // Increased height for 1 container
+      } else {
+        termsBoxHeight = 140; // Standard height for other container counts
+      }
+    }
 
-     // Bottom border position will be calculated after terms content is processed
+    // Bottom border position will be calculated after terms content is processed
 
     doc.setLineWidth(0.5);
     // Draw bottom box without bottom edge so there is only one line between this box and the terms box below
@@ -1846,13 +1845,13 @@ rowEndY = Math.max(rowEndY, addY);
     doc.line(colNUM_X, bottomBoxTop + 18, colRightEnd, bottomBoxTop + 18);
 
     // Place and date of issue - right aligned with extra padding from border
-// Place and date of issue - right aligned with extra padding from border
-// Place and date of issue - right aligned with extra padding from border
-doc.text(formData.dateOfIssue, rightSectionRight, bottomBoxTop + 16, { align: "right" });    // Terms block moved below the bottom grid (new section)
+    // Place and date of issue - right aligned with extra padding from border
+    // Place and date of issue - right aligned with extra padding from border
+    doc.text(formData.dateOfIssue, rightSectionRight, bottomBoxTop + 16, { align: "right" });    // Terms block moved below the bottom grid (new section)
     // Using fixed terms box height calculated earlier
     // Draw the top separator only under Delivery Agent + Freight sections (exclude rightmost section)
     doc.line(marginX, termsBoxTop, colNUM_X, termsBoxTop);
-     // Note: Vertical separator will be drawn after bottom border position is calculated
+    // Note: Vertical separator will be drawn after bottom border position is calculated
     // Remove left and right vertical borders of terms box as requested
     // Omit bottom edge of terms box so only the outer page border shows at the end
     // Reduce top padding so the first line starts higher (closer to the separator line)
@@ -1875,27 +1874,27 @@ doc.text(formData.dateOfIssue, rightSectionRight, bottomBoxTop + 16, { align: "r
     // Constrain terms text to the left of the new vertical separator
     const miniTermsMaxWidth = Math.max(40, colNUM_X - (marginX + 9));
 
-     // Height for terms text varies based on container count - increased for 1 container to prevent cutoff
-     let availableHeight;
-     if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
-       // Height varies based on container count - more height for 1 container
-       const chargesLength = blFormData?.chargesAndFees?.length || 0;
-       if (actualContainerCount === 1) {
-         availableHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
-       } else {
-         availableHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
-       }
-     } else {
-       // Height varies based on container count - more height for 1 container
-       if (actualContainerCount === 1) {
-         availableHeight = 160; // Increased height for 1 container
-       } else {
-         availableHeight = 140; // Standard height for other container counts
-       }
-     }
+    // Height for terms text varies based on container count - increased for 1 container to prevent cutoff
+    let availableHeight;
+    if (blFormData?.chargesAndFees && blFormData.chargesAndFees.trim()) {
+      // Height varies based on container count - more height for 1 container
+      const chargesLength = blFormData?.chargesAndFees?.length || 0;
+      if (actualContainerCount === 1) {
+        availableHeight = Math.max(160, Math.min(200, 160 + (chargesLength / 100) * 10)); // Increased height for 1 container
+      } else {
+        availableHeight = Math.max(140, Math.min(180, 140 + (chargesLength / 100) * 10)); // Standard height for other container counts
+      }
+    } else {
+      // Height varies based on container count - more height for 1 container
+      if (actualContainerCount === 1) {
+        availableHeight = 160; // Increased height for 1 container
+      } else {
+        availableHeight = 140; // Standard height for other container counts
+      }
+    }
     const maxBottomY = termsBoxTop + availableHeight;
 
-     let lastDrawnTextY = mtY; // Track the actual Y position of the last drawn text
+    let lastDrawnTextY = mtY; // Track the actual Y position of the last drawn text
 
     miniTerms.forEach((t) => {
       // Check if we have space for more text
@@ -1907,66 +1906,69 @@ doc.text(formData.dateOfIssue, rightSectionRight, bottomBoxTop + 16, { align: "r
       const textBlockHeight = wrapped.length * 2.5 + 0.5;
       if (mtY + textBlockHeight <= maxBottomY) {
         doc.text(wrapped, marginX + 7, mtY); // Slightly indented for alignment
-         lastDrawnTextY = mtY + (wrapped.length * 2.5); // Track actual end of drawn text (without extra spacing)
+        lastDrawnTextY = mtY + (wrapped.length * 2.5); // Track actual end of drawn text (without extra spacing)
         mtY += textBlockHeight;
       }
     });
 
-     // Calculate actual content height used
-     const actualTermsContentHeight = lastDrawnTextY - miniTermsY;
+    // Calculate actual content height used
+    const actualTermsContentHeight = lastDrawnTextY - miniTermsY;
 
-     // Update bottom border position to create equal margins above and below
-     // Calculate the proper bottom border position to balance top and bottom margins
-     const topMargin = marginY; // Top margin (2mm)
-     const bottomMargin = topMargin; // Equal bottom margin (2mm)
-     const availableContentHeight = initialPageHeight - topMargin - bottomMargin;
-     const contentUsedHeight = lastDrawnTextY - topMargin;
-     const extraSpace = availableContentHeight - contentUsedHeight;
-     
-     // Position bottom border to create equal margins
-     bottomBorderY = lastDrawnTextY + (extraSpace / 2); // Add half the extra space below content
+    // Update bottom border position to create equal margins above and below
+    // Calculate the proper bottom border position to balance top and bottom margins
+    const topMargin = marginY; // Top margin (2mm)
+    const bottomMargin = topMargin; // Equal bottom margin (2mm)
+    const availableContentHeight = initialPageHeight - topMargin - bottomMargin;
+    const contentUsedHeight = lastDrawnTextY - topMargin;
+    const extraSpace = availableContentHeight - contentUsedHeight;
 
-     // Calculate the actual required page height based on content
-     const actualPageHeight = bottomBorderY + 5; // Add small margin for page number
-     
-     // Note: jsPDF doesn't support dynamic page resizing, so we'll work with the calculated height
+    // Position bottom border to create equal margins
+    bottomBorderY = lastDrawnTextY + (extraSpace / 2); // Add half the extra space below content
 
-     // Add footer text positioned above the terms content, below the "0(ZERO) Nhava Sheva" section
-     const footerY = bottomBoxTop + bottomBoxHeight - 12; // Move up closer to "0(ZERO) Nhava Sheva"
-     doc.setFont("arial", "bold");
-     doc.setFontSize(10);
-     doc.text("For RISTAR LOGISTICS PVT LTD", rightColX, footerY - 7);
-     doc.text("As Agent for the Carrier", rightColX, footerY + (actualContainerCount > 3 ? 50 : 55)); // Moved down for 4+ containers to fix positioning
+    // Calculate the actual required page height based on content
+    const actualPageHeight = bottomBorderY + 5; // Add small margin for page number
 
-     // Now draw the bottom border at the correct position
-     doc.line(marginX, bottomBorderY, marginX + contentWidth, bottomBorderY); // bottom
+    // Note: jsPDF doesn't support dynamic page resizing, so we'll work with the calculated height
 
-     // Draw the vertical separator from terms top to bottom border
-     doc.line(colNUM_X, termsBoxTop, colNUM_X, bottomBorderY);
+    // Add footer text positioned above the terms content, below the "0(ZERO) Nhava Sheva" section
+    const footerY = bottomBoxTop + bottomBoxHeight - 12; // Move up closer to "0(ZERO) Nhava Sheva"
+    doc.setFont("arial", "bold");
+    doc.setFontSize(10);
+    doc.text("For RISTAR LOGISTICS PVT LTD", rightColX, footerY - 7);
+    doc.text("As Agent for the Carrier", rightColX, footerY + (actualContainerCount > 3 ? 50 : 55)); // Moved down for 4+ containers to fix positioning
 
-     // Update left and right borders to match the new bottom position
-     leftBorderY = bottomBorderY;
-     rightBorderY = bottomBorderY;
+    // Now draw the bottom border at the correct position
+    doc.line(marginX, bottomBorderY, marginX + contentWidth, bottomBorderY); // bottom
 
-     // Now draw the left and right vertical borders at the correct position
-     doc.line(marginX, marginY, marginX, leftBorderY); // left
-     doc.line(
-       marginX + contentWidth,
-       marginY,
-       marginX + contentWidth,
-       rightBorderY
-     ); // right
+    // Draw the vertical separator from terms top to bottom border
+    doc.line(colNUM_X, termsBoxTop, colNUM_X, bottomBorderY);
+
+    // Update left and right borders to match the new bottom position
+    leftBorderY = bottomBorderY;
+    rightBorderY = bottomBorderY;
+
+    // Now draw the left and right vertical borders at the correct position
+    doc.line(marginX, marginY, marginX, leftBorderY); // left
+    doc.line(
+      marginX + contentWidth,
+      marginY,
+      marginX + contentWidth,
+      rightBorderY
+    ); // right
 
     // Removed rightmost stamp cell per request
 
     // Save the PDF with dynamic port names from shipment data
+   
+    // ========== FILENAME LOGIC (FIXED) ==========
     let fileName = "";
     const copySuffix =
       copyNumber === 0 ? "" : copyNumber === 1 ? "_2nd_Copy" : "_3rd_Copy";
 
-      const rawShipmentNo = shipment.jobNumber || shipment.shipmentNumber || "UNKNOWN";
-const sanitizedShipmentNo = rawShipmentNo.replace(/\//g, "_");
-
+    // Extract shipment number for filename
+    const rawShipmentNo =
+      shipment.jobNumber || shipment.shipmentNumber || "UNKNOWN";
+    const sanitizedShipmentNo = rawShipmentNo.replace(/\//g, "_");
 
     // Get port codes from shipment data for dynamic filename
     const polPortCode = shipment.polPort?.portCode || "NSA";
@@ -1981,38 +1983,102 @@ const sanitizedShipmentNo = rawShipmentNo.replace(/\//g, "_");
 
     switch (blType) {
       case "original":
-fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
         break;
       case "draft":
-fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_Draft_BL${copySuffix}.pdf`;
         break;
       case "seaway":
-fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_Seaway_BL${copySuffix}.pdf`;
         break;
       case "non-negotiable":
-fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_Non_Negotiable_BL${copySuffix}.pdf`;
         break;
       case "rfs":
-fileName = `RST_${portCode}_${sanitizedShipmentNo}_Original_BL${copySuffix}.pdf`;
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_RFS_BL${copySuffix}.pdf`;
+        break;
+      default:
+        fileName = `RST_${portCode}_${sanitizedShipmentNo}_BL${copySuffix}.pdf`;
         break;
     }
 
-    // Add page numbers to all pages as "Page X of Y"
-    const totalPages = (doc as any).getNumberOfPages
-      ? (doc as any).getNumberOfPages()
-      : 1;
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
-      doc.setFont("arial", "normal");
-      doc.setFontSize(10);
-      const pageNumberText = `Page ${p} of ${totalPages}`;
-       // Position page number below the main borderline with equal margin, moved down a bit
-       const pageNumberY = bottomBorderY + bottomMargin + (actualContainerCount > 3 ? 3 : 2); // Increased spacing for 4+ containers to make page number visible
-       doc.text(pageNumberText, pageWidth - 40, pageNumberY);
-    }
+  // Add page numbers to all pages as "Page X of Y"
+const totalPages = (doc as any).getNumberOfPages
+  ? (doc as any).getNumberOfPages()
+  : 1;
 
-    doc.save(fileName);
+const bottomBorderYZ = pageHeight - 20;
+const bottomMarginY = 5;
+
+for (let p = 1; p <= totalPages; p++) {
+  doc.setPage(p);
+  doc.setFont("arial", "normal");
+  doc.setFontSize(10);
+  const pageNumberText = `Page ${p} of ${totalPages}`;
+  const pageNumberY = bottomBorderYZ + bottomMarginY;
+  doc.text(pageNumberText, pageWidth - 40, pageNumberY);
+}
+
+// ===================== APPLY WATERMARK TO ALL PAGES =====================
+const pages = doc.getNumberOfPages();
+
+// -------- NON-DRAFT LOGO WATERMARK ON EVERY PAGE --------
+if (blType !== "draft") {
+  try {
+    const wmImage = await loadImageAsDataURL("/crologo.jpg");
+
+    for (let p = 1; p <= pages; p++) {
+      doc.setPage(p);
+      doc.saveGraphicsState();
+
+      try {
+        doc.setGState(doc.GState({ opacity: 0.18 }));
+      } catch (e) {}
+
+      const wmMaxWidth = pageWidth * 0.88;
+      const aspectRatio = 271 / 921;
+      const wmHeight = wmMaxWidth * aspectRatio;
+
+      const wmX = (pageWidth - wmMaxWidth) / 2;
+      const wmY = pageHeight * 0.40;
+
+      doc.addImage(wmImage, "JPEG", wmX, wmY, wmMaxWidth, wmHeight);
+      doc.restoreGraphicsState();
+    }
+  } catch (e) {
+    console.error("Logo watermark failed", e);
+  }
+}
+
+// -------- DRAFT TEXT WATERMARK ON EVERY PAGE --------
+if (blType === "draft") {
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.saveGraphicsState();
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(120);
+    doc.setTextColor(120, 120, 120);
+
+    try {
+      doc.setGState(doc.GState({ opacity: 0.20 }));
+    } catch (e) {}
+
+    const x = pageWidth / 2;
+    const y = pageHeight * 0.58;
+
+    doc.text("DRAFT", x, y, { align: "center", angle: 45 });
+
+    doc.restoreGraphicsState();
+    doc.setTextColor(0, 0, 0);
+  }
+}
+
+// ===================== END WATERMARK BLOCK =====================
+
+doc.save(fileName);
   } catch (err) {
     console.error("Error generating BL PDF", err);
   }
 }
+

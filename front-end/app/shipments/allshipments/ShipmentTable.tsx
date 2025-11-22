@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Pencil, Search, Trash2, Plus, History, Download, Eye, MoreVertical } from 'lucide-react';
+import { Pencil, Search, Trash2, Plus, Download, Eye, MoreVertical } from 'lucide-react';
 import axios from 'axios';
 import AddShipmentForm from './AddShipmentForm';
 import ViewShipmentModal from './ViewShipmentModal';
@@ -1344,6 +1344,80 @@ firstGenerationDate: null,
       alert('Failed to download assigned BL.');
     }
   };
+
+  // Reset all cargo/container details
+const resetCargoDetails = () => {
+  try {
+    const cleaned = blFormData.containers.map((c: any) => ({
+      ...c,
+      grossWt: "",
+      netWt: "",
+      tareWt: "",
+      sealNumber: "",
+      cbmWt: "",
+      shippersealNo: "",
+      unit: "KGS",
+    }));
+
+    setBlFormData((prev: any) => ({
+      ...prev,
+      containers: cleaned,
+    }));
+
+    // Reset CSV input
+    const csvInput = document.querySelector<HTMLInputElement>("#csvUploader");
+    if (csvInput) csvInput.value = "";
+
+    alert("Cargo details cleared.");
+  } catch (err) {
+    console.error("Reset failed", err);
+  }
+};
+
+
+
+  // CSV Upload for Cargo
+const handleCsvUpload = async (e: any) => {
+  try {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const text = await file.text();
+    const rows = text
+      .trim()
+      .split("\n")
+      .map((r:any) => r.split(",").map((c:any) => c.trim()));
+
+    const containers = [...blFormData.containers];
+
+    let rowIndex = 1; // skip header
+    for (let i = 0; i < containers.length; i++) {
+      if (!rows[rowIndex]) break; // stop if no more rows
+
+      const r = rows[rowIndex];
+      rowIndex++;
+
+      containers[i].containerNumber = containers[i].containerNumber; // unchanged
+      containers[i].grossWt = r[1] || "";
+      containers[i].netWt = r[2] || "";
+      containers[i].tareWt = r[3] || "";
+      containers[i].sealNumber = r[4] || "";
+      containers[i].cbmWt = r[5] || "";
+      containers[i].shippersealNo = r[6] || "";
+      containers[i].unit = r[7] || "KGS";
+    }
+
+    setBlFormData((prev: any) => ({
+      ...prev,
+      containers,
+    }));
+
+    alert("Cargo data imported successfully.");
+  } catch (err) {
+    console.error("CSV upload failed", err);
+    alert("Invalid file format.");
+  }
+};
 
 
 
@@ -2768,20 +2842,7 @@ date:
 
             {/* Date Field - Added at the top */}
             <div className="grid grid-cols-3 gap-4">
-              {currentBlType !== 'draft' && (
-                <div className="space-y-2">
-                  <Label htmlFor="blDate">BL Issued Date</Label>
-                  <Input
-                    id="blDate"
-                    type="date"
-                    value={blFormData.date}
-                    onChange={(e) =>
-                      setBlFormData({ ...blFormData, date: e.target.value })
-                    }
-                    className="bg-white dark:bg-black"
-                  />
-                </div>
-              )}
+          
 
               <div className="space-y-2">
                 <Label htmlFor="blTypeDisplay">BL Type</Label>
@@ -2806,7 +2867,7 @@ date:
 
               {/* Date of Issue */}
               <div className="space-y-2">
-                <Label htmlFor="dateOfIssue">Date of Issue</Label>
+                <Label htmlFor="dateOfIssue">BL Issued Date</Label>
                 <Input
                   id="dateOfIssue"
                   type="date"
@@ -2933,6 +2994,58 @@ date:
             <hr className="border-black" />
             <div className="mt-4">
               <h3 className="text-lg font-semibold mb-3">Cargo Information</h3>
+              <div className="flex items-center gap-3 mb-4">
+                <Button
+  variant="destructive"
+  onClick={resetCargoDetails}
+>
+  Reset All Cargo
+</Button>
+
+  {/* Download sample Excel */}
+  <Button
+    variant="outline"
+    className="cursor-pointer"
+    onClick={() => {
+      const header = [
+        "Container Number",
+        "Gross Weight",
+        "Net Weight",
+        "Tare Weight",
+        "Seal Number",
+        "CBM Weight",
+        "Shipper Seal Number",
+        "Unit"
+      ].join(",");
+
+      const sample = [
+        "CONTAINER1,10000,9000,1000,SEAL001,28,SS001,KGS",
+        "CONTAINER2,12000,11000,1000,SEAL002,30,SS002,KGS",
+      ].join("\n");
+
+      const blob = new Blob([header + "\n" + sample], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "BL_Cargo_Sample.csv";
+      a.click();
+    }}
+  >
+    Download Sample CSV
+  </Button>
+
+  {/* Upload CSV */}
+ <input
+  id="csvUploader"
+  type="file"
+  accept=".csv"
+  onChange={(e) => handleCsvUpload(e)}
+  className="text-sm cursor-pointer"
+/>
+
+</div>
+
 
               {/* Dynamic Container fields - now with 8 columns */}
               <div className="space-y-4">
